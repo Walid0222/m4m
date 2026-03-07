@@ -1,0 +1,75 @@
+.seller-page {
+  width: 100%;
+}
+
+.seller-profile-card {
+  text-align: center;
+  padding: 2rem;
+  background: linear-gradient(180deg, var(--color-purple) 0%, var(--color-purple-dark) 100%);
+  color: var(--color-white);
+  border-radius: var(--radius);
+  margin-bottom: 2rem;
+}
+
+.seller-avatar {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1rem;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.seller-name {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.seller-meta {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+
+.seller-status.online {
+  background: rgba(22, 163, 74, 0.9);
+  color: white;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.seller-products h2 {
+  margin: 0 0 1.25rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.seller-empty {
+  color: var(--color-gray-500);
+  padding: 2rem 0;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.page-loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-gray-500);
+}
