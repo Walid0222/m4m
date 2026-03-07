@@ -1,124 +1,153 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { getEcho } from '../echo';
-import './ChatPage.css';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-
-function getToken() {
-  return localStorage.getItem('m4m_token');
-}
+import {
+  getConversations,
+  getConversation,
+  sendMessage as apiSendMessage,
+  paginatedItems,
+  getToken,
+} from '../services/api';
+import ChatBox from '../components/ChatBox';
 
 export default function ChatPage() {
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [conversations, setConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef(null);
-  const echoRef = useRef(null);
+  const [unread, setUnread] = useState({});
+  const selectedIdRef = useRef(null);
+  const channelsRef = useRef({});
+
+  selectedIdRef.current = selected?.id;
+
+  const refreshConversations = useCallback(async () => {
+    if (!getToken()) return;
+    try {
+      const result = await getConversations();
+      setConversations(paginatedItems(result));
+    } catch {
+      setConversations([]);
+    }
+  }, []);
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
+    if (!getToken()) {
       setLoading(false);
       return;
     }
     let cancelled = false;
-    async function fetchConversations() {
+    (async () => {
       try {
-        const res = await fetch(`${API_BASE}/conversations`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        const list = data.data?.data ?? data.data ?? [];
-        if (!cancelled) setConversations(Array.isArray(list) ? list : []);
+        const result = await getConversations();
+        if (!cancelled) setConversations(paginatedItems(result));
       } catch {
         if (!cancelled) setConversations([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
-    fetchConversations();
+    })();
     return () => { cancelled = true; };
   }, []);
 
+  const conversationIdFromUrl = searchParams.get('conversation');
+  useEffect(() => {
+    if (!conversationIdFromUrl || conversations.length === 0) return;
+    const id = Number(conversationIdFromUrl);
+    const conv = conversations.find((c) => c.id === id);
+    if (conv) setSelected((s) => (s?.id === id ? s : conv));
+  }, [conversationIdFromUrl, conversations]);
+
   useEffect(() => {
     if (!selected?.id || !getToken()) return;
+    setUnread((prev) => ({ ...prev, [selected.id]: 0 }));
     let cancelled = false;
-    async function fetchMessages() {
+    (async () => {
       try {
-        const res = await fetch(`${API_BASE}/conversations/${selected.id}`, {
-          headers: { Authorization: `Bearer ${getToken()}` },
-        });
-        const data = await res.json();
-        if (!cancelled && data.data?.messages) {
-          const list = data.data.messages.data ?? data.data.messages ?? [];
-          setMessages(Array.isArray(list) ? [...list].reverse() : []);
-        } else if (!cancelled) setMessages([]);
+        const data = await getConversation(selected.id);
+        const msgPaginator = data?.messages;
+        const list = msgPaginator ? paginatedItems(msgPaginator) : [];
+        if (!cancelled) setMessages(Array.isArray(list) ? [...list].reverse() : []);
       } catch {
         if (!cancelled) setMessages([]);
       }
-    }
-    fetchMessages();
+    })();
     return () => { cancelled = true; };
   }, [selected?.id]);
 
+  // Auto-refresh messages every 15s for selected conversation
   useEffect(() => {
     if (!selected?.id || !getToken()) return;
+    const interval = setInterval(async () => {
+      try {
+        const data = await getConversation(selected.id);
+        const msgPaginator = data?.messages;
+        const list = msgPaginator ? paginatedItems(msgPaginator) : [];
+        if (Array.isArray(list)) setMessages([...list].reverse());
+      } catch {}
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [selected?.id]);
 
+  // Subscribe to all conversation channels for real-time messages + unread
+  useEffect(() => {
+    if (!user?.id || !getToken() || conversations.length === 0) return;
     try {
       const echo = getEcho();
-      echoRef.current = echo;
-
-      const channel = echo.private(`conversation.${selected.id}`);
-
-      channel.listen('.message.sent', (payload) => {
-        const msg = payload.message;
-        if (!msg) return;
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) return prev;
-          return [...prev, msg];
+      const current = channelsRef.current;
+      conversations.forEach((c) => {
+        const key = `conversation.${c.id}`;
+        if (current[key]) return;
+        const channel = echo.private(key);
+        current[key] = channel;
+        channel.listen('.message.sent', (payload) => {
+          const msg = payload.message;
+          if (!msg) return;
+          const convId = c.id;
+          const isFromMe = msg.user_id === user.id;
+          if (convId === selectedIdRef.current) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === msg.id)) return prev;
+              return [...prev, msg];
+            });
+          } else if (!isFromMe) {
+            setUnread((prev) => ({ ...prev, [convId]: (prev[convId] || 0) + 1 }));
+          }
         });
       });
-
       return () => {
-        channel.stopListening('.message.sent');
-        echo.leave(`conversation.${selected.id}`);
+        Object.keys(current).forEach((k) => {
+          echo.leave(k);
+          delete current[k];
+        });
       };
     } catch (err) {
       console.warn('Echo subscription failed:', err);
       return () => {};
     }
-  }, [selected?.id]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [user?.id, conversations]);
 
   const otherUser = selected?.other_user || selected?.userOne || selected?.userTwo;
+
   const sendMessage = async () => {
     if (!newMessage.trim() || !selected?.id || sending) return;
-    const token = getToken();
-    if (!token) return;
+    if (!getToken()) return;
     setSending(true);
     try {
-      const res = await fetch(`${API_BASE}/conversations/${selected.id}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ body: newMessage.trim() }),
-      });
-      const data = await res.json();
-      if (data.data) {
+      const message = await apiSendMessage(selected.id, newMessage.trim());
+      if (message) {
         setMessages((prev) => {
-          if (prev.some((m) => m.id === data.data.id)) return prev;
-          return [...prev, data.data];
+          if (prev.some((m) => m.id === message.id)) return prev;
+          return [...prev, message];
         });
       }
       setNewMessage('');
+      refreshConversations();
     } catch {
       // ignore
     } finally {
@@ -126,80 +155,101 @@ export default function ChatPage() {
     }
   };
 
-  if (loading && conversations.length === 0)
-    return <div className="page-loading">Loading conversations…</div>;
+  if (loading && conversations.length === 0) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse flex gap-4">
+          <div className="w-80 h-[500px] rounded-xl bg-m4m-gray-100" />
+          <div className="flex-1 h-[500px] rounded-xl bg-m4m-gray-100" />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="chat-page">
-      <h1>Chat</h1>
-      {!getToken() ? (
-        <p className="chat-auth-msg">Log in to use chat.</p>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      <h1 className="text-2xl font-bold text-m4m-black mb-6">Messages</h1>
+
+      {!user ? (
+        <div className="rounded-2xl border border-m4m-gray-200 bg-white p-8 text-center shadow-sm">
+          <p className="text-m4m-gray-500 mb-4">Log in to use chat.</p>
+          <a href="/login" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-light transition-colors">
+            Sign in
+          </a>
+        </div>
       ) : (
-        <div className="chat-layout">
-          <aside className="chat-sidebar">
-            <h2>Conversations</h2>
-            {conversations.length === 0 ? (
-              <p className="chat-empty">No conversations yet.</p>
-            ) : (
-              <ul className="chat-conv-list">
-                {conversations.map((c) => {
-                  const other = c.other_user || (c.user_one_id ? c.userTwo : c.userOne);
-                  return (
-                    <li key={c.id}>
-                      <button
-                        type="button"
-                        className={`chat-conv-btn ${selected?.id === c.id ? 'active' : ''}`}
-                        onClick={() => setSelected(c)}
-                      >
-                        {other?.name || 'Conversation'} {c.messages_count != null && `(${c.messages_count})`}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+        <div className="rounded-2xl border border-m4m-gray-200 overflow-hidden bg-white shadow-lg flex flex-col md:flex-row min-h-[560px]">
+          {/* Conversation list */}
+          <aside className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-m4m-gray-200 flex flex-col bg-m4m-gray-50 shrink-0">
+            <div className="p-4 border-b border-m4m-gray-200 bg-white">
+              <h2 className="font-semibold text-m4m-black">Conversations</h2>
+              <p className="text-sm text-m4m-gray-500 mt-0.5">
+                {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {conversations.length === 0 ? (
+                <div className="p-6 text-center">
+                  <p className="text-sm text-m4m-gray-500">No conversations yet.</p>
+                  <p className="text-xs text-m4m-gray-400 mt-1">Start a conversation from a product or order.</p>
+                </div>
+              ) : (
+                <ul className="space-y-1">
+                  {conversations.map((c) => {
+                    const other = c.other_user || (c.user_one_id === user?.id ? c.userTwo : c.userOne);
+                    const isSelected = selected?.id === c.id;
+                    const count = unread[c.id] || 0;
+                    return (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelected(c)}
+                          className={`w-full text-left p-3 rounded-xl transition-colors flex items-center gap-3 ${
+                            isSelected
+                              ? 'bg-m4m-purple text-white shadow-sm'
+                              : 'hover:bg-white hover:shadow-sm text-m4m-black'
+                          }`}
+                        >
+                          <span className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                              isSelected ? 'bg-white/20 text-white' : 'bg-m4m-purple/20 text-m4m-purple'
+                            }`}
+                          >
+                            {other?.name?.charAt(0)?.toUpperCase() || '?'}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className={`font-medium truncate ${isSelected ? 'text-white' : 'text-m4m-black'}`}>
+                              {other?.name || 'Conversation'}
+                            </p>
+                            <p className={`text-xs truncate ${isSelected ? 'text-white/80' : 'text-m4m-gray-500'}`}>
+                              {c.messages_count != null ? `${c.messages_count} message${c.messages_count !== 1 ? 's' : ''}` : 'Chat'}
+                            </p>
+                          </div>
+                          {count > 0 && (
+                            <span className="shrink-0 min-w-[22px] h-[22px] rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                              {count > 99 ? '99+' : count}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </aside>
-          <div className="chat-main">
-            {!selected ? (
-              <div className="chat-placeholder">Select a conversation</div>
-            ) : (
-              <>
-                <div className="chat-header">
-                  <strong>{otherUser?.name || 'Chat'}</strong>
-                  <span className="chat-realtime-badge">Live</span>
-                </div>
-                <div className="chat-messages">
-                  {messages.length === 0 ? (
-                    <p className="chat-no-msg">No messages yet. Say hello!</p>
-                  ) : (
-                    messages.map((m) => (
-                      <div
-                        key={m.id}
-                        className={`chat-msg ${m.sender?.id === otherUser?.id ? 'other' : 'mine'}`}
-                      >
-                        <span className="chat-msg-sender">{m.sender?.name}</span>
-                        <p className="chat-msg-body">{m.body}</p>
-                      </div>
-                    ))
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-                <div className="chat-input-row">
-                  <input
-                    type="text"
-                    placeholder="Type a message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
-                    className="chat-input"
-                    disabled={sending}
-                  />
-                  <button type="button" onClick={sendMessage} className="chat-send" disabled={sending}>
-                    {sending ? '…' : 'Send'}
-                  </button>
-                </div>
-              </>
-            )}
+
+          {/* Chat area */}
+          <div className="flex-1 flex flex-col min-w-0">
+            <ChatBox
+              messages={messages}
+              currentUserId={user?.id}
+              otherUser={otherUser}
+              newMessage={newMessage}
+              onNewMessageChange={setNewMessage}
+              onSend={sendMessage}
+              sending={sending}
+              placeholder="Select a conversation"
+            />
           </div>
         </div>
       )}

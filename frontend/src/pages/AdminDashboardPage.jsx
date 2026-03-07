@@ -1,112 +1,202 @@
 import { useState, useEffect } from 'react';
-import './AdminDashboardPage.css';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-
-function getToken() {
-  return localStorage.getItem('m4m_token');
-}
+import { useParams, Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { apiFetch, getToken } from '../lib/api';
 
 export default function AdminDashboardPage() {
+  const { user } = useAuth();
   const [deposits, setDeposits] = useState([]);
+  const [withdrawals, setWithdrawals] = useState([]);
+  const [activeTab, setActiveTab] = useState('deposits');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
+    if (!getToken()) {
       setLoading(false);
       setError('Admin access requires login.');
       return;
     }
     let cancelled = false;
-    async function fetchDeposits() {
+    async function fetchData() {
       try {
-        const res = await fetch(`${API_BASE}/admin/deposit-requests`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.status === 403) {
-          if (!cancelled) setError('You do not have admin access.');
-          return;
+        const [depRes, wdRes] = await Promise.all([
+          apiFetch('/admin/deposit-requests'),
+          apiFetch('/admin/withdraw-requests').catch(() => ({ data: [] })),
+        ]);
+        if (!cancelled) {
+          const depData = depRes?.data ?? depRes;
+          setDeposits(Array.isArray(depData) ? depData : depData?.data ?? []);
+          const wdData = wdRes?.data ?? wdRes;
+          setWithdrawals(Array.isArray(wdData) ? wdData : wdData?.data ?? []);
         }
-        const data = await res.json();
-        const list = data.data?.data ?? data.data ?? [];
-        if (!cancelled) setDeposits(Array.isArray(list) ? list : []);
-      } catch {
-        if (!cancelled) setError('Could not load deposit requests.');
+      } catch (e) {
+        if (!cancelled) {
+          if (e.status === 403) setError('You do not have admin access.');
+          else setError('Could not load requests.');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-    fetchDeposits();
+    fetchData();
     return () => { cancelled = true; };
   }, []);
 
-  const handleVerify = async (depositId, action) => {
-    const token = getToken();
-    if (!token) return;
+  const handleVerifyDeposit = async (depositId, action) => {
     try {
-      const res = await fetch(`${API_BASE}/admin/deposit-requests/${depositId}/verify`, {
+      await apiFetch(`/admin/deposit-requests/${depositId}/verify`, {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
-      if (res.ok) {
-        setDeposits((d) => d.filter((x) => x.id !== depositId));
-      }
+      setDeposits((d) => d.filter((x) => x.id !== depositId));
     } catch {}
   };
 
-  if (loading && deposits.length === 0)
-    return <div className="page-loading">Loading admin dashboard…</div>;
+  const handleVerifyWithdraw = async (withdrawId, action) => {
+    try {
+      await apiFetch(`/admin/withdraw-requests/${withdrawId}/verify`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      setWithdrawals((w) => w.filter((x) => x.id !== withdrawId));
+    } catch {}
+  };
+
+  if (loading && deposits.length === 0 && withdrawals.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-12 text-center text-m4m-gray-500">
+        Loading admin dashboard…
+      </div>
+    );
+  }
 
   return (
-    <div className="admin-page">
-      <h1>Admin Dashboard</h1>
-      <p className="admin-subtitle">Deposit verification</p>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <h1 className="text-2xl font-bold text-m4m-black mb-2">Admin Dashboard</h1>
+      <p className="text-m4m-gray-500 mb-6">Deposit and withdrawal verification</p>
 
-      {error && <div className="admin-error">{error}</div>}
+      {error && (
+        <div className="mb-6 p-4 rounded-lg bg-red-50 text-red-700">
+          {error}
+        </div>
+      )}
 
       {!error && (
-        <section className="admin-section">
-          <h2>Pending deposit requests</h2>
+        <div className="flex gap-2 mb-6">
+          <button
+            type="button"
+            onClick={() => setActiveTab('deposits')}
+            className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'deposits' ? 'bg-m4m-purple text-white' : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'}`}
+          >
+            Deposit requests
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('withdrawals')}
+            className={`px-4 py-2 rounded-lg font-medium ${activeTab === 'withdrawals' ? 'bg-m4m-purple text-white' : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'}`}
+          >
+            Withdraw requests
+          </button>
+        </div>
+      )}
+
+      {!error && activeTab === 'deposits' && (
+        <section>
+          <h2 className="text-lg font-semibold text-m4m-black mb-4">Deposit requests</h2>
           {deposits.length === 0 ? (
-            <p className="admin-empty">No pending deposits.</p>
+            <p className="text-m4m-gray-500">No deposit requests.</p>
           ) : (
-            <div className="admin-table-wrap">
-              <table className="admin-table">
-                <thead>
+            <div className="overflow-x-auto rounded-xl border border-m4m-gray-200">
+              <table className="min-w-full divide-y divide-m4m-gray-200">
+                <thead className="bg-m4m-gray-100">
                   <tr>
-                    <th>Reference</th>
-                    <th>User</th>
-                    <th>Amount</th>
-                    <th>Date</th>
-                    <th>Actions</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">User</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">Amount</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">Reference</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">Date</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-white divide-y divide-m4m-gray-200">
                   {deposits.map((d) => (
                     <tr key={d.id}>
-                      <td><strong>{d.reference_code || `#${d.id}`}</strong></td>
-                      <td>{d.user?.name ?? d.user?.email ?? '—'}</td>
-                      <td>{Number(d.amount).toFixed(2)} {d.currency}</td>
-                      <td>{d.created_at ? new Date(d.created_at).toLocaleDateString() : '—'}</td>
-                      <td>
-                        <div className="admin-actions">
+                      <td className="px-4 py-3 text-sm">{d.user?.name ?? d.user?.email ?? '—'}</td>
+                      <td className="px-4 py-3 text-sm">{Number(d.amount).toFixed(2)} {d.currency ?? 'USD'}</td>
+                      <td className="px-4 py-3 font-mono text-sm">{d.reference_code || `#${d.id}`}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${d.status === 'completed' ? 'bg-green-100 text-green-800' : d.status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                          {d.status ?? 'pending'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm">{d.created_at ? new Date(d.created_at).toLocaleString() : '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
                           <button
                             type="button"
-                            className="admin-btn approve"
-                            onClick={() => handleVerify(d.id, 'approve')}
+                            onClick={() => handleVerifyDeposit(d.id, 'approve')}
+                            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-m4m-green text-white hover:bg-m4m-green-hover"
                           >
                             Approve
                           </button>
                           <button
                             type="button"
-                            className="admin-btn reject"
-                            onClick={() => handleVerify(d.id, 'reject')}
+                            onClick={() => handleVerifyDeposit(d.id, 'reject')}
+                            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {!error && activeTab === 'withdrawals' && (
+        <section>
+          <h2 className="text-lg font-semibold text-m4m-black mb-4">Pending withdraw requests</h2>
+          {withdrawals.length === 0 ? (
+            <p className="text-m4m-gray-500">No pending withdrawals.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-m4m-gray-200">
+              <table className="min-w-full divide-y divide-m4m-gray-200">
+                <thead className="bg-m4m-gray-100">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">User</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">Amount</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">Payment details</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">Date</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-m4m-black">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-m4m-gray-200">
+                  {withdrawals.map((w) => (
+                    <tr key={w.id}>
+                      <td className="px-4 py-3 text-sm">{w.user?.name ?? w.user?.email ?? '—'}</td>
+                      <td className="px-4 py-3 text-sm">{Number(w.amount).toFixed(2)} {w.currency}</td>
+                      <td className="px-4 py-3 text-sm max-w-xs truncate" title={w.payment_details}>{w.payment_details || '—'}</td>
+                      <td className="px-4 py-3 text-sm">{w.created_at ? new Date(w.created_at).toLocaleDateString() : '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyWithdraw(w.id, 'approve')}
+                            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-m4m-green text-white hover:bg-m4m-green-hover"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleVerifyWithdraw(w.id, 'reject')}
+                            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700"
                           >
                             Reject
                           </button>

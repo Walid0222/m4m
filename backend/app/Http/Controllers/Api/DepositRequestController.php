@@ -11,7 +11,7 @@ class DepositRequestController extends Controller
     private function generateReferenceCode(): string
     {
         do {
-            $code = 'M4M-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 4));
+            $code = 'M4M-' . strtoupper(bin2hex(random_bytes(3)));
         } while (DepositRequest::where('reference_code', $code)->exists());
 
         return $code;

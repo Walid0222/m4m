@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Controller;
 use App\Models\DepositRequest;
 use App\Models\Wallet;
 use App\Models\WalletTransaction;
+use App\Notifications\DepositApprovedNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,6 +67,12 @@ class DepositVerificationController extends Controller
                 'description' => "Deposit verified - {$depositRequest->reference_code}",
             ]);
         });
+
+        $depositRequest->user->notify(new DepositApprovedNotification(
+            (float) $depositRequest->amount,
+            $depositRequest->currency ?? 'USD',
+            $depositRequest->reference_code ?? ''
+        ));
 
         return $this->success($depositRequest->fresh(['user:id,name,email']), 'Deposit approved and wallet credited.');
     }

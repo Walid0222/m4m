@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Wallet;
+use App\Notifications\NewOrderNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,7 @@ class OrderController extends Controller
     {
         $orders = $request->user()
             ->orders()
-            ->with(['orderItems.product:id,name,slug'])
+            ->with(['orderItems.product:id,name,slug,user_id', 'orderItems.product.seller:id,name'])
             ->latest()
             ->paginate($request->integer('per_page', 15));
 
@@ -32,6 +33,22 @@ class OrderController extends Controller
         $order->load(['orderItems.product:id,name,slug,price', 'buyer:id,name']);
 
         return $this->success($order);
+    }
+
+    public function confirmDelivery(Request $request, Order $order): JsonResponse
+    {
+        if ($order->user_id !== $request->user()->id) {
+            return $this->error('Forbidden.', 403);
+        }
+
+        if (strtolower($order->status) !== 'delivered') {
+            return $this->error('Order must be delivered before you can confirm.', 422);
+        }
+
+        $order->update(['status' => Order::STATUS_COMPLETED]);
+        $order->load(['orderItems.product:id,name,slug,price', 'buyer:id,name']);
+
+        return $this->success($order, 'Order marked as completed.');
     }
 
     public function store(Request $request): JsonResponse
@@ -103,7 +120,15 @@ class OrderController extends Controller
             return $order;
         });
 
-        $order->load(['orderItems.product:id,name,slug']);
+        $order->load(['orderItems.product:id,name,slug,user_id']);
+
+        $sellerIds = $order->orderItems->pluck('product.user_id')->unique()->filter();
+        foreach ($sellerIds as $sellerId) {
+            $seller = \App\Models\User::find($sellerId);
+            if ($seller) {
+                $seller->notify(new NewOrderNotification($order));
+            }
+        }
 
         return $this->success($order->toArray(), 'Order placed successfully.', 201);
     }

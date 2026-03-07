@@ -24,7 +24,7 @@ class ProductController extends Controller
             $query->where('user_id', $request->seller_id);
         }
 
-        $products = $query->with('seller:id,name')
+        $products = $query->with('seller:id,name,last_activity_at')
             ->latest()
             ->paginate($request->integer('per_page', 15));
 
@@ -37,7 +37,7 @@ class ProductController extends Controller
             return $this->error('Product not available.', 404);
         }
 
-        $product->load('seller:id,name');
+        $product->load('seller:id,name,last_activity_at');
 
         return $this->success($product);
     }

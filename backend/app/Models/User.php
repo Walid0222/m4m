@@ -25,6 +25,7 @@ class User extends Authenticatable
         'password',
         'is_seller',
         'is_admin',
+        'last_activity_at',
     ];
 
     /**
@@ -46,6 +47,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'last_activity_at' => 'datetime',
             'password' => 'hashed',
             'is_seller' => 'boolean',
             'is_admin' => 'boolean',

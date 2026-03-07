@@ -1,32 +1,20 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+@import "tailwindcss";
 
-:root {
-  --color-white: #ffffff;
-  --color-black: #0f0f0f;
-  --color-purple: #6d28d9;
-  --color-purple-light: #8b5cf6;
-  --color-purple-dark: #5b21b6;
-  --color-green: #16a34a;
-  --color-green-hover: #15803d;
-  --color-gray-100: #f5f5f5;
-  --color-gray-200: #e5e5e5;
-  --color-gray-300: #d4d4d4;
-  --color-gray-500: #737373;
-  --color-gray-700: #404040;
-  --color-gray-800: #262626;
-  --radius: 10px;
-  --radius-sm: 6px;
-  --shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.12);
-  font-family: 'DM Sans', system-ui, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: var(--color-black);
-  background-color: var(--color-white);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme {
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --color-m4m-black: #0f0f0f;
+  --color-m4m-purple: #6d28d9;
+  --color-m4m-purple-light: #8b5cf6;
+  --color-m4m-purple-dark: #5b21b6;
+  --color-m4m-green: #16a34a;
+  --color-m4m-green-hover: #15803d;
+  --color-m4m-white: #ffffff;
+  --color-m4m-gray-100: #f5f5f5;
+  --color-m4m-gray-200: #e5e5e5;
+  --color-m4m-gray-500: #737373;
+  --color-m4m-gray-700: #404040;
+  --color-m4m-gray-800: #262626;
 }
 
 * {
@@ -37,15 +25,23 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-family: var(--font-sans);
+  background-color: var(--color-m4m-white);
+  color: var(--color-m4m-black);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
 }
 
 a {
-  color: var(--color-purple);
-  text-decoration: none;
+  color: var(--color-m4m-purple);
   font-weight: 500;
 }
 a:hover {
-  color: var(--color-purple-dark);
+  color: var(--color-m4m-purple-dark);
   text-decoration: underline;
 }
 
@@ -53,8 +49,4 @@ button {
   font-family: inherit;
   cursor: pointer;
   font-weight: 500;
-}
-
-#root {
-  min-height: 100vh;
 }

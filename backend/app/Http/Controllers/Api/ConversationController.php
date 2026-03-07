@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Events\MessageSent;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Notifications\NewMessageNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -98,6 +99,12 @@ class ConversationController extends Controller
         $message->load('sender:id,name');
 
         $conversation->touch();
+
+        $otherUserId = $conversation->user_one_id === $userId ? $conversation->user_two_id : $conversation->user_one_id;
+        $otherUser = \App\Models\User::find($otherUserId);
+        if ($otherUser) {
+            $otherUser->notify(new NewMessageNotification($message));
+        }
 
         broadcast(new MessageSent($message))->toOthers();
 

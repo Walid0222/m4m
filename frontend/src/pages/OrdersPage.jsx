@@ -1,32 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import './OrdersPage.css';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-
-function getToken() {
-  return localStorage.getItem('m4m_token');
-}
+import { useAuth } from '../contexts/AuthContext';
+import { getOrders, paginatedItems, getToken } from '../services/api';
+import OrderCard from '../components/OrderCard';
+import { ORDER_STATUSES } from '../lib/orderStatus';
 
 export default function OrdersPage() {
+  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('');
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
+    if (!getToken()) {
       setLoading(false);
       return;
     }
     let cancelled = false;
     async function fetchOrders() {
       try {
-        const res = await fetch(`${API_BASE}/orders`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        const list = data.data?.data ?? data.data ?? [];
-        if (!cancelled) setOrders(Array.isArray(list) ? list : []);
+        const result = await getOrders();
+        if (!cancelled) setOrders(paginatedItems(result));
       } catch {
         if (!cancelled) setOrders([]);
       } finally {
@@ -37,36 +31,96 @@ export default function OrdersPage() {
     return () => { cancelled = true; };
   }, []);
 
-  if (loading) return <div className="page-loading">Loading orders…</div>;
+  const filteredOrders = useMemo(() => {
+    if (!statusFilter) return orders;
+    return orders.filter((o) => (o.status || '').toLowerCase() === statusFilter.toLowerCase());
+  }, [orders, statusFilter]);
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        <h1 className="text-2xl font-bold text-m4m-black mb-6">My Orders</h1>
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-m4m-gray-200 bg-white h-32 animate-pulse"
+              aria-hidden
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="orders-page">
-      <h1>My Orders</h1>
-      {!getToken() ? (
-        <p className="orders-auth-msg">Log in to see your orders.</p>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      <h1 className="text-2xl font-bold text-m4m-black mb-6">My Orders</h1>
+
+      {!user ? (
+        <div className="rounded-2xl border border-m4m-gray-200 bg-white p-8 text-center shadow-sm">
+          <p className="text-m4m-gray-500 mb-4">
+            Log in to view your orders.
+          </p>
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-light transition-colors"
+          >
+            Sign in
+          </Link>
+        </div>
       ) : orders.length === 0 ? (
-        <p className="orders-empty">You have no orders yet.</p>
+        <div className="rounded-2xl border border-m4m-gray-200 bg-white p-8 md:p-12 text-center shadow-sm">
+          <div className="w-14 h-14 rounded-full bg-m4m-gray-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-m4m-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+            </svg>
+          </div>
+          <p className="text-m4m-gray-600 font-medium">No orders yet</p>
+          <p className="text-sm text-m4m-gray-500 mt-1">Your orders will appear here after you make a purchase.</p>
+          <Link to="/" className="mt-6 inline-block text-m4m-purple font-medium hover:underline">
+            Browse marketplace
+          </Link>
+        </div>
       ) : (
-        <ul className="orders-list">
-          {orders.map((order) => (
-            <li key={order.id} className="order-card">
-              <div className="order-header">
-                <Link to={`/orders/${order.id}`} className="order-id">
-                  Order #{order.id}
-                </Link>
-                <span className={`order-status ${order.status}`}>{order.status}</span>
-              </div>
-              <p className="order-total">
-                Total: ${Number(order.total_amount ?? 0).toFixed(2)}
-              </p>
-              {order.order_items?.length > 0 && (
-                <p className="order-items-preview">
-                  {order.order_items.map((i) => i.product?.name).filter(Boolean).join(', ') || `${order.order_items.length} item(s)`}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
+        <>
+          <div className="mb-6">
+            <label htmlFor="order-status-filter" className="block text-sm font-medium text-m4m-gray-700 mb-2">
+              Filter by status
+            </label>
+            <select
+              id="order-status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-2.5 rounded-xl border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none min-w-[180px]"
+            >
+              {ORDER_STATUSES.map((opt) => (
+                <option key={opt.value || 'all'} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {filteredOrders.length === 0 ? (
+            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-8 text-center shadow-sm">
+              <p className="text-m4m-gray-500">No orders match the selected status.</p>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('')}
+                className="mt-3 text-m4m-purple font-medium hover:underline"
+              >
+                Clear filter
+              </button>
+            </div>
+          ) : (
+            <ul className="space-y-4">
+              {filteredOrders.map((order) => (
+                <OrderCard key={order.id} order={order} />
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </div>
   );
