@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { apiFetch, getToken } from '../lib/api';
-import { getNotifications, markNotificationRead } from '../services/api';
+import { getToken } from '../lib/api';
+import { getWallet, getNotifications, markNotificationRead } from '../services/api';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -29,9 +29,9 @@ export default function Navbar() {
       return;
     }
     let cancelled = false;
-    apiFetch('/wallet')
+    getWallet()
       .then((data) => {
-        if (!cancelled && data.data) setWalletBalance(data.data.balance);
+        if (!cancelled && data != null) setWalletBalance(data.balance);
       })
       .catch(() => {
         if (!cancelled) setWalletBalance(null);

@@ -60,6 +60,7 @@ export default function SellerDashboardPage() {
   const [editingProduct, setEditingProduct] = useState(null);
   const [formError, setFormError] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
+  const [actionMessage, setActionMessage] = useState(null);
   const [form, setForm] = useState({
     title: '',
     game: '',
@@ -105,11 +106,18 @@ export default function SellerDashboardPage() {
     fetchOrders();
   }, [fetchOrders]);
 
+  useEffect(() => {
+    if (!actionMessage) return;
+    const t = setTimeout(() => setActionMessage(null), 3000);
+    return () => clearTimeout(t);
+  }, [actionMessage]);
+
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     setFormError('');
     try {
       await updateSellerOrderStatus(orderId, { status: newStatus });
       await fetchOrders();
+      setActionMessage({ type: 'success', text: 'Order status updated.' });
     } catch (err) {
       setFormError(err.message || 'Failed to update order status.');
     }
@@ -166,6 +174,7 @@ export default function SellerDashboardPage() {
       setForm({ title: '', game: '', description: '', price: '', stock: '', delivery_time: '', image: '' });
       setAddProductOpen(false);
       await fetchProducts();
+      setActionMessage({ type: 'success', text: 'Product created.' });
     } catch (err) {
       setFormError(err.message || 'Failed to create product.');
     } finally {
@@ -178,6 +187,7 @@ export default function SellerDashboardPage() {
     try {
       await deleteProduct(product.id);
       await fetchProducts();
+      setActionMessage({ type: 'success', text: 'Product deleted.' });
     } catch (err) {
       setFormError(err.message || 'Failed to delete product.');
     }
@@ -228,6 +238,7 @@ export default function SellerDashboardPage() {
       });
       setEditingProduct(null);
       await fetchProducts();
+      setActionMessage({ type: 'success', text: 'Product updated.' });
     } catch (err) {
       setFormError(err.message || 'Failed to update product.');
     } finally {
@@ -315,6 +326,18 @@ export default function SellerDashboardPage() {
 
       {/* Main content */}
       <main className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 bg-m4m-gray-50">
+        {actionMessage && (
+          <div
+            className={`mb-6 p-4 rounded-xl border ${
+              actionMessage.type === 'success'
+                ? 'bg-green-50 border-green-200 text-green-800'
+                : 'bg-red-50 border-red-200 text-red-700'
+            }`}
+            role="alert"
+          >
+            {actionMessage.text}
+          </div>
+        )}
         {section === 'overview' && (
           <>
             <h1 className="text-xl font-bold text-m4m-black mb-6">Overview</h1>

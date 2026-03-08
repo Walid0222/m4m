@@ -6,9 +6,9 @@ export function getOrderStatusStyle(status) {
   const s = (status || '').toLowerCase();
   const configs = {
     pending: {
-      border: 'border-l-amber-500',
-      bg: 'bg-amber-50',
-      badge: 'bg-amber-100 text-amber-800',
+      border: 'border-l-gray-500',
+      bg: 'bg-gray-50',
+      badge: 'bg-gray-200 text-gray-800',
       label: 'Pending',
     },
     paid: {
@@ -18,15 +18,15 @@ export function getOrderStatusStyle(status) {
       label: 'Paid',
     },
     processing: {
-      border: 'border-l-indigo-500',
-      bg: 'bg-indigo-50',
-      badge: 'bg-indigo-100 text-indigo-800',
+      border: 'border-l-blue-500',
+      bg: 'bg-blue-50',
+      badge: 'bg-blue-100 text-blue-800',
       label: 'Processing',
     },
     delivered: {
-      border: 'border-l-teal-500',
-      bg: 'bg-teal-50',
-      badge: 'bg-teal-100 text-teal-800',
+      border: 'border-l-orange-500',
+      bg: 'bg-orange-50',
+      badge: 'bg-orange-100 text-orange-800',
       label: 'Delivered',
     },
     completed: {

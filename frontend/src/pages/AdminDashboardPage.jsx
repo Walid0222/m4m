@@ -10,6 +10,7 @@ export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState('deposits');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [flashMessage, setFlashMessage] = useState(null);
 
   useEffect(() => {
     if (!getToken()) {
@@ -43,6 +44,12 @@ export default function AdminDashboardPage() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!flashMessage) return;
+    const t = setTimeout(() => setFlashMessage(null), 3000);
+    return () => clearTimeout(t);
+  }, [flashMessage]);
+
   const handleVerifyDeposit = async (depositId, action) => {
     try {
       await apiFetch(`/admin/deposit-requests/${depositId}/verify`, {
@@ -51,7 +58,10 @@ export default function AdminDashboardPage() {
         body: JSON.stringify({ action }),
       });
       setDeposits((d) => d.filter((x) => x.id !== depositId));
-    } catch {}
+      setFlashMessage({ type: 'success', text: action === 'approve' ? 'Deposit approved and wallet credited.' : 'Deposit rejected.' });
+    } catch {
+      setFlashMessage({ type: 'error', text: 'Action failed. Please try again.' });
+    }
   };
 
   const handleVerifyWithdraw = async (withdrawId, action) => {
@@ -62,7 +72,10 @@ export default function AdminDashboardPage() {
         body: JSON.stringify({ action }),
       });
       setWithdrawals((w) => w.filter((x) => x.id !== withdrawId));
-    } catch {}
+      setFlashMessage({ type: 'success', text: action === 'approve' ? 'Withdrawal approved.' : 'Withdrawal rejected.' });
+    } catch {
+      setFlashMessage({ type: 'error', text: 'Action failed. Please try again.' });
+    }
   };
 
   if (loading && deposits.length === 0 && withdrawals.length === 0) {
@@ -81,6 +94,19 @@ export default function AdminDashboardPage() {
       {error && (
         <div className="mb-6 p-4 rounded-lg bg-red-50 text-red-700">
           {error}
+        </div>
+      )}
+
+      {flashMessage && (
+        <div
+          className={`mb-6 p-4 rounded-xl border ${
+            flashMessage.type === 'success'
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+          role="alert"
+        >
+          {flashMessage.text}
         </div>
       )}
 

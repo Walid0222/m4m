@@ -40,12 +40,16 @@ export default function ProductCard({ product }) {
 
         {/* Seller name + online indicator */}
         <div className="mt-2 flex items-center gap-2 flex-wrap">
-          <Link
-            to={`/seller/${seller?.id ?? id}`}
-            className="text-sm text-m4m-gray-600 hover:text-m4m-purple transition-colors"
-          >
-            {sellerName}
-          </Link>
+          {seller?.id ? (
+            <Link
+              to={`/seller/${seller.id}`}
+              className="text-sm text-m4m-gray-600 hover:text-m4m-purple transition-colors"
+            >
+              {sellerName}
+            </Link>
+          ) : (
+            <span className="text-sm text-m4m-gray-600">{sellerName}</span>
+          )}
           <span
             className={`inline-flex items-center gap-1 text-xs font-medium ${
               online ? 'text-green-600' : 'text-m4m-gray-500'

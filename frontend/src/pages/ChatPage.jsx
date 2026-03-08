@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getEcho } from '../echo';
 import {
@@ -13,6 +13,7 @@ import ChatBox from '../components/ChatBox';
 
 export default function ChatPage() {
   const { user } = useAuth();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [conversations, setConversations] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -173,9 +174,13 @@ export default function ChatPage() {
       {!user ? (
         <div className="rounded-2xl border border-m4m-gray-200 bg-white p-8 text-center shadow-sm">
           <p className="text-m4m-gray-500 mb-4">Log in to use chat.</p>
-          <a href="/login" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-light transition-colors">
+          <Link
+            to="/login"
+            state={{ from: location }}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-light transition-colors"
+          >
             Sign in
-          </a>
+          </Link>
         </div>
       ) : (
         <div className="rounded-2xl border border-m4m-gray-200 overflow-hidden bg-white shadow-lg flex flex-col md:flex-row min-h-[560px]">

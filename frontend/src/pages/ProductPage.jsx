@@ -47,6 +47,13 @@ export default function ProductPage() {
       return;
     }
     if (!product || quantity < 1) return;
+
+    const currentStock = Number(product.stock ?? 0);
+    if (currentStock <= 0) {
+      setError('Out of stock.');
+      return;
+    }
+
     setError('');
     setBuying(true);
     try {
@@ -59,6 +66,15 @@ export default function ProductPage() {
         return;
       }
       await createOrder([{ product_id: product.id, quantity }]);
+      // Optimistically decrease local stock so UI reflects the purchase
+      setProduct((prev) =>
+        prev
+          ? {
+              ...prev,
+              stock: Math.max(0, Number(prev.stock ?? 0) - quantity),
+            }
+          : prev
+      );
       navigate('/orders');
     } catch (err) {
       setError(err.message || 'Purchase failed');
@@ -121,6 +137,7 @@ export default function ProductPage() {
   const seller = product.seller || {};
   const price = Number(product.price || 0);
   const stock = Number(product.stock ?? 0);
+  const isOutOfStock = stock <= 0;
   const rating = getRating(product);
   const displayRating = rating != null ? rating : 4;
   const sellerOnline = isSellerOnline(seller);
@@ -221,6 +238,11 @@ export default function ProductPage() {
           <p className="mt-1 text-sm text-m4m-gray-500">
             In stock: {stock}
           </p>
+          {isOutOfStock && (
+            <p className="mt-1 text-sm font-medium text-red-600">
+              Out of stock
+            </p>
+          )}
 
           {/* Description */}
           {product.description && (
@@ -240,16 +262,17 @@ export default function ProductPage() {
                   min={1}
                   max={stock}
                   value={quantity}
+                  disabled={isOutOfStock}
                   onChange={(e) =>
                     setQuantity(Math.max(1, Math.min(stock, parseInt(e.target.value, 10) || 1)))
                   }
-                  className="w-24 px-3 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                  className="w-24 px-3 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none disabled:bg-m4m-gray-50 disabled:text-m4m-gray-400"
                 />
               </label>
               <button
                 type="button"
                 onClick={handleBuy}
-                disabled={buying || stock < 1}
+                disabled={buying || isOutOfStock}
                 className="px-8 py-3 rounded-lg font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
               >
                 {buying ? 'Processing…' : 'BUY'}
