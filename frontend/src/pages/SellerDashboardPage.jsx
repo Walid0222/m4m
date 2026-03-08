@@ -80,14 +80,19 @@ export default function SellerDashboardPage() {
   const [formError, setFormError] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
+  const [orderStatusConfirm, setOrderStatusConfirm] = useState(null); // { orderId, status }
   const [form, setForm] = useState({
     title: '',
     game: '',
     description: '',
     price: '',
     stock: '',
+    delivery_type: 'manual',
     delivery_time: '',
-    image: '',
+    delivery_content: '',
+    image_urls: '',
+    features: [],
+    seller_reminder: '',
   });
 
   const fetchProducts = useCallback(async () => {
@@ -145,7 +150,14 @@ export default function SellerDashboardPage() {
     return () => clearTimeout(t);
   }, [actionMessage]);
 
-  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+  const handleUpdateOrderStatus = (orderId, newStatus) => {
+    setOrderStatusConfirm({ orderId, status: newStatus });
+  };
+
+  const handleOrderStatusConfirm = async () => {
+    if (!orderStatusConfirm) return;
+    const { orderId, status: newStatus } = orderStatusConfirm;
+    setOrderStatusConfirm(null);
     setFormError('');
     try {
       await updateSellerOrderStatus(orderId, { status: newStatus });
@@ -218,32 +230,44 @@ export default function SellerDashboardPage() {
     e.preventDefault();
     setFormError('');
     const title = (form.title || '').trim();
-    if (!title) {
-      setFormError('Title is required.');
-      return;
-    }
+    if (!title) { setFormError('Title is required.'); return; }
     const price = parseFloat(form.price);
-    if (Number.isNaN(price) || price < 0) {
-      setFormError('Please enter a valid price.');
-      return;
+    if (Number.isNaN(price) || price < 0) { setFormError('Please enter a valid price.'); return; }
+
+    // Instant delivery: stock = number of lines in delivery_content
+    const deliveryContent = (form.delivery_content || '').trim();
+    const deliveryLines = deliveryContent ? deliveryContent.split('\n').filter((l) => l.trim()) : [];
+    const isInstant = form.delivery_type === 'instant';
+    let stock;
+    if (isInstant) {
+      stock = deliveryLines.length;
+    } else {
+      stock = parseInt(form.stock, 10);
+      if (Number.isNaN(stock) || stock < 0) { setFormError('Please enter a valid stock quantity.'); return; }
     }
-    const stock = parseInt(form.stock, 10);
-    if (Number.isNaN(stock) || stock < 0) {
-      setFormError('Please enter a valid stock quantity.');
-      return;
-    }
+
     const parts = [];
     if ((form.game || '').trim()) parts.push('Game: ' + form.game.trim());
-    if ((form.delivery_time || '').trim()) parts.push('Delivery time: ' + form.delivery_time.trim());
     if ((form.description || '').trim()) parts.push(form.description.trim());
     const description = parts.length ? parts.join('\n\n') : null;
-    const imageUrl = (form.image || '').trim();
-    const images = imageUrl ? [imageUrl] : [];
+    const images = (form.image_urls || '').split('\n').map((u) => u.trim()).filter(Boolean);
 
     setFormSubmitting(true);
     try {
-      await createProduct({ name: title, description, price, stock, images, status: 'active' });
-      setForm({ title: '', game: '', description: '', price: '', stock: '', delivery_time: '', image: '' });
+      await createProduct({
+        name: title,
+        description,
+        price,
+        stock,
+        images,
+        status: 'active',
+        delivery_type: form.delivery_type,
+        delivery_time: (form.delivery_time || '').trim() || null,
+        delivery_content: isInstant ? deliveryContent : null,
+        features: form.features,
+        seller_reminder: (form.seller_reminder || '').trim() || null,
+      });
+      setForm({ title: '', game: '', description: '', price: '', stock: '', delivery_type: 'manual', delivery_time: '', delivery_content: '', image_urls: '', features: [], seller_reminder: '' });
       setAddProductOpen(false);
       await fetchProducts();
       setActionMessage({ type: 'success', text: 'Product created.' });
@@ -344,8 +368,35 @@ export default function SellerDashboardPage() {
     );
   }
 
+  const DELIVERY_TIME_OPTIONS = [
+    'Instant delivery', '5 minutes', '15 minutes', '30 minutes',
+    '1 hour', '24 hours', '48 hours',
+  ];
+  const FEATURE_OPTIONS = [
+    { id: 'mac', label: 'Works on Mac' },
+    { id: 'linux', label: 'Works on Linux' },
+    { id: 'global', label: 'Global access' },
+    { id: 'instant', label: 'Instant delivery' },
+    { id: 'assurance', label: '30-day assurance' },
+  ];
+
   return (
     <div className="min-h-[80vh] flex flex-col md:flex-row">
+      {/* Order status confirm modal */}
+      {orderStatusConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="rounded-2xl bg-white shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Confirm status change</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Change order <strong>#{orderStatusConfirm.orderId}</strong> status to <strong className="capitalize">{orderStatusConfirm.status}</strong>?
+            </p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setOrderStatusConfirm(null)} className="flex-1 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+              <button type="button" onClick={handleOrderStatusConfirm} className="flex-1 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Sidebar */}
       <aside className="w-full md:w-64 lg:w-72 border-b md:border-b-0 md:border-r border-m4m-gray-200 bg-white shrink-0">
         <div className="p-4 border-b border-m4m-gray-200">
@@ -434,7 +485,7 @@ export default function SellerDashboardPage() {
               />
               <StatCard
                 title="Wallet balance"
-                value={walletBalance != null ? `$${Number(walletBalance).toFixed(2)}` : '—'}
+                value={walletBalance != null ? `${Number(walletBalance).toFixed(2)} MAD` : '—'}
                 subtitle="Available balance"
                 icon="dollar"
               />
@@ -504,93 +555,94 @@ export default function SellerDashboardPage() {
                 <form onSubmit={handleAddProductSubmit} className="space-y-4 max-w-xl">
                   <div>
                     <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Title *</label>
-                    <input
-                      type="text"
-                      value={form.title}
-                      onChange={(e) => updateForm('title', e.target.value)}
-                      placeholder="Product title"
-                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                      maxLength={255}
-                    />
+                    <input type="text" value={form.title} onChange={(e) => updateForm('title', e.target.value)} placeholder="Product title" maxLength={255} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Game</label>
-                    <input
-                      type="text"
-                      value={form.game}
-                      onChange={(e) => updateForm('game', e.target.value)}
-                      placeholder="e.g. Fortnite, Minecraft"
-                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                    />
+                    <input type="text" value={form.game} onChange={(e) => updateForm('game', e.target.value)} placeholder="e.g. Fortnite, Minecraft" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Description</label>
-                    <textarea
-                      value={form.description}
-                      onChange={(e) => updateForm('description', e.target.value)}
-                      placeholder="Product description"
-                      rows={3}
-                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none"
-                    />
+                    <textarea value={form.description} onChange={(e) => updateForm('description', e.target.value)} placeholder="Product description" rows={3} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Price *</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={form.price}
-                        onChange={(e) => updateForm('price', e.target.value)}
-                        placeholder="0.00"
-                        className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                      />
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Price (MAD) *</label>
+                    <input type="number" min="0" step="0.01" value={form.price} onChange={(e) => updateForm('price', e.target.value)} placeholder="0.00" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                  </div>
+
+                  {/* Delivery type */}
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Delivery type</label>
+                    <div className="flex gap-3">
+                      {['manual', 'instant'].map((dt) => (
+                        <button key={dt} type="button" onClick={() => updateForm('delivery_type', dt)} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors capitalize ${form.delivery_type === dt ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
+                          {dt === 'instant' ? '⚡ Instant delivery' : '📦 Manual delivery'}
+                        </button>
+                      ))}
                     </div>
+                  </div>
+
+                  {/* Instant: delivery content */}
+                  {form.delivery_type === 'instant' ? (
+                    <div className="rounded-xl bg-green-50 border border-green-200 p-4">
+                      <label className="block text-sm font-semibold text-green-800 mb-1">
+                        Delivery content <span className="font-normal text-green-600">(one item per line)</span>
+                      </label>
+                      <p className="text-xs text-green-700 mb-2">Each line = 1 unit of stock. e.g.: <code className="bg-green-100 px-1 rounded">email:password</code></p>
+                      <textarea value={form.delivery_content} onChange={(e) => { updateForm('delivery_content', e.target.value); }} placeholder={"email1:password1\nemail2:password2\nemail3:password3"} rows={5} className="w-full px-3 py-2 rounded-lg border border-green-300 text-gray-900 text-sm focus:ring-2 focus:ring-green-500 outline-none resize-y font-mono" />
+                      <p className="text-xs text-green-600 mt-1">
+                        Stock: <strong>{form.delivery_content.split('\n').filter((l) => l.trim()).length} items</strong>
+                      </p>
+                    </div>
+                  ) : (
                     <div>
                       <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Stock *</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={form.stock}
-                        onChange={(e) => updateForm('stock', e.target.value)}
-                        placeholder="0"
-                        className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                      />
+                      <input type="number" min="0" value={form.stock} onChange={(e) => updateForm('stock', e.target.value)} placeholder="0" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                    </div>
+                  )}
+
+                  {/* Delivery time */}
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Delivery time</label>
+                    <div className="flex flex-wrap gap-2">
+                      {DELIVERY_TIME_OPTIONS.map((opt) => (
+                        <button key={opt} type="button" onClick={() => updateForm('delivery_time', form.delivery_time === opt ? '' : opt)} className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${form.delivery_time === opt ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
+                          {opt}
+                        </button>
+                      ))}
                     </div>
                   </div>
+
+                  {/* Feature icons */}
                   <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Delivery time</label>
-                    <input
-                      type="text"
-                      value={form.delivery_time}
-                      onChange={(e) => updateForm('delivery_time', e.target.value)}
-                      placeholder="e.g. 24 hours, 1-3 days"
-                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                    />
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Features</label>
+                    <div className="flex flex-wrap gap-2">
+                      {FEATURE_OPTIONS.map((f) => {
+                        const selected = form.features.includes(f.id);
+                        return (
+                          <button key={f.id} type="button" onClick={() => updateForm('features', selected ? form.features.filter((x) => x !== f.id) : [...form.features, f.id])} className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${selected ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
+                            {f.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {/* Image URLs */}
                   <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Image URL</label>
-                    <input
-                      type="url"
-                      value={form.image}
-                      onChange={(e) => updateForm('image', e.target.value)}
-                      placeholder="https://..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                    />
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Image URLs <span className="font-normal text-m4m-gray-400">(one per line)</span></label>
+                    <textarea value={form.image_urls} onChange={(e) => updateForm('image_urls', e.target.value)} placeholder={"https://example.com/image1.jpg\nhttps://example.com/image2.jpg"} rows={3} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none font-mono text-sm" />
                   </div>
+
+                  {/* Seller reminder */}
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Seller note / reminder <span className="font-normal text-m4m-gray-400">(shown to buyers on product page)</span></label>
+                    <textarea value={form.seller_reminder} onChange={(e) => updateForm('seller_reminder', e.target.value)} placeholder="e.g. Please provide your game username after purchase." rows={2} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
+                  </div>
+
                   <div className="flex gap-3 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => { setAddProductOpen(false); setFormError(''); }}
-                      className="px-4 py-2.5 rounded-lg font-medium border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={formSubmitting}
-                      className="px-4 py-2.5 rounded-lg font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60"
-                    >
+                    <button type="button" onClick={() => { setAddProductOpen(false); setFormError(''); }} className="px-4 py-2.5 rounded-lg font-medium border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50">Cancel</button>
+                    <button type="submit" disabled={formSubmitting} className="px-4 py-2.5 rounded-lg font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60">
                       {formSubmitting ? 'Creating…' : 'Create product'}
                     </button>
                   </div>
@@ -704,7 +756,7 @@ export default function SellerDashboardPage() {
                       </div>
                     )}
                     <h3 className="font-semibold text-m4m-black truncate">{p.name}</h3>
-                    <p className="mt-1 text-lg font-bold text-m4m-black">${Number(p.price).toFixed(2)}</p>
+                    <p className="mt-1 text-lg font-bold text-m4m-black">{Number(p.price).toFixed(2)} MAD</p>
                     <p className="text-sm text-m4m-gray-600">Stock: {Number(p.stock ?? 0)}</p>
                     <div className="mt-3 pt-3 border-t border-m4m-gray-100 flex gap-2">
                       <button
@@ -761,7 +813,7 @@ export default function SellerDashboardPage() {
                     >
                       <div className="p-4 md:p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                          <span className="font-semibold text-m4m-black">Order #{order.id}</span>
+                          <span className="font-mono font-semibold text-m4m-black">M4M-{String(order.id).padStart(6, '0')}</span>
                           <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${style.badge}`}>
                             {style.label}
                           </span>
@@ -771,7 +823,7 @@ export default function SellerDashboardPage() {
                           Buyer: {order.buyer?.name ?? '—'}
                         </p>
                         <p className="mt-1 text-lg font-bold text-m4m-black">
-                          ${Number(order.total_amount ?? 0).toFixed(2)}
+                          {Number(order.total_amount ?? 0).toFixed(2)} MAD
                         </p>
                         <p className="mt-1 text-sm text-m4m-gray-500">
                           {order.created_at ? new Date(order.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}

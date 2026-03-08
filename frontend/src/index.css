@@ -40,12 +40,12 @@ body {
 }
 
 a {
-  color: var(--color-m4m-purple);
+  color: inherit;
   font-weight: 500;
+  text-decoration: none;
 }
 a:hover {
-  color: var(--color-m4m-purple-dark);
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 button {

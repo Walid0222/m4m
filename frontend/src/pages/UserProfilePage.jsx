@@ -10,6 +10,8 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
 
+  const handleOpenEdit = () => setEditOpen(true);
+
   useEffect(() => {
     if (!user || !getToken()) {
       setLoading(false);

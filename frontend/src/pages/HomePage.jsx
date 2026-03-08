@@ -3,6 +3,63 @@ import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import { getProducts, paginatedItems } from '../services/api';
 
+const TESTIMONIALS = [
+  {
+    id: 1,
+    name: 'Ahmed Karim',
+    avatar: 'A',
+    comment: 'خدمة ممتازة وسريعة جداً! حصلت على حسابي في دقائق. سأعود بالتأكيد للشراء مجدداً.',
+    rating: 5,
+    date: 'Feb 2026',
+    flag: '🇲🇦',
+  },
+  {
+    id: 2,
+    name: 'Lucas Moreau',
+    avatar: 'L',
+    comment: 'Super marketplace, j\'ai acheté plusieurs produits sans aucun problème. Le vendeur était très réactif et professionnel.',
+    rating: 5,
+    date: 'Jan 2026',
+    flag: '🇫🇷',
+  },
+  {
+    id: 3,
+    name: 'Jordan Smith',
+    avatar: 'J',
+    comment: 'Absolutely love this platform! The instant delivery feature is a game changer. Got my account credentials in seconds.',
+    rating: 5,
+    date: 'Mar 2026',
+    flag: '🇺🇸',
+  },
+  {
+    id: 4,
+    name: 'Youssef Benali',
+    avatar: 'Y',
+    comment: 'منصة موثوقة ومنظمة. الدعم ممتاز والأسعار معقولة. أنصح الجميع بالتسوق من هنا.',
+    rating: 4,
+    date: 'Feb 2026',
+    flag: '🇩🇿',
+  },
+  {
+    id: 5,
+    name: 'Camille Dupont',
+    avatar: 'C',
+    comment: 'Très bonne expérience d\'achat. La vérification des vendeurs donne confiance. Je recommande vivement M4M.',
+    rating: 5,
+    date: 'Mar 2026',
+    flag: '🇧🇪',
+  },
+  {
+    id: 6,
+    name: 'Tyler Brooks',
+    avatar: 'T',
+    comment: 'Fast, reliable and trustworthy. The escrow-like deposit system makes me feel safe spending money here.',
+    rating: 4,
+    date: 'Jan 2026',
+    flag: '🇬🇧',
+  },
+];
+
 const RATING_OPTIONS = [
   { value: '', label: 'Any rating' },
   { value: '3', label: '3+ stars' },
@@ -230,7 +287,62 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-m4m-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      {/* Hero Banner */}
+      <section className="relative bg-gradient-to-br from-gray-900 via-purple-950 to-gray-900 overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-10 left-10 w-72 h-72 bg-m4m-purple rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-10 w-96 h-64 bg-purple-400 rounded-full blur-3xl" />
+        </div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 md:py-20 flex flex-col md:flex-row items-center gap-10">
+          <div className="flex-1 text-center md:text-left">
+            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-1.5 text-sm text-white/80 mb-5">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              Trusted by 10,000+ gamers worldwide
+            </div>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight mb-5">
+              Discover the{' '}
+              <span className="text-m4m-purple-light">favorite marketplace</span>
+              {' '}for game services & products
+            </h1>
+            <p className="text-base md:text-lg text-gray-400 max-w-xl mb-8 mx-auto md:mx-0">
+              With worldwide gamers enjoying game accounts, credits, and digital goods — all delivered safely and instantly.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+              <a
+                href="#marketplace"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
+              >
+                Browse Products
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </a>
+              <a
+                href="#reviews"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-colors"
+              >
+                See Reviews
+              </a>
+            </div>
+          </div>
+          {/* Stats */}
+          <div className="flex-shrink-0 grid grid-cols-2 gap-3">
+            {[
+              { label: 'Products', value: '500+' },
+              { label: 'Sellers', value: '120+' },
+              { label: 'Orders', value: '8K+' },
+              { label: 'Happy Buyers', value: '5K+' },
+            ].map(({ label, value }) => (
+              <div key={label} className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-5 text-center">
+                <p className="text-2xl font-bold text-white">{value}</p>
+                <p className="text-sm text-gray-400 mt-1">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <div id="marketplace" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
         {/* Z2U-style top section: search + filters in one card */}
         <section className="mb-6 md:mb-8">
           <div className="flex items-baseline justify-between gap-4 mb-3">
@@ -443,6 +555,39 @@ export default function HomePage() {
           )}
         </section>
       </div>
+
+      {/* Community Reviews */}
+      <section id="reviews" className="bg-white border-t border-gray-100 py-14 md:py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">What our community says</h2>
+            <p className="mt-2 text-gray-500">Real reviews from real buyers around the world</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {TESTIMONIALS.map((t) => (
+              <div key={t.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-6 flex flex-col gap-4">
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <svg key={i} className={`w-4 h-4 ${i < t.rating ? 'text-yellow-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  ))}
+                </div>
+                <p className="text-gray-700 text-sm leading-relaxed flex-1">&ldquo;{t.comment}&rdquo;</p>
+                <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
+                  <span className="w-9 h-9 rounded-full bg-m4m-purple text-white flex items-center justify-center font-bold text-sm shrink-0">
+                    {t.avatar}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{t.flag} {t.name}</p>
+                    <p className="text-xs text-gray-400">{t.date}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

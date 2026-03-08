@@ -141,18 +141,20 @@ export default function OrdersPage() {
       ) : (
         <>
           {deliveredOrders.length > 0 && (
-            <div className="mb-6 p-4 rounded-xl border border-green-200 bg-green-50 flex flex-wrap items-center justify-between gap-4">
-              <p className="text-green-800 font-medium">
-                Your order has been delivered. Please confirm delivery.
-              </p>
-              <button
-                type="button"
-                onClick={() => firstDeliveredOrder && handleConfirmDelivery(firstDeliveredOrder.id)}
-                disabled={isConfirmingFirst}
-                className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-70 disabled:cursor-not-allowed transition-colors shadow-sm"
-              >
-                {isConfirmingFirst ? 'Confirming…' : 'Confirm delivery'}
-              </button>
+            <div className="mb-6 p-4 rounded-xl border border-orange-200 bg-orange-50 flex flex-wrap items-center gap-3">
+              <svg className="w-5 h-5 text-orange-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-orange-800 font-medium text-sm">
+                  {deliveredOrders.length === 1
+                    ? 'Your order has been delivered! Please confirm receipt below.'
+                    : `${deliveredOrders.length} orders have been delivered. Please confirm receipt.`}
+                </p>
+                <p className="text-orange-600 text-xs mt-0.5">
+                  Tip: Only confirm once you have received and verified the delivery. Orders auto-confirm after 7 days.
+                </p>
+              </div>
             </div>
           )}
 
