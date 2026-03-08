@@ -37,7 +37,7 @@ class ProductController extends Controller
             return $this->error('Product not available.', 404);
         }
 
-        $product->load('seller:id,name,last_activity_at');
+        $product->load(['seller:id,name,last_activity_at', 'reviews.reviewer:id,name']);
 
         return $this->success($product);
     }

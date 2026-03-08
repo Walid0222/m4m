@@ -1,7 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getProduct, createOrder, createConversation, getWallet, getToken } from '../services/api';
+import {
+  getProduct,
+  createOrder,
+  createConversation,
+  createReview,
+  getWallet,
+  getOrders,
+  getToken,
+  paginatedItems,
+} from '../services/api';
 import { isSellerOnline } from '../lib/sellerOnline';
 
 function getRating(product) {
@@ -22,6 +31,13 @@ export default function ProductPage() {
   const [chatting, setChatting] = useState(false);
   const [error, setError] = useState('');
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [userOrders, setUserOrders] = useState([]);
+  const [reviewFormOpen, setReviewFormOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewOrderId, setReviewOrderId] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +56,70 @@ export default function ProductPage() {
     fetchProduct();
     return () => { cancelled = true; };
   }, [id]);
+
+  // Fetch user's orders to check if they can leave a review
+  useEffect(() => {
+    if (!user || !getToken() || !product?.id) {
+      setUserOrders([]);
+      return;
+    }
+    let cancelled = false;
+    getOrders({ per_page: 100 })
+      .then((res) => {
+        if (cancelled) return;
+        const orders = paginatedItems(res) ?? [];
+        setUserOrders(Array.isArray(orders) ? orders : []);
+      })
+      .catch(() => {
+        if (!cancelled) setUserOrders([]);
+      });
+    return () => { cancelled = true; };
+  }, [user, product?.id]);
+
+  const eligibleOrders = useMemo(() => {
+    if (!product?.id || !userOrders.length) return [];
+    const reviewedOrderIds = new Set(
+      (product.reviews ?? [])
+        .filter((r) => Number(r.user_id) === Number(user?.id))
+        .map((r) => r.order_id)
+    );
+    return userOrders.filter((o) => {
+      if ((o.status || '').toLowerCase() !== 'completed') return false;
+      if (reviewedOrderIds.has(o.id)) return false;
+      const items = o.order_items ?? o.orderItems ?? [];
+      return items.some((i) => Number(i.product_id) === Number(product.id));
+    });
+  }, [product?.id, product?.reviews, user?.id, userOrders]);
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!product || !reviewOrderId || !user || !getToken()) return;
+    setReviewError('');
+    setSubmittingReview(true);
+    try {
+      const newReview = await createReview(product.id, {
+        order_id: parseInt(reviewOrderId, 10),
+        rating: reviewRating,
+        comment: reviewComment.trim() || null,
+      });
+      setProduct((prev) =>
+        prev
+          ? {
+              ...prev,
+              reviews: [...(prev.reviews ?? []), { ...newReview, reviewer: newReview.reviewer || { name: user.name } }],
+            }
+          : prev
+      );
+      setReviewFormOpen(false);
+      setReviewComment('');
+      setReviewRating(5);
+      setReviewOrderId('');
+    } catch (err) {
+      setReviewError(err.message || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const handleBuy = async () => {
     if (!user || !getToken()) {
@@ -84,17 +164,18 @@ export default function ProductPage() {
   };
 
   const handleChatSeller = async () => {
+    const sellerData = product?.seller;
     if (!user || !getToken()) {
       navigate('/login', { state: { from: `/product/${id}` } });
       return;
     }
-    if (!product || !seller?.id) return;
-    if (seller.id === user.id) return;
+    if (!product || !sellerData?.id) return;
+    if (sellerData.id === user.id) return;
     setError('');
     setChatting(true);
     try {
       const conversation = await createConversation({
-        other_user_id: seller.id,
+        other_user_id: sellerData.id,
         product_id: product.id,
       });
       const convId = conversation?.id;
@@ -139,7 +220,12 @@ export default function ProductPage() {
   const stock = Number(product.stock ?? 0);
   const isOutOfStock = stock <= 0;
   const rating = getRating(product);
-  const displayRating = rating != null ? rating : 4;
+  const reviews = product.reviews ?? [];
+  const avgRatingFromReviews =
+    reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length
+      : null;
+  const displayRating = rating != null ? rating : avgRatingFromReviews ?? null;
   const sellerOnline = isSellerOnline(seller);
   const images = product.images && product.images.length > 0 ? product.images : [];
   const mainImage = images[selectedImageIndex] || images[0];
@@ -226,11 +312,14 @@ export default function ProductPage() {
           </div>
 
           {/* Rating */}
-          <div className="mt-4 flex items-center gap-2" aria-label={rating != null ? `Rating: ${displayRating} out of 5` : 'No rating yet'}>
+          <div className="mt-4 flex items-center gap-2" aria-label={displayRating != null ? `Rating: ${displayRating.toFixed(1)} out of 5` : 'No rating yet'}>
             <span className="text-amber-500" aria-hidden>★</span>
             <span className="text-m4m-gray-700 font-medium">
-              {rating != null ? `${displayRating.toFixed(1)}` : 'No rating yet'}
+              {displayRating != null ? `${displayRating.toFixed(1)}` : 'No rating yet'}
             </span>
+            {reviews.length > 0 && (
+              <span className="text-sm text-m4m-gray-500">({reviews.length} review{reviews.length !== 1 ? 's' : ''})</span>
+            )}
           </div>
 
           {/* Price & stock */}
@@ -287,43 +376,149 @@ export default function ProductPage() {
 
       {/* Reviews section */}
       <section className="mt-12 pt-10 border-t border-m4m-gray-200">
-        <h2 className="text-xl font-semibold text-m4m-black mb-4">Reviews</h2>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 className="text-xl font-semibold text-m4m-black">Reviews</h2>
+          {user && eligibleOrders.length > 0 && !reviewFormOpen && (
+            <button
+              type="button"
+              onClick={() => { setReviewFormOpen(true); setReviewError(''); setReviewOrderId(eligibleOrders[0]?.id || ''); }}
+              className="px-4 py-2 rounded-xl font-medium bg-m4m-purple text-white hover:bg-m4m-purple-light transition-colors"
+            >
+              Write a review
+            </button>
+          )}
+        </div>
+
+        {/* Review form for eligible buyers */}
+        {reviewFormOpen && user && eligibleOrders.length > 0 && (
+          <form
+            onSubmit={handleSubmitReview}
+            className="rounded-xl border border-m4m-gray-200 bg-white p-6 mb-6 shadow-sm"
+          >
+            <h3 className="text-lg font-semibold text-m4m-black mb-4">Leave a review</h3>
+            {reviewError && (
+              <p className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{reviewError}</p>
+            )}
+            <div className="space-y-4 max-w-xl">
+              <div>
+                <label htmlFor="review-order" className="block text-sm font-medium text-m4m-gray-700 mb-1">
+                  Order
+                </label>
+                <select
+                  id="review-order"
+                  value={reviewOrderId}
+                  onChange={(e) => setReviewOrderId(e.target.value)}
+                  required
+                  className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                >
+                  <option value="">Select order</option>
+                  {eligibleOrders.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      Order #{o.id} – {o.created_at ? new Date(o.created_at).toLocaleDateString() : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Rating</label>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className="p-1 focus:outline-none"
+                      aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                    >
+                      <span
+                        className={`text-2xl ${
+                          star <= reviewRating ? 'text-amber-500' : 'text-m4m-gray-200'
+                        }`}
+                      >
+                        ★
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label htmlFor="review-comment" className="block text-sm font-medium text-m4m-gray-700 mb-1">
+                  Comment (optional)
+                </label>
+                <textarea
+                  id="review-comment"
+                  rows={4}
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder="Share your experience..."
+                  className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none placeholder-m4m-gray-400"
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setReviewFormOpen(false); setReviewError(''); }}
+                  className="px-4 py-2.5 rounded-lg font-medium border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReview}
+                  className="px-6 py-2.5 rounded-lg font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60"
+                >
+                  {submittingReview ? 'Submitting…' : 'Submit review'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+
         {product.reviews && product.reviews.length > 0 ? (
           <ul className="space-y-4">
             {product.reviews.map((review) => (
               <li
                 key={review.id}
-                className="rounded-xl border border-m4m-gray-200 bg-white p-4"
+                className="rounded-xl border border-m4m-gray-200 bg-white p-4 shadow-sm"
               >
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="w-8 h-8 rounded-full bg-m4m-gray-200 flex items-center justify-center text-sm font-medium text-m4m-gray-700">
-                    {review.reviewer?.name?.charAt(0) || review.user?.name?.charAt(0) || '?'}
+                <div className="flex items-start gap-3">
+                  <span className="w-10 h-10 rounded-full bg-m4m-purple/20 flex items-center justify-center text-sm font-semibold text-m4m-purple flex-shrink-0">
+                    {(review.reviewer?.name || review.user?.name || '?').charAt(0).toUpperCase()}
                   </span>
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <p className="font-medium text-m4m-black">
                       {review.reviewer?.name || review.user?.name || 'Anonymous'}
                     </p>
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-amber-500">
-                        {'★'.repeat(Math.round(review.rating || 0))}
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <span className="text-amber-500" aria-label={`${review.rating || 0} out of 5 stars`}>
+                        {'★'.repeat(Math.min(5, Math.max(0, Math.round(review.rating || 0))))}
+                        {'☆'.repeat(5 - Math.min(5, Math.max(0, Math.round(review.rating || 0))))}
                       </span>
                       {review.created_at && (
-                        <span className="text-m4m-gray-500">
-                          {new Date(review.created_at).toLocaleDateString()}
+                        <span className="text-sm text-m4m-gray-500">
+                          {new Date(review.created_at).toLocaleDateString(undefined, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
                         </span>
                       )}
                     </div>
+                    {review.comment && (
+                      <p className="text-m4m-gray-700 mt-2 text-sm leading-relaxed">{review.comment}</p>
+                    )}
                   </div>
                 </div>
-                {review.comment && (
-                  <p className="text-m4m-gray-700 text-sm mt-2">{review.comment}</p>
-                )}
               </li>
             ))}
           </ul>
         ) : (
           <div className="rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 py-12 text-center">
-            <p className="text-m4m-gray-500">No reviews yet. Be the first to review after purchasing.</p>
+            <p className="text-m4m-gray-500">
+              {user
+                ? 'No reviews yet. Complete a purchase and confirm delivery to leave a review.'
+                : 'No reviews yet. Sign in and complete a purchase to leave a review.'}
+            </p>
           </div>
         )}
       </section>

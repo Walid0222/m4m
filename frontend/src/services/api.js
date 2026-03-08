@@ -32,10 +32,14 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Normalize errors and optionally handle 401
+// Normalize errors and handle 401 (token expired/invalid)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 401) {
+      setToken(null);
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+    }
     const message = error.response?.data?.message || error.message || 'Request failed';
     const err = new Error(message);
     err.status = error.response?.status;
@@ -94,6 +98,17 @@ export function getProducts(params = {}) {
 
 export function getProduct(id) {
   return api.get(`/products/${id}`).then(unwrap);
+}
+
+export function getSellerProfile(id) {
+  return api.get(`/sellers/${id}`).then(unwrap);
+}
+
+export function createReview(productId, { order_id, rating, comment }) {
+  return api.post(`/products/${productId}/reviews`, { order_id, rating, comment }).then((res) => {
+    const data = res.data?.data !== undefined ? res.data.data : res.data;
+    return data;
+  });
 }
 
 export function getMyProducts(params = {}) {
@@ -197,6 +212,24 @@ export function markNotificationRead(id) {
 
 export function markAllNotificationsRead() {
   return api.post('/notifications/read-all').then(() => {});
+}
+
+// --- Admin ---
+
+export function getAdminDepositRequests() {
+  return api.get('/admin/deposit-requests').then(unwrap);
+}
+
+export function verifyAdminDeposit(depositId, action) {
+  return api.patch(`/admin/deposit-requests/${depositId}/verify`, { action }).then(() => {});
+}
+
+export function getAdminWithdrawRequests() {
+  return api.get('/admin/withdraw-requests').then(unwrap);
+}
+
+export function verifyAdminWithdraw(withdrawId, action) {
+  return api.patch(`/admin/withdraw-requests/${withdrawId}/verify`, { action }).then(() => {});
 }
 
 /**

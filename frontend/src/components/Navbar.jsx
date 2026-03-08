@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getToken } from '../lib/api';
-import { getWallet, getNotifications, markNotificationRead } from '../services/api';
+import { getWallet, getNotifications, markNotificationRead, getToken } from '../services/api';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -16,6 +15,7 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const profileRef = useRef(null);
   const notificationsRef = useRef(null);
+  const notificationsMobileRef = useRef(null);
 
   // Sync search input with URL when navigating
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function Navbar() {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
         setProfileOpen(false);
       }
-      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
+      if (!notificationsRef.current?.contains(e.target) && !notificationsMobileRef.current?.contains(e.target)) {
         setNotificationsOpen(false);
       }
     }
@@ -101,8 +101,43 @@ export default function Navbar() {
     const data = n.data || {};
     if (type === 'new_order') return '/seller-dashboard';
     if (type === 'new_message' && data.conversation_id) return `/chat?conversation=${data.conversation_id}`;
+    if (type === 'order_delivered') return '/orders';
     if (type === 'deposit_approved' || type === 'withdraw_approved') return '/wallet';
     return null;
+  }
+
+  function getNotificationDisplay(n) {
+    const type = n.type || n.data?.type;
+    const data = n.data || {};
+    const fallback = data.message || n.message || 'Notification';
+    const icons = {
+      new_order: (
+        <svg className="w-5 h-5 flex-shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+        </svg>
+      ),
+      new_message: (
+        <svg className="w-5 h-5 flex-shrink-0 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      ),
+      order_delivered: (
+        <svg className="w-5 h-5 flex-shrink-0 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      deposit_approved: (
+        <svg className="w-5 h-5 flex-shrink-0 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+      withdraw_approved: (
+        <svg className="w-5 h-5 flex-shrink-0 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+        </svg>
+      ),
+    };
+    return { icon: icons[type] || null, message: fallback };
   }
 
   async function handleNotificationClick(n) {
@@ -114,6 +149,7 @@ export default function Navbar() {
       } catch {}
     }
     setNotificationsOpen(false);
+    setMobileMenuOpen(false);
     if (link) navigate(link);
   }
 
@@ -156,8 +192,10 @@ export default function Navbar() {
             </div>
           </form>
 
-          {/* Desktop nav: Wallet, Orders, Messages, Profile */}
+          {/* Desktop nav: Wallet, Orders, Messages, Profile (only when logged in) */}
           <nav className="hidden md:flex items-center gap-1">
+            {user && (
+              <>
             <Link
               to="/wallet"
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
@@ -188,25 +226,34 @@ export default function Navbar() {
                 <div className="absolute right-0 mt-1 w-80 max-h-[24rem] overflow-y-auto rounded-xl bg-m4m-gray-800 border border-white/10 shadow-xl py-1 z-50">
                   <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between">
                     <span className="text-sm font-semibold text-white">Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="text-xs text-gray-400">{unreadCount} unread</span>
+                    )}
                   </div>
                   {notifications.length === 0 ? (
                     <p className="px-4 py-6 text-sm text-gray-400 text-center">No notifications yet.</p>
                   ) : (
                     <ul className="py-1">
-                      {notifications.map((n) => (
-                        <li key={n.id}>
-                          <button
-                            type="button"
-                            onClick={() => handleNotificationClick(n)}
-                            className={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors ${!n.read_at ? 'bg-m4m-purple/10' : ''}`}
-                          >
-                            <p className="text-sm text-gray-200 line-clamp-2">{(n.data && n.data.message) || n.message || 'Notification'}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
-                            </p>
-                          </button>
-                        </li>
-                      ))}
+                      {notifications.map((n) => {
+                        const { icon, message } = getNotificationDisplay(n);
+                        return (
+                          <li key={n.id}>
+                            <button
+                              type="button"
+                              onClick={() => handleNotificationClick(n)}
+                              className={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex gap-3 ${!n.read_at ? 'bg-m4m-purple/10' : ''}`}
+                            >
+                              {icon && <span className="flex-shrink-0">{icon}</span>}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm text-gray-200 line-clamp-2">{message}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                                </p>
+                              </div>
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
@@ -234,6 +281,8 @@ export default function Navbar() {
               </svg>
               <span>Messages</span>
             </NavLink>
+              </>
+            )}
 
             {/* Profile dropdown */}
             <div className="relative ml-2" ref={profileRef}>
@@ -260,6 +309,16 @@ export default function Navbar() {
                         <p className="text-sm font-medium text-white truncate">{user.name}</p>
                         <p className="text-xs text-gray-400 truncate">{user.email}</p>
                       </div>
+                      <Link
+                        to="/profile"
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        My Profile
+                      </Link>
                       {user.is_seller && (
                         <Link
                           to="/seller-dashboard"
@@ -358,6 +417,70 @@ export default function Navbar() {
               </div>
             </form>
             <nav className="flex flex-col gap-1">
+              {user && (
+                <>
+              <div className="relative px-4 py-3" ref={notificationsMobileRef}>
+                <button
+                  type="button"
+                  onClick={() => { setNotificationsOpen((o) => !o); }}
+                  className="flex items-center gap-3 w-full rounded-lg text-gray-300 hover:bg-white/5 hover:text-white"
+                >
+                  <span className="relative">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </span>
+                  <span>Notifications</span>
+                  {unreadCount > 0 && (
+                    <span className="ml-auto text-sm font-medium text-white">{unreadCount} unread</span>
+                  )}
+                </button>
+                {notificationsOpen && (
+                  <div className="mt-2 ml-2 rounded-lg border border-white/10 bg-m4m-gray-800 max-h-64 overflow-y-auto py-1">
+                    {notifications.length === 0 ? (
+                      <p className="px-4 py-4 text-sm text-gray-400 text-center">No notifications yet.</p>
+                    ) : (
+                      <ul>
+                        {notifications.slice(0, 5).map((n) => {
+                          const { icon, message } = getNotificationDisplay(n);
+                          return (
+                            <li key={n.id}>
+                              <button
+                                type="button"
+                                onClick={() => handleNotificationClick(n)}
+                                className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-white/5 ${!n.read_at ? 'bg-m4m-purple/10' : ''}`}
+                              >
+                                {icon && <span className="flex-shrink-0">{icon}</span>}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm text-gray-200 line-clamp-2">{message}</p>
+                                  <p className="text-xs text-gray-500 mt-0.5">
+                                    {n.created_at ? new Date(n.created_at).toLocaleString() : ''}
+                                  </p>
+                                </div>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+              <Link
+                to="/profile"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-gray-300 hover:bg-white/5 hover:text-white"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                My Profile
+              </Link>
               <Link
                 to="/wallet"
                 onClick={() => setMobileMenuOpen(false)}
@@ -393,6 +516,8 @@ export default function Navbar() {
                 </svg>
                 Messages
               </NavLink>
+              </>
+              )}
               {user?.is_seller && (
                 <Link
                   to="/seller-dashboard"

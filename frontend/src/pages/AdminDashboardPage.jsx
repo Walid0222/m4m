@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { apiFetch, getToken } from '../lib/api';
+import {
+  getToken,
+  getAdminDepositRequests,
+  getAdminWithdrawRequests,
+  verifyAdminDeposit,
+  verifyAdminWithdraw,
+  paginatedItems,
+} from '../services/api';
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
@@ -22,14 +28,12 @@ export default function AdminDashboardPage() {
     async function fetchData() {
       try {
         const [depRes, wdRes] = await Promise.all([
-          apiFetch('/admin/deposit-requests'),
-          apiFetch('/admin/withdraw-requests').catch(() => ({ data: [] })),
+          getAdminDepositRequests().catch(() => ({ data: [] })),
+          getAdminWithdrawRequests().catch(() => ({ data: [] })),
         ]);
         if (!cancelled) {
-          const depData = depRes?.data ?? depRes;
-          setDeposits(Array.isArray(depData) ? depData : depData?.data ?? []);
-          const wdData = wdRes?.data ?? wdRes;
-          setWithdrawals(Array.isArray(wdData) ? wdData : wdData?.data ?? []);
+          setDeposits(paginatedItems(depRes) ?? []);
+          setWithdrawals(paginatedItems(wdRes) ?? []);
         }
       } catch (e) {
         if (!cancelled) {
@@ -52,11 +56,7 @@ export default function AdminDashboardPage() {
 
   const handleVerifyDeposit = async (depositId, action) => {
     try {
-      await apiFetch(`/admin/deposit-requests/${depositId}/verify`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
+      await verifyAdminDeposit(depositId, action);
       setDeposits((d) => d.filter((x) => x.id !== depositId));
       setFlashMessage({ type: 'success', text: action === 'approve' ? 'Deposit approved and wallet credited.' : 'Deposit rejected.' });
     } catch {
@@ -66,11 +66,7 @@ export default function AdminDashboardPage() {
 
   const handleVerifyWithdraw = async (withdrawId, action) => {
     try {
-      await apiFetch(`/admin/withdraw-requests/${withdrawId}/verify`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
+      await verifyAdminWithdraw(withdrawId, action);
       setWithdrawals((w) => w.filter((x) => x.id !== withdrawId));
       setFlashMessage({ type: 'success', text: action === 'approve' ? 'Withdrawal approved.' : 'Withdrawal rejected.' });
     } catch {

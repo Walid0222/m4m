@@ -14,7 +14,7 @@ export default function AuthPage() {
   const { login, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || '/';
+  const fromPath = location.state?.from?.pathname ?? '/';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,7 +31,7 @@ export default function AuthPage() {
         }
         await register(name, email, password, passwordConfirmation, isSeller);
       }
-      navigate(from, { replace: true });
+      navigate(fromPath, { replace: true });
     } catch (err) {
       setError(err.message || 'Something went wrong');
     } finally {
@@ -40,8 +40,8 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-[60vh] flex items-center justify-center px-4 py-12 bg-white">
-      <div className="w-full max-w-md">
+    <div className="min-h-[60vh] flex items-center justify-center px-4 py-12 bg-m4m-gray-50">
+      <div className="w-full max-w-md rounded-2xl border border-m4m-gray-200 bg-white p-8 shadow-sm">
         <h1 className="text-2xl font-bold text-m4m-black mb-2 text-center">
           {isLogin ? 'Sign in' : 'Create account'}
         </h1>

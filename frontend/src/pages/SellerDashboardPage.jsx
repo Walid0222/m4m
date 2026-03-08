@@ -1,8 +1,26 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
-import { paginatedItems, getToken } from '../lib/api';
-import { getMyProducts, createProduct, updateProduct, deleteProduct, getSellerOrders, updateSellerOrderStatus } from '../services/api';
+import {
+  paginatedItems,
+  getToken,
+  getMyProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  getSellerOrders,
+  updateSellerOrderStatus,
+  getWallet,
+} from '../services/api';
 import OrderCard from '../components/OrderCard';
 import { getOrderStatusStyle } from '../lib/orderStatus';
 
@@ -53,6 +71,7 @@ export default function SellerDashboardPage() {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [walletBalance, setWalletBalance] = useState(null);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [section, setSection] = useState('overview');
@@ -106,6 +125,20 @@ export default function SellerDashboardPage() {
     fetchOrders();
   }, [fetchOrders]);
 
+  const fetchWallet = useCallback(async () => {
+    if (!getToken()) return;
+    try {
+      const data = await getWallet();
+      setWalletBalance(data?.balance ?? 0);
+    } catch {
+      setWalletBalance(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchWallet();
+  }, [fetchWallet]);
+
   useEffect(() => {
     if (!actionMessage) return;
     const t = setTimeout(() => setActionMessage(null), 3000);
@@ -125,11 +158,25 @@ export default function SellerDashboardPage() {
 
   const sellerProductIds = useMemo(() => products.map((p) => p.id), [products]);
   const activeOrderStatuses = ['paid', 'processing', 'delivered'];
-  const totalSales = orders.length;
+  const completedOrderStatuses = ['completed'];
+
+  const totalSales = useMemo(() => {
+    return orders.filter((o) => {
+      const status = (o.status || '').toLowerCase();
+      return !['cancelled', 'dispute'].includes(status);
+    }).length;
+  }, [orders]);
+
   const activeOrders = useMemo(
     () => orders.filter((o) => activeOrderStatuses.includes((o.status || '').toLowerCase())).length,
     [orders]
   );
+
+  const completedOrders = useMemo(
+    () => orders.filter((o) => completedOrderStatuses.includes((o.status || '').toLowerCase())).length,
+    [orders]
+  );
+
   const earnings = useMemo(() => {
     return orders.reduce((sum, order) => {
       const items = order.order_items ?? order.orderItems ?? [];
@@ -138,6 +185,31 @@ export default function SellerDashboardPage() {
         .reduce((s, i) => s + Number(i.total_price ?? 0), 0);
       return sum + myTotal;
     }, 0);
+  }, [orders, sellerProductIds]);
+
+  const salesHistoryData = useMemo(() => {
+    const byDate = new Map();
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      byDate.set(key, { date: key, label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), revenue: 0 });
+    }
+    orders.forEach((order) => {
+      const status = (order.status || '').toLowerCase();
+      if (['cancelled', 'dispute'].includes(status)) return;
+      const items = order.order_items ?? order.orderItems ?? [];
+      const myTotal = items
+        .filter((i) => sellerProductIds.includes(i.product_id))
+        .reduce((s, i) => s + Number(i.total_price ?? 0), 0);
+      if (myTotal <= 0) return;
+      const key = (order.created_at || '').toString().slice(0, 10);
+      if (byDate.has(key)) {
+        byDate.get(key).revenue += myTotal;
+      }
+    });
+    return Array.from(byDate.values());
   }, [orders, sellerProductIds]);
 
   const updateForm = (field, value) => setForm((f) => ({ ...f, [field]: value }));
@@ -345,7 +417,7 @@ export default function SellerDashboardPage() {
               <StatCard
                 title="Total sales"
                 value={loadingOrders ? '—' : totalSales}
-                subtitle="Orders containing your products"
+                subtitle="Orders with your products"
                 icon="order"
               />
               <StatCard
@@ -355,18 +427,35 @@ export default function SellerDashboardPage() {
                 icon="chart"
               />
               <StatCard
-                title="Products"
-                value={loadingProducts ? '—' : products.length}
-                subtitle="Listings"
-                icon="box"
+                title="Completed orders"
+                value={loadingOrders ? '—' : completedOrders}
+                subtitle="Buyer confirmed delivery"
+                icon="order"
               />
               <StatCard
-                title="Earnings"
-                value={loadingOrders ? '—' : `$${earnings.toFixed(2)}`}
-                subtitle="From your items in orders"
+                title="Wallet balance"
+                value={walletBalance != null ? `$${Number(walletBalance).toFixed(2)}` : '—'}
+                subtitle="Available balance"
                 icon="dollar"
               />
             </div>
+            <div className="rounded-xl border border-m4m-gray-200 bg-white p-6 shadow-sm mb-8">
+                <h2 className="text-lg font-semibold text-m4m-black mb-4">Sales history (last 7 days)</h2>
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={salesHistoryData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
+                      <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#737373" />
+                      <YAxis tick={{ fontSize: 12 }} stroke="#737373" tickFormatter={(v) => `$${v}`} />
+                      <Tooltip
+                        formatter={(value) => [`$${Number(value).toFixed(2)}`, 'Revenue']}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e5e5e5' }}
+                      />
+                      <Bar dataKey="revenue" fill="#6d28d9" radius={[4, 4, 0, 0]} name="Revenue" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             <div>
               <h2 className="text-lg font-semibold text-m4m-black mb-4">Recent orders</h2>
               {loadingOrders ? (

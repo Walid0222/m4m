@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getToken } from '../lib/api';
+import { getToken } from '../services/api';
 import { getOrder, confirmOrderDelivery } from '../services/api';
 
 export default function OrderDetailPage() {

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, ProtectedRoute, AdminRoute } from './contexts/AuthContext';
+import { AuthProvider, ProtectedRoute, SellerRoute, AdminRoute } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import ProductPage from './pages/ProductPage';
@@ -11,6 +11,7 @@ import AuthPage from './pages/AuthPage';
 import SellerDashboardPage from './pages/SellerDashboardPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
+import UserProfilePage from './pages/UserProfilePage';
 
 export default function App() {
   return (
@@ -24,6 +25,14 @@ export default function App() {
             <Route path="login" element={<AuthPage />} />
 
             {/* Protected routes: require login */}
+            <Route
+              path="profile"
+              element={
+                <ProtectedRoute>
+                  <UserProfilePage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="wallet"
               element={
@@ -59,9 +68,9 @@ export default function App() {
             <Route
               path="seller-dashboard"
               element={
-                <ProtectedRoute>
+                <SellerRoute>
                   <SellerDashboardPage />
-                </ProtectedRoute>
+                </SellerRoute>
               }
             />
             <Route

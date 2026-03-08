@@ -8,7 +8,9 @@ export default function ProductCard({ product }) {
     price,
     seller,
     rating,
+    stock,
   } = product;
+  const isOutOfStock = Number(stock ?? 0) <= 0;
   const sellerName = seller?.name ?? 'Seller';
   const online = isSellerOnline(seller);
   const displayRating = typeof rating === 'number' ? rating : parseFloat(rating) || 0;
@@ -16,7 +18,12 @@ export default function ProductCard({ product }) {
   return (
     <article className="bg-white rounded-xl border border-m4m-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
       {/* Product image */}
-      <Link to={`/product/${id}`} className="block flex-shrink-0">
+      <Link to={`/product/${id}`} className="block flex-shrink-0 relative">
+        {isOutOfStock && (
+          <span className="absolute top-2 left-2 z-10 px-2.5 py-1 rounded-lg bg-red-500/90 text-white text-xs font-semibold">
+            Out of stock
+          </span>
+        )}
         <div className="aspect-[4/3] bg-m4m-gray-100 flex items-center justify-center overflow-hidden">
           {product.images?.[0] ? (
             <img
@@ -83,9 +90,13 @@ export default function ProductCard({ product }) {
           </p>
           <Link
             to={`/product/${id}`}
-            className="flex-shrink-0 px-4 py-2 rounded-lg font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover transition-colors text-sm"
+            className={`flex-shrink-0 px-4 py-2 rounded-lg font-semibold transition-colors text-sm ${
+              isOutOfStock
+                ? 'bg-m4m-gray-200 text-m4m-gray-500 cursor-default'
+                : 'bg-m4m-green text-white hover:bg-m4m-green-hover'
+            }`}
           >
-            BUY
+            {isOutOfStock ? 'Out of stock' : 'BUY'}
           </Link>
         </div>
       </div>

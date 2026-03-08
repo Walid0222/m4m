@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getEcho } from '../echo';
 import {
@@ -9,11 +9,13 @@ import {
   paginatedItems,
   getToken,
 } from '../services/api';
+import { isSellerOnline } from '../lib/sellerOnline';
 import ChatBox from '../components/ChatBox';
 
 export default function ChatPage() {
   const { user } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [conversations, setConversations] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -22,6 +24,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [unread, setUnread] = useState({});
+  const [isTyping, setIsTyping] = useState(false);
   const selectedIdRef = useRef(null);
   const channelsRef = useRef({});
 
@@ -63,6 +66,11 @@ export default function ChatPage() {
     const conv = conversations.find((c) => c.id === id);
     if (conv) setSelected((s) => (s?.id === id ? s : conv));
   }, [conversationIdFromUrl, conversations]);
+
+  const handleSelectConversation = useCallback((conv) => {
+    setSelected(conv);
+    navigate(`/chat?conversation=${conv.id}`, { replace: true });
+  }, [navigate]);
 
   useEffect(() => {
     if (!selected?.id || !getToken()) return;
@@ -112,10 +120,21 @@ export default function ChatPage() {
           const convId = c.id;
           const isFromMe = msg.user_id === user.id;
           if (convId === selectedIdRef.current) {
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === msg.id)) return prev;
-              return [...prev, msg];
-            });
+            if (isFromMe) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === msg.id)) return prev;
+                return [...prev, msg];
+              });
+            } else {
+              setIsTyping(true);
+              setTimeout(() => {
+                setIsTyping(false);
+                setMessages((prev) => {
+                  if (prev.some((m) => m.id === msg.id)) return prev;
+                  return [...prev, msg];
+                });
+              }, 500);
+            }
           } else if (!isFromMe) {
             setUnread((prev) => ({ ...prev, [convId]: (prev[convId] || 0) + 1 }));
           }
@@ -208,25 +227,37 @@ export default function ChatPage() {
                       <li key={c.id}>
                         <button
                           type="button"
-                          onClick={() => setSelected(c)}
+                          onClick={() => handleSelectConversation(c)}
                           className={`w-full text-left p-3 rounded-xl transition-colors flex items-center gap-3 ${
                             isSelected
                               ? 'bg-m4m-purple text-white shadow-sm'
                               : 'hover:bg-white hover:shadow-sm text-m4m-black'
                           }`}
                         >
-                          <span className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                          <span className="relative shrink-0">
+                            <span className={`w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold ${
                               isSelected ? 'bg-white/20 text-white' : 'bg-m4m-purple/20 text-m4m-purple'
-                            }`}
-                          >
-                            {other?.name?.charAt(0)?.toUpperCase() || '?'}
+                            }`}>
+                              {other?.name?.charAt(0)?.toUpperCase() || '?'}
+                            </span>
+                            {other && isSellerOnline(other) && (
+                              <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 ${
+                                isSelected ? 'bg-green-400 border-white' : 'bg-green-500 border-white'
+                              }`} />
+                            )}
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className={`font-medium truncate ${isSelected ? 'text-white' : 'text-m4m-black'}`}>
                               {other?.name || 'Conversation'}
                             </p>
                             <p className={`text-xs truncate ${isSelected ? 'text-white/80' : 'text-m4m-gray-500'}`}>
-                              {c.messages_count != null ? `${c.messages_count} message${c.messages_count !== 1 ? 's' : ''}` : 'Chat'}
+                              {c.product?.name ? (
+                                <span className="truncate block">Re: {c.product.name}</span>
+                              ) : c.messages_count != null ? (
+                                `${c.messages_count} message${c.messages_count !== 1 ? 's' : ''}`
+                              ) : (
+                                'Chat'
+                              )}
                             </p>
                           </div>
                           {count > 0 && (
@@ -254,6 +285,7 @@ export default function ChatPage() {
               onSend={sendMessage}
               sending={sending}
               placeholder="Select a conversation"
+              isTyping={isTyping}
             />
           </div>
         </div>

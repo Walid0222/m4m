@@ -8,7 +8,9 @@ use App\Http\Controllers\Api\DepositRequestController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\SellerOrderController;
+use App\Http\Controllers\Api\SellerProfileController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\WithdrawRequestController;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +22,7 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/products', [ProductController::class, 'index']);
     Route::get('/products/{product}', [ProductController::class, 'show']);
+    Route::get('/sellers/{seller}', [SellerProfileController::class, 'show']);
 
     // Authenticated
     Route::middleware(['auth:sanctum', 'update.last_activity'])->group(function () {
@@ -45,6 +48,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders', [OrderController::class, 'index']);
         Route::get('/orders/{order}', [OrderController::class, 'show']);
         Route::patch('/orders/{order}/confirm-delivery', [OrderController::class, 'confirmDelivery']);
+        Route::post('/products/{product}/reviews', [ReviewController::class, 'store']);
 
         // Seller order management
         Route::get('/seller/orders', [SellerOrderController::class, 'index']);

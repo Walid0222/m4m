@@ -29,6 +29,16 @@ export function AuthProvider({ children }) {
     loadUser();
   }, [loadUser]);
 
+  // Handle 401 from API (token expired/invalid)
+  useEffect(() => {
+    const handler = () => {
+      api.setToken(null);
+      setUser(null);
+    };
+    window.addEventListener('auth:unauthorized', handler);
+    return () => window.removeEventListener('auth:unauthorized', handler);
+  }, []);
+
   const login = useCallback(async (email, password) => {
     const res = await api.login(email, password);
     const data = res?.data;
@@ -104,6 +114,31 @@ export function ProtectedRoute({ children }) {
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+}
+
+/**
+ * Protects seller-only routes. Requires login; redirects non-sellers to homepage.
+ */
+export function SellerRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-[40vh] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-m4m-purple border-t-transparent rounded-full animate-spin" aria-hidden />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!user.is_seller) {
+    return <Navigate to="/" replace />;
   }
 
   return children;

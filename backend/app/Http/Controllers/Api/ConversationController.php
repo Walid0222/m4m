@@ -15,7 +15,7 @@ class ConversationController extends Controller
     {
         $conversations = Conversation::where('user_one_id', $request->user()->id)
             ->orWhere('user_two_id', $request->user()->id)
-            ->with(['userOne:id,name', 'userTwo:id,name', 'order:id,status', 'product:id,name'])
+            ->with(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id,status', 'product:id,name'])
             ->withCount(['messages'])
             ->latest('updated_at')
             ->paginate($request->integer('per_page', 15));
@@ -54,7 +54,7 @@ class ConversationController extends Controller
             ]
         );
 
-        $conversation->load(['userOne:id,name', 'userTwo:id,name', 'order:id', 'product:id,name']);
+        $conversation->load(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id', 'product:id,name']);
 
         return $this->success($conversation->toArray(), 'Conversation ready.', 201);
     }
@@ -66,7 +66,7 @@ class ConversationController extends Controller
             return $this->error('Forbidden.', 403);
         }
 
-        $conversation->load(['userOne:id,name', 'userTwo:id,name', 'order:id,status', 'product:id,name']);
+        $conversation->load(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id,status', 'product:id,name']);
         $conversation->other_user = $conversation->user_one_id === $userId ? $conversation->userTwo : $conversation->userOne;
 
         $messages = $conversation->messages()
