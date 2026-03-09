@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Admin\AdminVerificationRequestController;
 use App\Http\Controllers\Api\Admin\DepositVerificationController;
 use App\Http\Controllers\Api\Admin\WithdrawVerificationController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DepositRequestController;
 use App\Http\Controllers\Api\DisputeController;
@@ -36,12 +37,17 @@ Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login',    [AuthController::class, 'login']);
 
-    Route::get('/products',        [ProductController::class, 'index']);
-    Route::get('/products/search', [ProductController::class, 'search']);
-    Route::get('/products/{product}', [ProductController::class, 'show']);
+    Route::get('/products',                 [ProductController::class, 'index']);
+    Route::get('/products/search',          [ProductController::class, 'search']);
+    Route::get('/products/trending',        [ProductController::class, 'trending']);
+    Route::get('/products/{product}',       [ProductController::class, 'show']);
+    Route::get('/products/{product}/recommended', [ProductController::class, 'recommended']);
 
     Route::get('/sellers/{seller}',              [SellerProfileController::class, 'show']);
     Route::get('/sellers/{seller}/stats',        [StatsController::class, 'publicSellerStats']);
+
+    // Announcements
+    Route::get('/announcements', [AnnouncementController::class, 'index']);
 
     // ─── Authenticated ───────────────────────────────────────────────────────
     Route::middleware(['auth:sanctum', 'update.last_activity', 'check.ban'])->group(function () {

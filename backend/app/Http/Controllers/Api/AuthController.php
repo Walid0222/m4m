@@ -114,6 +114,7 @@ class AuthController extends Controller
             'email' => ['sometimes', 'email', 'max:255', 'unique:users,email,' . $user->id],
             'password' => ['sometimes', 'confirmed', Password::defaults()],
             'is_seller' => ['sometimes', 'boolean'],
+            'show_recent_sales_notifications' => ['sometimes', 'boolean'],
         ]);
 
         if (isset($validated['password'])) {
@@ -136,6 +137,7 @@ class AuthController extends Controller
             'is_verified_seller', 'is_banned', 'ban_type', 'banned_until',
             'ban_reason', 'warning_count', 'last_activity_at',
             'auto_reply_message', 'product_limit', 'limits_overridden',
+            'show_recent_sales_notifications',
         ]);
     }
 }

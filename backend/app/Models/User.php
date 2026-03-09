@@ -35,6 +35,7 @@ class User extends Authenticatable
         'auto_reply_message',
         'product_limit',
         'limits_overridden',
+        'show_recent_sales_notifications',
     ];
 
     /**
@@ -54,6 +55,7 @@ class User extends Authenticatable
      */
     protected $appends = [
         'seller_level',
+        'member_since',
     ];
 
     /**
@@ -72,6 +74,7 @@ class User extends Authenticatable
             'is_admin' => 'boolean',
             'is_banned' => 'boolean',
             'is_verified_seller' => 'boolean',
+            'show_recent_sales_notifications' => 'boolean',
         ];
     }
 
@@ -191,5 +194,13 @@ class User extends Authenticatable
     {
         $completedOrders = $this->sellerStats?->total_orders ?? 0;
         return (int) floor($completedOrders / 2);
+    }
+
+    /**
+     * Member since date based on user creation time.
+     */
+    public function getMemberSinceAttribute(): ?string
+    {
+        return $this->created_at?->toIso8601String();
     }
 }

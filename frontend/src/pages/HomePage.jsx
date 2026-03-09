@@ -2,7 +2,15 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import { useAuth } from '../contexts/AuthContext';
-import { getProducts, paginatedItems, getFavoriteIds, toggleFavorite, getToken } from '../services/api';
+import {
+  getProducts,
+  getTrendingProducts,
+  getAnnouncements,
+  paginatedItems,
+  getFavoriteIds,
+  toggleFavorite,
+  getToken,
+} from '../services/api';
 
 const TESTIMONIALS = [
   {
@@ -94,6 +102,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [retryTrigger, setRetryTrigger] = useState(0);
+  const [trending, setTrending] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [search, setSearch] = useState(searchFromUrl);
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const [paginationMeta, setPaginationMeta] = useState({ currentPage: 1, lastPage: 1, total: 0 });
@@ -126,6 +136,52 @@ export default function HomePage() {
       cancelled = true;
     };
   }, [user]);
+
+  // Load announcements (public)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getAnnouncements({ limit: 3 });
+        if (!cancelled && Array.isArray(data)) {
+          setAnnouncements(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setAnnouncements([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load trending products (public)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getTrendingProducts({ limit: 8 });
+        if (!cancelled && Array.isArray(data)) {
+          setTrending(
+            data.map((p) => ({
+              ...p,
+              rating: p.rating ?? getProductRating(p),
+              is_online: p.is_online ?? p.isOnline ?? true,
+            }))
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setTrending([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleToggleFavorite = useCallback(
     async (productId) => {
@@ -337,6 +393,22 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-m4m-gray-50">
+      {/* Global announcements */}
+      {announcements.length > 0 && (
+        <div className="bg-indigo-600 text-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 space-y-1">
+            {announcements.map((a) => (
+              <div key={a.id} className="flex items-start gap-2 text-sm">
+                <span className="mt-0.5 text-base">📣</span>
+                <div className="min-w-0">
+                  <p className="font-semibold truncate">{a.title}</p>
+                  <p className="text-xs opacity-90 line-clamp-2">{a.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {/* Hero Banner */}
       <section className="relative bg-gradient-to-br from-gray-900 via-purple-950 to-gray-900 overflow-hidden">
         <div className="absolute inset-0 opacity-10">
@@ -415,6 +487,30 @@ export default function HomePage() {
       </div>
 
       <div id="marketplace" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        {/* Flash Deals / Trending products */}
+        {trending.length > 0 && (
+          <section className="mb-6 md:mb-8">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="text-lg font-semibold text-m4m-black">🔥 Flash Deals</h2>
+              <p className="text-xs text-m4m-gray-500">
+                Limited-time discounts on popular products
+              </p>
+            </div>
+            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-4 md:p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+                {trending.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    isFavorited={favoriteIds.includes(Number(product.id))}
+                    onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Z2U-style top section: search + filters in one card */}
         <section className="mb-6 md:mb-8">
           <div className="flex items-baseline justify-between gap-4 mb-3">

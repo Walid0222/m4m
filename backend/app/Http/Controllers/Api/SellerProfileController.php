@@ -40,6 +40,7 @@ class SellerProfileController extends Controller
         $data = [
             'id'               => $seller->id,
             'name'             => $seller->name,
+            'member_since'     => $seller->member_since,
             'is_verified_seller' => (bool) $seller->is_verified_seller,
             'last_activity_at' => $seller->last_activity_at?->toIso8601String(),
             'rating'           => $rating,

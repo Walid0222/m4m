@@ -4,7 +4,7 @@ import ProductCard from '../components/ProductCard';
 import ReportModal from '../components/ReportModal';
 import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
 import { isSellerOnline } from '../lib/sellerOnline';
-import { getProducts, getSellerProfile, paginatedItems, submitReport } from '../services/api';
+import { getProducts, getSellerProfile, getPublicSellerStats, paginatedItems, submitReport } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 function StatBadge({ label, value }) {
@@ -23,6 +23,7 @@ export default function SellerProfilePage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showReport, setShowReport] = useState(false);
+  const [stats, setStats] = useState(null);
 
   useEffect(() => {
     if (!id) return;
@@ -30,26 +31,36 @@ export default function SellerProfilePage() {
     async function fetchData() {
       setLoading(true);
       try {
-        const [profileRes, productsRes] = await Promise.all([
+        const [profileRes, productsRes, statsRes] = await Promise.all([
           getSellerProfile(id).catch(() => null),
           getProducts({ seller_id: id, per_page: 100 }),
+          getPublicSellerStats(id).catch(() => null),
         ]);
         if (cancelled) return;
         const list = paginatedItems(productsRes);
         const arr = Array.isArray(list) ? list : [];
         setProducts(arr);
+        if (statsRes) {
+          setStats(statsRes);
+        } else {
+          setStats(null);
+        }
+
         if (profileRes) {
           setSeller({
             id: profileRes.id,
             name: profileRes.name,
             last_activity_at: profileRes.last_activity_at,
+            member_since: profileRes.member_since ?? profileRes.created_at ?? null,
             rating: profileRes.rating,
-            total_sales: profileRes.total_sales ?? 0,
+            total_sales: statsRes?.total_sales ?? profileRes.total_sales ?? 0,
             total_reviews: profileRes.total_reviews ?? 0,
             // backend exposes is_verified_seller
             is_verified: profileRes.is_verified_seller ?? profileRes.is_verified,
             is_verified_seller: profileRes.is_verified_seller ?? profileRes.is_verified,
-            completed_sales: profileRes.completed_sales ?? profileRes.total_sales ?? 0,
+            completed_sales:
+              statsRes?.total_sales ?? profileRes.completed_sales ?? profileRes.total_sales ?? 0,
+            seller_level: statsRes?.seller_level ?? profileRes.seller_level ?? null,
           });
         } else {
           const fallback = arr[0]?.seller ?? { id: Number(id), name: 'Seller', last_activity_at: null };
@@ -84,6 +95,19 @@ export default function SellerProfilePage() {
     seller?.is_verified_seller === true ||
     seller?.is_verified_seller === 1;
   const sellerLevel = typeof seller?.seller_level === 'number' ? seller.seller_level : null;
+  const successRate =
+    typeof stats?.success_rate === 'number' ? `${stats.success_rate.toFixed(1)}%` : '—';
+  const avgResponse =
+    typeof stats?.avg_response_minutes === 'number'
+      ? `${stats.avg_response_minutes.toFixed(1)} min`
+      : '—';
+  const memberSinceLabel =
+    seller?.member_since
+      ? new Date(seller.member_since).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'long',
+        })
+      : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
@@ -127,6 +151,11 @@ export default function SellerProfilePage() {
                   )}
                 </div>
                 <SellerSalesBadge completedSales={seller?.completed_sales ?? seller?.total_sales ?? 0} size="lg" />
+                {memberSinceLabel && (
+                  <p className="mt-1 text-xs text-m4m-gray-500">
+                    Member since: <span className="font-medium text-m4m-black">{memberSinceLabel}</span>
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {/* Online status */}
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
@@ -152,6 +181,8 @@ export default function SellerProfilePage() {
                 <StatBadge label="Total sales" value={seller?.total_sales ?? 0} />
                 <StatBadge label="Reviews" value={seller?.total_reviews ?? 0} />
                 <StatBadge label="Products" value={products.length} />
+                <StatBadge label="Success rate" value={successRate} />
+                <StatBadge label="Avg. response" value={avgResponse} />
               </div>
               <button
                 type="button"

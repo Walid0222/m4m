@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Models\BuyerStat;
 use App\Models\Review;
 use App\Models\SellerStat;
+use App\Models\Conversation;
+use App\Models\Message;
+use App\Models\Order;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -35,6 +38,9 @@ class StatsController extends Controller
         $completedOrders = (int) $stats->total_orders;
         $sellerLevel     = (int) floor($completedOrders / 2);
 
+        $successRate        = $this->successRate($user->id);
+        $avgResponseMinutes = $this->averageSellerResponseMinutes($user->id);
+
         // Commission progression
         [$commissionRate, $nextThreshold] = $this->commissionInfo($completedOrders);
 
@@ -50,6 +56,8 @@ class StatsController extends Controller
             'badge'                     => $stats->badge,
             'is_verified'               => (bool) $user->is_verified_seller,
             'seller_level'              => $sellerLevel,
+            'success_rate'              => $successRate,
+            'avg_response_minutes'      => $avgResponseMinutes,
             'commission_rate'           => $commissionRate,
             'next_commission_threshold' => $nextThreshold,
         ]);
@@ -89,6 +97,9 @@ class StatsController extends Controller
         $completedOrders = (int) ($stats?->total_orders ?? 0);
         $sellerLevel     = (int) floor($completedOrders / 2);
 
+        $successRate        = $this->successRate($sellerId);
+        $avgResponseMinutes = $this->averageSellerResponseMinutes($sellerId);
+
         return $this->success([
             'seller_id'        => $sellerId,
             'total_sales'      => $stats?->total_sales ?? 0,
@@ -98,6 +109,8 @@ class StatsController extends Controller
             'badge'            => $stats?->badge ?? 'new',
             'is_verified'      => (bool) $user->is_verified_seller,
             'seller_level'     => $sellerLevel,
+            'success_rate'     => $successRate,
+            'avg_response_minutes' => $avgResponseMinutes,
         ]);
     }
 
@@ -119,5 +132,76 @@ class StatsController extends Controller
         }
 
         return [15.0, 10];
+    }
+
+    /**
+     * Compute seller success rate based on completed vs all non-cancelled orders.
+     */
+    private function successRate(int $sellerId): ?float
+    {
+        $total = Order::where('seller_id', $sellerId)
+            ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_DISPUTE])
+            ->count();
+
+        if ($total === 0) {
+            return null;
+        }
+
+        $completed = Order::where('seller_id', $sellerId)
+            ->where('status', Order::STATUS_COMPLETED)
+            ->count();
+
+        return round(($completed / $total) * 100, 1);
+    }
+
+    /**
+     * Approximate average first response time (in minutes) for a seller.
+     */
+    private function averageSellerResponseMinutes(int $sellerId): ?float
+    {
+        $conversations = Conversation::query()
+            ->where(function ($q) use ($sellerId) {
+                $q->where('user_one_id', $sellerId)
+                    ->orWhere('user_two_id', $sellerId);
+            })
+            ->where(function ($q) {
+                $q->whereNull('type')->orWhere('type', '!=', 'support');
+            })
+            ->get();
+
+        if ($conversations->isEmpty()) {
+            return null;
+        }
+
+        $totalMinutes = 0.0;
+        $pairCount    = 0;
+
+        foreach ($conversations as $conversation) {
+            $messages = Message::query()
+                ->where('conversation_id', $conversation->id)
+                ->orderBy('created_at')
+                ->get(['user_id', 'created_at']);
+
+            $lastBuyerMessageAt = null;
+
+            foreach ($messages as $message) {
+                if ($message->user_id === $sellerId) {
+                    if ($lastBuyerMessageAt) {
+                        $diffMinutes = $lastBuyerMessageAt->diffInMinutes($message->created_at);
+                        $totalMinutes += $diffMinutes;
+                        $pairCount++;
+                        $lastBuyerMessageAt = null;
+                    }
+                } else {
+                    $lastBuyerMessageAt = $message->created_at;
+                }
+            }
+        }
+
+        if ($pairCount === 0) {
+            return null;
+        }
+
+        return round($totalMinutes / $pairCount, 1);
     }
 }

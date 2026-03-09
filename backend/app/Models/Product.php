@@ -20,6 +20,10 @@ class Product extends Model
         'stock',
         'images',
         'status',
+        'is_flash_deal',
+        'flash_price',
+        'flash_start',
+        'flash_end',
         'delivery_time',
         'delivery_type',
         'delivery_content',
@@ -30,11 +34,20 @@ class Product extends Model
     protected function casts(): array
     {
         return [
-            'price' => 'decimal:2',
-            'images' => 'array',
-            'features' => 'array',
+            'price'        => 'decimal:2',
+            'flash_price'  => 'decimal:2',
+            'is_flash_deal'=> 'boolean',
+            'flash_start'  => 'datetime',
+            'flash_end'    => 'datetime',
+            'images'       => 'array',
+            'features'     => 'array',
         ];
     }
+
+    protected $appends = [
+        'is_flash_active',
+        'effective_price',
+    ];
 
     /** Seller who owns the product. */
     public function seller(): BelongsTo
@@ -76,5 +89,33 @@ class Product extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);
+    }
+
+    public function getIsFlashActiveAttribute(): bool
+    {
+        if (! $this->is_flash_deal) {
+            return false;
+        }
+
+        $now = now();
+
+        if ($this->flash_start && $now->lt($this->flash_start)) {
+            return false;
+        }
+
+        if ($this->flash_end && $now->gt($this->flash_end)) {
+            return false;
+        }
+
+        return (bool) $this->flash_price && (float) $this->flash_price < (float) $this->price;
+    }
+
+    public function getEffectivePriceAttribute(): float
+    {
+        if ($this->is_flash_active) {
+            return (float) $this->flash_price;
+        }
+
+        return (float) $this->price;
     }
 }

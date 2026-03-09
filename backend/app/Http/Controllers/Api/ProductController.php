@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Product;
 use App\Models\ProductAccount;
+use App\Models\Order;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -25,9 +26,34 @@ class ProductController extends Controller
             $query->where('user_id', $request->seller_id);
         }
 
-        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at')
+        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at,created_at')
             ->latest()
             ->paginate($request->integer('per_page', 15));
+
+        return $this->success($products);
+    }
+
+    /**
+     * GET /products/trending
+     *
+     * Return a short list of trending products based on completed orders.
+     */
+    public function trending(Request $request): JsonResponse
+    {
+        $limit = $request->integer('limit', 8);
+
+        $products = Product::query()
+            ->where('status', 'active')
+            ->with('seller:id,name,is_verified_seller,last_activity_at,created_at')
+            ->withCount([
+                'orders as completed_orders_count' => function ($q) {
+                    $q->where('status', Order::STATUS_COMPLETED);
+                },
+            ])
+            ->orderByDesc('completed_orders_count')
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get();
 
         return $this->success($products);
     }
@@ -38,9 +64,43 @@ class ProductController extends Controller
             return $this->error('Product not available.', 404);
         }
 
-        $product->load(['seller:id,name,is_verified_seller,last_activity_at', 'reviews.reviewer:id,name']);
+        $product->load(['seller:id,name,is_verified_seller,last_activity_at,created_at', 'reviews.reviewer:id,name']);
 
         return $this->success($product);
+    }
+
+    /**
+     * GET /products/{product}/recommended
+     *
+     * Recommend other products based on popularity and recency.
+     * Excludes the current product.
+     */
+    public function recommended(Request $request, Product $product): JsonResponse
+    {
+        $limit = $request->integer('limit', 8);
+
+        $query = Product::query()
+            ->where('status', 'active')
+            ->where('id', '!=', $product->id)
+            ->with('seller:id,name,is_verified_seller,last_activity_at,created_at')
+            ->withCount([
+                'orders as completed_orders_count' => function ($q) {
+                    $q->where('status', Order::STATUS_COMPLETED);
+                },
+            ]);
+
+        // Prefer products from the same seller when possible
+        if ($product->user_id) {
+            $query->orderByRaw('CASE WHEN user_id = ? THEN 0 ELSE 1 END', [$product->user_id]);
+        }
+
+        $products = $query
+            ->orderByDesc('completed_orders_count')
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get();
+
+        return $this->success($products);
     }
 
     public function myIndex(Request $request): JsonResponse
@@ -72,7 +132,7 @@ class ProductController extends Controller
             });
         }
 
-        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at')
+        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at,created_at')
             ->latest()
             ->limit(20)
             ->get();

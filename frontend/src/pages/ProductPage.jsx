@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getProduct,
   getProducts,
+  getRecommendedProducts,
   createOrder,
   createConversation,
   createReview,
@@ -114,6 +115,7 @@ export default function ProductPage() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState('');
   const [similarProducts, setSimilarProducts] = useState([]);
+  const [recommendedProducts, setRecommendedProducts] = useState([]);
   const [reportOpen, setReportOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [favToggling, setFavToggling] = useState(false);
@@ -160,7 +162,7 @@ export default function ProductPage() {
     }
   };
 
-  // Fetch similar products
+  // Fetch similar products (same seller)
   useEffect(() => {
     if (!product?.seller?.id) return;
     let cancelled = false;
@@ -173,6 +175,25 @@ export default function ProductPage() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [product?.seller?.id, id]);
+
+  // Fetch recommended products (global)
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    getRecommendedProducts(id, { limit: 8 })
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res) ? res : paginatedItems(res);
+        const arr = Array.isArray(list) ? list : [];
+        setRecommendedProducts(arr.filter((p) => String(p.id) !== String(id)).slice(0, 8));
+      })
+      .catch(() => {
+        if (!cancelled) setRecommendedProducts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   useEffect(() => {
     if (!user || !getToken() || !product?.id) { setUserOrders([]); return; }
@@ -234,7 +255,7 @@ export default function ProductPage() {
     try {
       const wallet = await getWallet();
       const balance = Number(wallet?.balance ?? 0);
-      const total = quantity * Number(product.price ?? 0);
+      const total = quantity * Number(product.effective_price ?? product.price ?? 0);
       if (balance < total) { setError('Insufficient wallet balance.'); setBuying(false); return; }
       await createOrder([{ product_id: product.id, quantity }]);
       setProduct((prev) => prev ? { ...prev, stock: Math.max(0, Number(prev.stock ?? 0) - quantity) } : prev);
@@ -290,6 +311,7 @@ export default function ProductPage() {
 
   const seller = product.seller || {};
   const price = Number(product.price || 0);
+  const effectivePrice = Number(product.effective_price ?? product.price ?? 0);
   const stock = Number(product.stock ?? 0);
   const isOutOfStock = stock <= 0;
   const completedSales = seller.completed_sales ?? seller.completedSales ?? 0;
@@ -305,6 +327,16 @@ export default function ProductPage() {
   const avgRatingFromReviews = reviews.length > 0 ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length : null;
   const displayRating = rating != null ? rating : avgRatingFromReviews ?? null;
   const sellerOnline = isSellerOnline(seller);
+  const sellerMemberSince =
+    seller.member_since || seller.created_at || seller.createdAt || null;
+  const sellerMemberSinceLabel =
+    sellerMemberSince
+      ? new Date(sellerMemberSince).toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'long',
+        })
+      : null;
+  const isFlashActive = product.is_flash_active === true;
   const images = product.images && product.images.length > 0 ? product.images : [];
   const mainImage = images[selectedImageIndex] || images[0];
 
@@ -524,9 +556,32 @@ export default function ProductPage() {
 
           {/* Price */}
           <div>
-            <p className="text-3xl font-bold text-gray-900">{price.toFixed(2)} <span className="text-xl font-semibold text-gray-500">MAD</span></p>
+            {isFlashActive ? (
+              <div className="space-y-1">
+                <div className="flex items-baseline gap-2">
+                  <p className="text-xl font-semibold text-gray-400 line-through">
+                    {price.toFixed(2)} MAD
+                  </p>
+                  <p className="text-3xl font-extrabold text-red-600">
+                    {effectivePrice.toFixed(2)}{' '}
+                    <span className="text-xl font-semibold text-red-500">MAD</span>
+                  </p>
+                </div>
+                <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">
+                  Limited-time flash deal
+                </p>
+              </div>
+            ) : (
+              <p className="text-3xl font-bold text-gray-900">
+                {price.toFixed(2)} <span className="text-xl font-semibold text-gray-500">MAD</span>
+              </p>
+            )}
             <div className="flex items-center gap-2 mt-1">
-              <span className={`text-sm font-medium ${isOutOfStock ? 'text-red-600' : 'text-green-600'}`}>
+              <span
+                className={`text-sm font-medium ${
+                  isOutOfStock ? 'text-red-600' : 'text-green-600'
+                }`}
+              >
                 {isOutOfStock ? '✕ Out of stock' : `✓ ${stock} in stock`}
               </span>
               {deliveryTime && (
@@ -590,6 +645,12 @@ export default function ProductPage() {
                   <div className="mt-0.5">
                     <SellerSalesBadge completedSales={seller.completed_sales ?? seller.completedSales ?? 0} />
                   </div>
+                  {sellerMemberSinceLabel && (
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Member since:{' '}
+                      <span className="font-medium text-gray-900">{sellerMemberSinceLabel}</span>
+                    </p>
+                  )}
                   <p className="text-xs text-gray-400 mt-0.5">View seller profile</p>
                 </div>
               </Link>
@@ -656,19 +717,79 @@ export default function ProductPage() {
           <h2 className="text-xl font-semibold text-gray-900 mb-5">More from this seller</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {similarProducts.map((p) => (
-              <Link key={p.id} to={`/product/${p.id}`} className="rounded-2xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow group">
+              <Link
+                key={p.id}
+                to={`/product/${p.id}`}
+                className="rounded-2xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow group"
+              >
                 <div className="aspect-square bg-gray-100 overflow-hidden">
                   {p.images?.[0] ? (
-                    <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <img
+                      src={p.images[0]}
+                      alt={p.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-300">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
                     </div>
                   )}
                 </div>
                 <div className="p-3">
                   <p className="text-sm font-medium text-gray-900 line-clamp-2 leading-snug">{p.name}</p>
-                  <p className="mt-1.5 font-bold text-gray-900 text-sm">{Number(p.price || 0).toFixed(2)} MAD</p>
+                  <p className="mt-1.5 font-bold text-gray-900 text-sm">
+                    {Number(p.price || 0).toFixed(2)} MAD
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Recommended products */}
+      {recommendedProducts.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-xl font-semibold text-gray-900 mb-5">Recommended for you</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {recommendedProducts.map((p) => (
+              <Link
+                key={p.id}
+                to={`/product/${p.id}`}
+                className="rounded-2xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow group"
+              >
+                <div className="aspect-square bg-gray-100 overflow-hidden">
+                  {p.images?.[0] ? (
+                    <img
+                      src={p.images[0]}
+                      alt={p.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-300">
+                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+                <div className="p-3">
+                  <p className="text-sm font-medium text-gray-900 line-clamp-2 leading-snug">{p.name}</p>
+                  <p className="mt-1.5 font-bold text-gray-900 text-sm">
+                    {Number(p.price || 0).toFixed(2)} MAD
+                  </p>
                 </div>
               </Link>
             ))}

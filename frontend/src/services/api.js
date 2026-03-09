@@ -114,12 +114,24 @@ export function getProducts(params = {}) {
   return api.get('/products', { params }).then(unwrap);
 }
 
+export function getTrendingProducts(params = {}) {
+  return api.get('/products/trending', { params }).then(unwrap);
+}
+
 export function getProduct(id) {
   return api.get(`/products/${id}`).then(unwrap);
 }
 
+export function getRecommendedProducts(id, params = {}) {
+  return api.get(`/products/${id}/recommended`, { params }).then(unwrap);
+}
+
 export function getSellerProfile(id) {
   return api.get(`/sellers/${id}`).then(unwrap);
+}
+
+export function getPublicSellerStats(id) {
+  return api.get(`/sellers/${id}/stats`).then(unwrap);
 }
 
 export function createReview(productId, { order_id, rating, comment }) {
@@ -299,6 +311,12 @@ export function getSellerStats() {
 
 export function getBuyerStats() {
   return api.get('/stats/buyer').then(unwrap);
+}
+
+// --- Announcements ---
+
+export function getAnnouncements(params = {}) {
+  return api.get('/announcements', { params }).then(unwrap);
 }
 
 // --- Conversations & Messages ---

@@ -313,6 +313,10 @@ export default function SellerDashboardPage() {
     image_urls: '',
     features: [],
     seller_reminder: '',
+    is_flash_deal: false,
+    flash_price: '',
+    flash_start: '',
+    flash_end: '',
   });
 
   const fetchProducts = useCallback(async () => {
@@ -564,8 +568,28 @@ export default function SellerDashboardPage() {
         delivery_content: isInstant ? deliveryContent : null,
         features: form.features,
         seller_reminder: (form.seller_reminder || '').trim() || null,
+        is_flash_deal: !!form.is_flash_deal,
+        flash_price: form.is_flash_deal ? parseFloat(form.flash_price) || null : null,
+        flash_start: form.is_flash_deal && form.flash_start ? new Date(form.flash_start).toISOString() : null,
+        flash_end: form.is_flash_deal && form.flash_end ? new Date(form.flash_end).toISOString() : null,
       });
-      setForm({ title: '', game: '', description: '', price: '', stock: '', delivery_type: 'manual', delivery_time: '', delivery_content: '', image_urls: '', features: [], seller_reminder: '' });
+      setForm({
+        title: '',
+        game: '',
+        description: '',
+        price: '',
+        stock: '',
+        delivery_type: 'manual',
+        delivery_time: '',
+        delivery_content: '',
+        image_urls: '',
+        features: [],
+        seller_reminder: '',
+        is_flash_deal: false,
+        flash_price: '',
+        flash_start: '',
+        flash_end: '',
+      });
       setAddProductOpen(false);
       await fetchProducts();
       setActionMessage({ type: 'success', text: 'Product created.' });
@@ -600,6 +624,10 @@ export default function SellerDashboardPage() {
       seller_reminder: product.seller_reminder || '',
       image_urls: Array.isArray(product.images) ? product.images.join('\n') : (product.images?.[0] || ''),
       instant_add_accounts: '',
+      is_flash_deal: !!product.is_flash_deal,
+      flash_price: product.flash_price != null ? String(product.flash_price) : '',
+      flash_start: product.flash_start ? new Date(product.flash_start).toISOString().slice(0, 16) : '',
+      flash_end: product.flash_end ? new Date(product.flash_end).toISOString().slice(0, 16) : '',
     });
     setFormError('');
   };
@@ -642,6 +670,28 @@ export default function SellerDashboardPage() {
         seller_reminder: editingProduct.seller_reminder || null,
         features: Array.isArray(editingProduct.features) ? editingProduct.features : [],
       };
+
+      if (editingProduct.is_flash_deal) {
+        const fPrice = parseFloat(editingProduct.flash_price);
+        if (Number.isNaN(fPrice) || fPrice <= 0 || fPrice >= price) {
+          setFormError('Flash price must be lower than the regular price.');
+          setFormSubmitting(false);
+          return;
+        }
+        payload.is_flash_deal = true;
+        payload.flash_price = fPrice;
+        payload.flash_start = editingProduct.flash_start
+          ? new Date(editingProduct.flash_start).toISOString()
+          : null;
+        payload.flash_end = editingProduct.flash_end
+          ? new Date(editingProduct.flash_end).toISOString()
+          : null;
+      } else {
+        payload.is_flash_deal = false;
+        payload.flash_price = null;
+        payload.flash_start = null;
+        payload.flash_end = null;
+      }
 
       const extraAccounts = (editingProduct.instant_add_accounts || '')
         .split('\n')
@@ -1160,6 +1210,55 @@ export default function SellerDashboardPage() {
                     <textarea value={form.seller_reminder} onChange={(e) => updateForm('seller_reminder', e.target.value)} placeholder="e.g. Please provide your game username after purchase." rows={2} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
                   </div>
 
+                  {/* Flash deal */}
+                  <div className="border-t border-m4m-gray-100 pt-4 mt-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-m4m-gray-700 mb-2">
+                      <input
+                        type="checkbox"
+                        checked={form.is_flash_deal}
+                        onChange={(e) => updateForm('is_flash_deal', e.target.checked)}
+                        className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple"
+                      />
+                      Enable Flash Deal
+                    </label>
+                    {form.is_flash_deal && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <label className="block text-xs font-medium text-m4m-gray-500 mb-1">Flash price (MAD)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={form.flash_price}
+                            onChange={(e) => updateForm('flash_price', e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-m4m-gray-500 mb-1">Start</label>
+                          <input
+                            type="datetime-local"
+                            value={form.flash_start}
+                            onChange={(e) => updateForm('flash_start', e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-m4m-gray-500 mb-1">End</label>
+                          <input
+                            type="datetime-local"
+                            value={form.flash_end}
+                            onChange={(e) => updateForm('flash_end', e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {form.is_flash_deal && form.price && form.flash_price && parseFloat(form.flash_price) >= parseFloat(form.price) && (
+                      <p className="mt-2 text-xs text-red-600">Flash price must be lower than the regular price.</p>
+                    )}
+                  </div>
+
                   <div className="flex gap-3 pt-2">
                     <button type="button" onClick={() => { setAddProductOpen(false); setFormError(''); }} className="px-4 py-2.5 rounded-lg font-medium border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50">Cancel</button>
                     <button type="submit" disabled={formSubmitting} className="px-4 py-2.5 rounded-lg font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60">
@@ -1218,6 +1317,77 @@ export default function SellerDashboardPage() {
                         className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
                       />
                     </div>
+                  </div>
+
+                  {/* Flash deal (edit) */}
+                  <div className="border-t border-m4m-gray-100 pt-4 mt-2">
+                    <label className="flex items-center gap-2 text-sm font-medium text-m4m-gray-700 mb-2">
+                      <input
+                        type="checkbox"
+                        checked={!!editingProduct.is_flash_deal}
+                        onChange={(e) =>
+                          setEditingProduct((f) => ({
+                            ...f,
+                            is_flash_deal: e.target.checked,
+                          }))
+                        }
+                        className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple"
+                      />
+                      Enable Flash Deal
+                    </label>
+                    {editingProduct.is_flash_deal && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <label className="block text-xs font-medium text-m4m-gray-500 mb-1">
+                            Flash price (MAD)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={editingProduct.flash_price}
+                            onChange={(e) =>
+                              setEditingProduct((f) => ({ ...f, flash_price: e.target.value }))
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-m4m-gray-500 mb-1">
+                            Start
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={editingProduct.flash_start}
+                            onChange={(e) =>
+                              setEditingProduct((f) => ({ ...f, flash_start: e.target.value }))
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-m4m-gray-500 mb-1">
+                            End
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={editingProduct.flash_end}
+                            onChange={(e) =>
+                              setEditingProduct((f) => ({ ...f, flash_end: e.target.value }))
+                            }
+                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {editingProduct.is_flash_deal &&
+                      editingProduct.price &&
+                      editingProduct.flash_price &&
+                      parseFloat(editingProduct.flash_price) >= parseFloat(editingProduct.price) && (
+                        <p className="mt-2 text-xs text-red-600">
+                          Flash price must be lower than the regular price.
+                        </p>
+                      )}
                   </div>
                   {/* Delivery type */}
                   <div>

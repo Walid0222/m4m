@@ -148,7 +148,7 @@ class OrderController extends Controller
                 }
             }
 
-            $unitPrice = (float) $product->price;
+            $unitPrice = (float) ($product->effective_price ?? $product->price);
             $lineTotal = round($unitPrice * $qty, 2);
 
             $orderLineItems[] = [

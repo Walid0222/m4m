@@ -12,6 +12,7 @@ import SellerDashboardPage from './pages/SellerDashboardPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import UserProfilePage from './pages/UserProfilePage';
+import SettingsPage from './pages/SettingsPage';
 import FavoritesPage from './pages/FavoritesPage';
 import DisputesPage from './pages/DisputesPage';
 import HelpPage from './pages/HelpPage';
@@ -34,6 +35,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <UserProfilePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="settings"
+              element={
+                <ProtectedRoute>
+                  <SettingsPage />
                 </ProtectedRoute>
               }
             />
