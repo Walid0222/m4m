@@ -28,6 +28,8 @@ class User extends Authenticatable
         'is_banned',
         'ban_type',
         'banned_until',
+        'ban_reason',
+        'warning_count',
         'is_verified_seller',
         'last_activity_at',
     ];
@@ -143,6 +145,18 @@ class User extends Authenticatable
     public function disputes(): HasMany
     {
         return $this->hasMany(Dispute::class, 'buyer_id');
+    }
+
+    /** Warnings issued to this seller. */
+    public function warnings(): HasMany
+    {
+        return $this->hasMany(SellerWarning::class, 'seller_id');
+    }
+
+    /** Full moderation action history for this seller. */
+    public function moderationActions(): HasMany
+    {
+        return $this->hasMany(SellerModerationAction::class, 'seller_id');
     }
 
     /** Database notifications (override to use app model). */

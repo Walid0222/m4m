@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Product;
+use App\Models\ProductAccount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -107,15 +108,37 @@ class ProductController extends Controller
         }
         $validated['slug'] = $slug;
 
-        // Auto-calculate stock for instant delivery based on line count
-        if (($validated['delivery_type'] ?? 'manual') === 'instant' && !empty($validated['delivery_content'])) {
-            $lines = array_filter(explode("\n", trim($validated['delivery_content'])));
+        $isInstant = ($validated['delivery_type'] ?? 'manual') === 'instant';
+
+        // For instant delivery, seed product_accounts from delivery_content
+        if ($isInstant && ! empty($validated['delivery_content'])) {
+            $lines = array_values(array_filter(
+                array_map('trim', explode("\n", trim($validated['delivery_content'])))
+            ));
             $validated['stock'] = count($lines);
         }
 
         $product = $request->user()->products()->create($validated);
 
-        return $this->success($product->fresh(), 'Product created.', 201);
+        // Seed product_accounts for instant delivery
+        if ($isInstant && ! empty($validated['delivery_content'])) {
+            $lines = array_values(array_filter(
+                array_map('trim', explode("\n", trim($validated['delivery_content'])))
+            ));
+            foreach ($lines as $line) {
+                ProductAccount::create([
+                    'product_id'   => $product->id,
+                    'account_data' => $line,
+                    'status'       => ProductAccount::STATUS_AVAILABLE,
+                ]);
+            }
+        }
+
+        return $this->success(
+            $this->productWithStock($product->fresh()),
+            'Product created.',
+            201
+        );
     }
 
     public function update(Request $request, Product $my_product): JsonResponse
@@ -140,15 +163,32 @@ class ProductController extends Controller
             'features.*' => ['string', 'max:100'],
         ]);
 
-        // Auto-calculate stock for instant delivery
-        if (($validated['delivery_type'] ?? $my_product->delivery_type) === 'instant' && isset($validated['delivery_content'])) {
-            $lines = array_filter(explode("\n", trim($validated['delivery_content'])));
+        $isInstant = ($validated['delivery_type'] ?? $my_product->delivery_type) === 'instant';
+
+        // If delivery_content updated for instant product, replace account stock
+        if ($isInstant && isset($validated['delivery_content'])) {
+            $lines = array_values(array_filter(
+                array_map('trim', explode("\n", trim($validated['delivery_content'])))
+            ));
             $validated['stock'] = count($lines);
+
+            // Remove only unsold accounts and replace
+            ProductAccount::where('product_id', $my_product->id)
+                ->where('status', ProductAccount::STATUS_AVAILABLE)
+                ->delete();
+
+            foreach ($lines as $line) {
+                ProductAccount::create([
+                    'product_id'   => $my_product->id,
+                    'account_data' => $line,
+                    'status'       => ProductAccount::STATUS_AVAILABLE,
+                ]);
+            }
         }
 
         $my_product->update($validated);
 
-        return $this->success($my_product->fresh(), 'Product updated.');
+        return $this->success($this->productWithStock($my_product->fresh()), 'Product updated.');
     }
 
     public function destroy(Request $request, Product $my_product): JsonResponse
@@ -160,6 +200,100 @@ class ProductController extends Controller
         $my_product->delete();
 
         return $this->success(null, 'Product deleted.', 204);
+    }
+
+    // ─── Account stock management ─────────────────────────────────────────────
+
+    /**
+     * POST /seller/products/{product}/accounts
+     *
+     * Append new account lines to the product's instant-delivery stock.
+     * Each line is one record in product_accounts.
+     *
+     * Input: { accounts: "email1:pass1\nemail2:pass2\n..." }
+     */
+    public function addAccounts(Request $request, Product $my_product): JsonResponse
+    {
+        $this->authorizeSeller($request);
+
+        if ($my_product->user_id !== $request->user()->id) {
+            return $this->error('Forbidden.', 403);
+        }
+
+        if ($my_product->delivery_type !== 'instant') {
+            return $this->error('Account stock can only be added to instant-delivery products.', 422);
+        }
+
+        $validated = $request->validate([
+            'accounts' => ['required', 'string'],
+        ]);
+
+        $lines = array_values(array_filter(
+            array_map('trim', explode("\n", trim($validated['accounts'])))
+        ));
+
+        if (empty($lines)) {
+            return $this->error('No valid account lines provided.', 422);
+        }
+
+        $created = [];
+        foreach ($lines as $line) {
+            $created[] = ProductAccount::create([
+                'product_id'   => $my_product->id,
+                'account_data' => $line,
+                'status'       => ProductAccount::STATUS_AVAILABLE,
+            ]);
+        }
+
+        // Sync stock count
+        $availableCount = ProductAccount::where('product_id', $my_product->id)
+            ->where('status', ProductAccount::STATUS_AVAILABLE)
+            ->count();
+        $my_product->update(['stock' => $availableCount]);
+
+        return $this->success([
+            'added'           => count($created),
+            'available_stock' => $availableCount,
+        ], count($created) . ' account(s) added successfully.', 201);
+    }
+
+    /**
+     * GET /seller/products/{product}/accounts
+     *
+     * List account stock for this product (seller only).
+     * account_data is masked for sold entries to protect credentials.
+     */
+    public function listAccounts(Request $request, Product $my_product): JsonResponse
+    {
+        $this->authorizeSeller($request);
+
+        if ($my_product->user_id !== $request->user()->id) {
+            return $this->error('Forbidden.', 403);
+        }
+
+        $accounts = ProductAccount::where('product_id', $my_product->id)
+            ->orderBy('status')
+            ->latest()
+            ->paginate($request->integer('per_page', 50));
+
+        return $this->success($accounts);
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    /**
+     * Attach real-time available_stock from product_accounts
+     * so the frontend always sees accurate stock for instant products.
+     */
+    private function productWithStock(Product $product): array
+    {
+        $data = $product->toArray();
+        if ($product->delivery_type === 'instant') {
+            $data['available_stock'] = ProductAccount::where('product_id', $product->id)
+                ->where('status', ProductAccount::STATUS_AVAILABLE)
+                ->count();
+        }
+        return $data;
     }
 
     private function authorizeSeller(Request $request): void

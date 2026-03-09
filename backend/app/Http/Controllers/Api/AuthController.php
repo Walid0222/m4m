@@ -30,6 +30,13 @@ class AuthController extends Controller
 
         $user->wallet()->create(['balance' => 0]);
 
+        // Log registration and check for banned multi-accounts
+        $regLog = SecurityLogService::log($user, 'register', $request);
+        $bannedMatches = SecurityLogService::detectMultiAccount($user, $request);
+        if (! empty($bannedMatches)) {
+            SecurityLogService::flagUser($user, 'Possible multi-account: shares IP/device with banned user(s)');
+        }
+
         $token = $user->createToken('auth')->plainTextToken;
 
         return $this->success([
@@ -54,9 +61,27 @@ class AuthController extends Controller
             ]);
         }
 
-        if ($user->is_banned && ($user->ban_type === 'permanent' || ($user->banned_until && $user->banned_until->isFuture()))) {
-            return $this->error('Your account has been banned.', 403);
+        // Auto-lift expired temporary bans before login check
+        if ($user->is_banned && $user->ban_type === 'temporary' && $user->banned_until?->isPast()) {
+            $user->update([
+                'is_banned'    => false,
+                'ban_type'     => null,
+                'banned_until' => null,
+                'ban_reason'   => null,
+            ]);
         }
+
+        // Permanent ban — cannot login at all
+        if ($user->is_banned && $user->ban_type === 'permanent') {
+            return $this->error(
+                '🚫 Your account has been permanently banned.'
+                    . ($user->ban_reason ? ' Reason: ' . $user->ban_reason : ''),
+                403
+            );
+        }
+
+        // Temporary ban — allow login so seller can see suspension message
+        // (seller-action routes are protected by EnsureSellerNotBanned middleware)
 
         $user->tokens()->where('name', 'auth')->delete();
         $token = $user->createToken('auth')->plainTextToken;
@@ -64,8 +89,8 @@ class AuthController extends Controller
         SecurityLogService::log($user, 'login', $request);
 
         return $this->success([
-            'user' => $this->userFields($user),
-            'token' => $token,
+            'user'       => $this->userFields($user),
+            'token'      => $token,
             'token_type' => 'Bearer',
         ]);
     }
@@ -109,7 +134,7 @@ class AuthController extends Controller
         return $user->only([
             'id', 'name', 'email', 'is_seller', 'is_admin',
             'is_verified_seller', 'is_banned', 'ban_type', 'banned_until',
-            'last_activity_at',
+            'ban_reason', 'warning_count', 'last_activity_at',
         ]);
     }
 }

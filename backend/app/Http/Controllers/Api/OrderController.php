@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\ProductAccount;
 use App\Notifications\NewOrderNotification;
 use App\Notifications\OrderCompletedNotification;
 use App\Notifications\OrderDeliveredNotification;
@@ -18,12 +19,14 @@ class OrderController extends Controller
 {
     public function __construct(private readonly EscrowService $escrow) {}
 
+    // ─── Buyer: list own orders ───────────────────────────────────────────────
+
     public function index(Request $request): JsonResponse
     {
         $orders = $request->user()
             ->orders()
             ->with([
-                'orderItems.product:id,name,slug,user_id,images',
+                'orderItems.product:id,name,slug,user_id,images,delivery_type',
                 'orderItems.product.seller:id,name,is_verified_seller',
                 'dispute:id,order_id,status',
             ])
@@ -33,6 +36,8 @@ class OrderController extends Controller
         return $this->success($orders);
     }
 
+    // ─── Buyer: order detail (with delivery content) ──────────────────────────
+
     public function show(Request $request, Order $order): JsonResponse
     {
         if ($order->user_id !== $request->user()->id) {
@@ -40,14 +45,17 @@ class OrderController extends Controller
         }
 
         $order->load([
-            'orderItems.product:id,name,slug,price,images',
+            'orderItems.product:id,name,slug,price,images,delivery_type,delivery_time',
             'orderItems',
             'buyer:id,name',
+            'seller:id,name',
             'dispute:id,order_id,status,reason',
         ]);
 
-        return $this->success($order);
+        return $this->success($this->orderPayload($order));
     }
+
+    // ─── Buyer: confirm delivery ──────────────────────────────────────────────
 
     public function confirmDelivery(Request $request, Order $order): JsonResponse
     {
@@ -59,31 +67,31 @@ class OrderController extends Controller
             return $this->error('Order must be in delivered status before confirming.', 422);
         }
 
-        DB::transaction(function () use ($order, $request) {
+        DB::transaction(function () use ($order) {
             $order->update([
                 'status'       => Order::STATUS_COMPLETED,
                 'completed_at' => now(),
             ]);
 
-            // Release escrow → seller payout + commission
             $this->escrow->releaseFunds($order);
         });
 
         $order->load([
-            'orderItems.product:id,name,slug,price,images',
+            'orderItems.product:id,name,slug,price,images,delivery_type',
             'orderItems',
             'buyer:id,name',
             'seller:id,name',
         ]);
 
-        // Notify both parties
         if ($order->seller) {
             $order->seller->notify(new OrderCompletedNotification($order));
         }
         $request->user()->notify(new OrderCompletedNotification($order));
 
-        return $this->success($order, 'Order confirmed. Payment released to seller.');
+        return $this->success($this->orderPayload($order), 'Order confirmed. Payment released to seller.');
     }
+
+    // ─── Buyer: place order ───────────────────────────────────────────────────
 
     public function store(Request $request): JsonResponse
     {
@@ -97,25 +105,41 @@ class OrderController extends Controller
         $productIds = array_column($items, 'product_id');
         $products   = Product::whereIn('id', $productIds)->where('status', 'active')->get()->keyBy('id');
 
-        $orderItems  = [];
-        $totalAmount = 0;
+        $orderLineItems = [];
+        $totalAmount    = 0;
 
         foreach ($items as $item) {
             $product = $products->get($item['product_id']);
             if (! $product) {
                 return $this->error("Product {$item['product_id']} not found or not available.", 422);
             }
+
             $qty = (int) $item['quantity'];
-            if ($product->stock < $qty) {
-                return $this->error("Insufficient stock for product: {$product->name}. Available: {$product->stock}", 422);
+
+            // Stock check (use product_accounts for instant delivery)
+            if ($product->delivery_type === 'instant') {
+                $available = ProductAccount::where('product_id', $product->id)
+                    ->where('status', ProductAccount::STATUS_AVAILABLE)
+                    ->count();
+
+                if ($available < $qty) {
+                    return $this->error("This product is currently out of stock.", 422);
+                }
+            } else {
+                if ($product->stock < $qty) {
+                    return $this->error("Insufficient stock for product: {$product->name}. Available: {$product->stock}", 422);
+                }
             }
-            $unitPrice  = (float) $product->price;
-            $lineTotal  = round($unitPrice * $qty, 2);
-            $orderItems[] = [
-                'product_id'  => $product->id,
-                'quantity'    => $qty,
-                'unit_price'  => $unitPrice,
-                'total_price' => $lineTotal,
+
+            $unitPrice = (float) $product->price;
+            $lineTotal = round($unitPrice * $qty, 2);
+
+            $orderLineItems[] = [
+                'product'    => $product,
+                'product_id' => $product->id,
+                'quantity'   => $qty,
+                'unit_price' => $unitPrice,
+                'total_price'=> $lineTotal,
             ];
             $totalAmount += $lineTotal;
         }
@@ -129,45 +153,79 @@ class OrderController extends Controller
 
         $autoConfirmHours = (int) config('platform.auto_confirm_hours', 24);
 
-        $order = DB::transaction(function () use ($user, $totalAmount, $orderItems, $products, $autoConfirmHours) {
+        $order = DB::transaction(function () use ($user, $totalAmount, $orderLineItems, $autoConfirmHours) {
             do {
                 $orderNumber = 'M4M-' . strtoupper(Str::random(6));
             } while (Order::where('order_number', $orderNumber)->exists());
 
-            $firstProduct = $products->get($orderItems[0]['product_id']);
-            $sellerId     = $firstProduct?->user_id;
+            $firstProduct = $orderLineItems[0]['product'];
+            $sellerId     = $firstProduct->user_id;
+            $deliveryType = $firstProduct->delivery_type ?? 'manual';
 
             $order = $user->orders()->create([
                 'order_number'    => $orderNumber,
                 'seller_id'       => $sellerId,
+                'delivery_type'   => $deliveryType,
                 'status'          => Order::STATUS_PROCESSING,
                 'total_amount'    => $totalAmount,
                 'escrow_amount'   => $totalAmount,
                 'escrow_status'   => 'held',
-                'auto_confirm_at' => now()->addHours($autoConfirmHours + 48), // buffer: delivered_at + 24h; set properly on delivery
+                'auto_confirm_at' => now()->addHours($autoConfirmHours + 48),
             ]);
 
-            $isInstant = false;
-            foreach ($orderItems as $oi) {
-                $product     = $products->get($oi['product_id']);
+            $isInstant          = false;
+            $allDeliveryContent = [];
+
+            foreach ($orderLineItems as $oi) {
+                $product     = $oi['product'];
                 $credentials = null;
 
-                if ($product && $product->delivery_type === 'instant' && $product->delivery_content) {
-                    $lines       = array_values(array_filter(explode("\n", trim($product->delivery_content))));
-                    $credentials = implode("\n", array_splice($lines, 0, $oi['quantity']));
-                    $remaining   = implode("\n", $lines);
-                    $product->update([
-                        'delivery_content' => $remaining,
-                        'stock'            => max(0, $product->stock - $oi['quantity']),
+                if ($product->delivery_type === 'instant') {
+                    // Pull accounts from product_accounts table
+                    $accounts = ProductAccount::where('product_id', $product->id)
+                        ->where('status', ProductAccount::STATUS_AVAILABLE)
+                        ->lockForUpdate()
+                        ->take($oi['quantity'])
+                        ->get();
+
+                    if ($accounts->count() < $oi['quantity']) {
+                        throw new \RuntimeException("Out of stock for product: {$product->name}");
+                    }
+
+                    $credLines = $accounts->pluck('account_data')->toArray();
+                    $credentials = implode("\n", $credLines);
+
+                    // Create the order item first so we have its ID
+                    $orderItem = $order->orderItems()->create([
+                        'product_id'           => $oi['product_id'],
+                        'quantity'             => $oi['quantity'],
+                        'unit_price'           => $oi['unit_price'],
+                        'total_price'          => $oi['total_price'],
+                        'delivery_credentials' => $credentials,
                     ]);
+
+                    // Mark accounts as sold and link to order item
+                    ProductAccount::whereIn('id', $accounts->pluck('id'))
+                        ->update([
+                            'status'        => ProductAccount::STATUS_SOLD,
+                            'order_item_id' => $orderItem->id,
+                        ]);
+
+                    // Sync product stock
+                    $product->decrement('stock', $oi['quantity']);
+
+                    $allDeliveryContent[] = $credentials;
                     $isInstant = true;
                 } else {
+                    // Manual delivery
+                    $order->orderItems()->create([
+                        'product_id'  => $oi['product_id'],
+                        'quantity'    => $oi['quantity'],
+                        'unit_price'  => $oi['unit_price'],
+                        'total_price' => $oi['total_price'],
+                    ]);
                     Product::where('id', $oi['product_id'])->decrement('stock', $oi['quantity']);
                 }
-
-                $order->orderItems()->create(array_merge($oi, [
-                    'delivery_credentials' => $credentials,
-                ]));
             }
 
             // Escrow hold — debit buyer wallet
@@ -183,20 +241,22 @@ class OrderController extends Controller
                 'description'    => "Escrow hold for order #{$orderNumber}",
             ]);
 
-            // Instant delivery → mark delivered immediately + set auto-confirm timer
+            // Instant delivery → delivered immediately
             if ($isInstant) {
-                $deliveredAt = now();
+                $deliveryContent = implode("\n---\n", $allDeliveryContent);
+                $deliveredAt     = now();
                 $order->update([
                     'status'          => Order::STATUS_DELIVERED,
                     'delivered_at'    => $deliveredAt,
-                    'auto_confirm_at' => $deliveredAt->addHours($autoConfirmHours),
+                    'delivery_content'=> $deliveryContent,
+                    'auto_confirm_at' => $deliveredAt->copy()->addHours($autoConfirmHours),
                 ]);
             }
 
             return $order;
         });
 
-        $order->load(['orderItems.product:id,name,slug,user_id']);
+        $order->load(['orderItems.product:id,name,slug,user_id,delivery_type']);
 
         // Notify seller(s)
         $sellerIds = $order->orderItems->pluck('product.user_id')->unique()->filter();
@@ -207,18 +267,40 @@ class OrderController extends Controller
             }
         }
 
-        // For instant delivery, also notify the buyer that it's already delivered
+        // For instant delivery, notify buyer
         if ($order->status === Order::STATUS_DELIVERED) {
             $user->notify(new OrderDeliveredNotification($order));
         }
 
-        // Security log
         SecurityLogService::log($user, 'purchase', $request, [
             'order_id'     => $order->id,
             'order_number' => $order->order_number,
             'amount'       => $totalAmount,
         ]);
 
-        return $this->success($order->toArray(), 'Order placed successfully.', 201);
+        return $this->success($this->orderPayload($order->fresh(['orderItems.product'])), 'Order placed successfully.', 201);
+    }
+
+    // ─── Helper: build safe order payload ────────────────────────────────────
+
+    /**
+     * Build the public order payload.
+     * delivery_content is only included when the caller is the buyer or admin.
+     * (Authorization is already enforced before calling this.)
+     */
+    private function orderPayload(Order $order): array
+    {
+        $data                     = $order->toArray();
+        $data['delivery_content'] = $order->delivery_content;
+
+        // Also attach credentials per order item
+        $items = $order->orderItems ?? collect();
+        $data['order_items'] = $items->map(function ($item) {
+            $arr = $item->toArray();
+            $arr['delivery_credentials'] = $item->delivery_credentials;
+            return $arr;
+        })->values()->toArray();
+
+        return $data;
     }
 }

@@ -17,14 +17,19 @@ class UserSecurityLog extends Model
         'ip_address',
         'device',
         'location',
+        'country',
+        'user_agent',
         'action',
         'metadata',
+        'flagged',
+        'flag_reason',
     ];
 
     protected function casts(): array
     {
         return [
-            'metadata' => 'array',
+            'metadata'    => 'array',
+            'flagged'     => 'boolean',
         ];
     }
 

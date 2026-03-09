@@ -157,6 +157,26 @@ export function updateSellerOrderStatus(orderId, body) {
   return api.patch(`/seller/orders/${orderId}/status`, body).then(unwrap);
 }
 
+/** Seller sends manual delivery credentials — marks order as delivered. */
+export function deliverOrder(orderId, deliveryContent) {
+  return api.post(`/seller/orders/${orderId}/deliver`, { delivery_content: deliveryContent }).then(unwrap);
+}
+
+/** Seller adds account stock lines to an instant-delivery product. */
+export function addProductAccounts(productId, accountsText) {
+  return api.post(`/seller/products/${productId}/accounts`, { accounts: accountsText }).then(unwrap);
+}
+
+/** Seller lists account stock for a product. */
+export function getProductAccounts(productId, params = {}) {
+  return api.get(`/seller/products/${productId}/accounts`, { params }).then(unwrap);
+}
+
+/** Seller moderation status (for dashboard warning banner). */
+export function getSellerModerationStatus() {
+  return api.get('/seller/moderation-status').then(unwrap);
+}
+
 // --- Wallet ---
 
 export function getWallet() {

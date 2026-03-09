@@ -23,6 +23,8 @@ class Order extends Model
         'delivered_at',
         'completed_at',
         'auto_confirm_at',
+        'delivery_content',
+        'delivery_type',
     ];
 
     protected function casts(): array

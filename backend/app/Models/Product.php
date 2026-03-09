@@ -54,6 +54,18 @@ class Product extends Model
         return $this->hasManyThrough(Order::class, OrderItem::class, 'product_id', 'id', 'id', 'order_id');
     }
 
+    /** Account stock entries for instant-delivery products. */
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(ProductAccount::class);
+    }
+
+    /** Available (unsold) account stock. */
+    public function availableAccounts(): HasMany
+    {
+        return $this->hasMany(ProductAccount::class)->where('status', ProductAccount::STATUS_AVAILABLE);
+    }
+
     /** Reviews for this product. */
     public function reviews(): HasMany
     {

@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Api\Controller;
 use App\Models\Product;
 use App\Models\Report;
+use App\Models\SellerWarning;
 use App\Models\User;
 use App\Notifications\SellerBannedNotification;
+use App\Notifications\SellerWarningNotification;
 use App\Services\AdminLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -159,10 +161,21 @@ class AdminReportController extends Controller
     private function applySellerPenalty(User $seller, string $action, User $admin, int $reportId): void
     {
         if ($action === 'warn_seller') {
-            $seller->notify(new SellerBannedNotification(
-                banType: 'warning',
-                bannedUntil: null,
-                reason: "You received a warning due to a report (#{$reportId}) on your account."
+            // Create a proper warning record
+            $warningMsg = "A report was filed against your account (report #{$reportId}). "
+                . "Please review our marketplace policies and ensure your listings comply.";
+            SellerWarning::create([
+                'seller_id' => $seller->id,
+                'admin_id'  => $admin->id,
+                'reason'    => 'Report violation',
+                'message'   => $warningMsg,
+            ]);
+            $seller->increment('warning_count');
+            $newCount = $seller->fresh()->warning_count;
+            $seller->notify(new SellerWarningNotification(
+                reason: 'Report violation',
+                message: $warningMsg,
+                warningCount: $newCount,
             ));
             AdminLogService::log(
                 $admin,
@@ -179,6 +192,7 @@ class AdminReportController extends Controller
                 'is_banned'    => true,
                 'ban_type'     => 'temporary',
                 'banned_until' => $bannedUntil,
+                'ban_reason'   => "Suspended following report #{$reportId}.",
             ]);
             $seller->tokens()->delete();
             $seller->notify(new SellerBannedNotification(
@@ -200,6 +214,7 @@ class AdminReportController extends Controller
                 'is_banned'    => true,
                 'ban_type'     => 'permanent',
                 'banned_until' => null,
+                'ban_reason'   => "Permanently banned following report #{$reportId}.",
             ]);
             $seller->tokens()->delete();
             $seller->notify(new SellerBannedNotification(

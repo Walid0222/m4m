@@ -19,6 +19,7 @@ import {
   deleteProduct,
   getSellerOrders,
   updateSellerOrderStatus,
+  deliverOrder,
   getWallet,
 } from '../services/api';
 import OrderCard from '../components/OrderCard';
@@ -233,6 +234,9 @@ export default function SellerDashboardPage() {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [orderStatusConfirm, setOrderStatusConfirm] = useState(null); // { orderId, status }
+  const [deliverModal, setDeliverModal] = useState(null);             // { orderId, orderNumber }
+  const [deliverContent, setDeliverContent] = useState('');
+  const [deliverSubmitting, setDeliverSubmitting] = useState(false);
   const [form, setForm] = useState({
     title: '',
     game: '',
@@ -317,6 +321,28 @@ export default function SellerDashboardPage() {
       setActionMessage({ type: 'success', text: 'Order status updated.' });
     } catch (err) {
       setFormError(err.message || 'Failed to update order status.');
+    }
+  };
+
+  const handleDeliverOpen = (order) => {
+    setDeliverContent('');
+    setDeliverModal({ orderId: order.id, orderNumber: order.order_number ?? order.id });
+  };
+
+  const handleDeliverSubmit = async () => {
+    if (!deliverModal || !deliverContent.trim()) return;
+    setDeliverSubmitting(true);
+    setFormError('');
+    try {
+      await deliverOrder(deliverModal.orderId, deliverContent.trim());
+      setDeliverModal(null);
+      setDeliverContent('');
+      await fetchOrders();
+      setActionMessage({ type: 'success', text: 'Delivery sent! Order marked as delivered.' });
+    } catch (err) {
+      setFormError(err.message || 'Failed to send delivery.');
+    } finally {
+      setDeliverSubmitting(false);
     }
   };
 
@@ -521,7 +547,7 @@ export default function SellerDashboardPage() {
   }
 
   const DELIVERY_TIME_OPTIONS = [
-    'Instant delivery', '5 minutes', '15 minutes', '30 minutes',
+    '5 minutes', '15 minutes', '30 minutes',
     '1 hour', '24 hours', '48 hours',
   ];
   const FEATURE_OPTIONS = [
@@ -548,6 +574,48 @@ export default function SellerDashboardPage() {
           </div>
         </div>
       )}
+      {/* Manual delivery modal */}
+      {deliverModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="rounded-2xl bg-white shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Send Delivery</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Order <strong>{deliverModal.orderNumber}</strong> — Enter the account credentials for the buyer.
+            </p>
+            {formError && (
+              <p className="mb-3 text-sm text-red-600 bg-red-50 rounded-lg p-2">{formError}</p>
+            )}
+            <textarea
+              value={deliverContent}
+              onChange={(e) => setDeliverContent(e.target.value)}
+              placeholder={"email:password\n\nOr any delivery information for the buyer"}
+              rows={5}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none resize-y mb-4"
+            />
+            <p className="text-xs text-gray-500 mb-4">
+              ⚠️ This information will be sent to the buyer and stored securely. The order will be marked as delivered immediately.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setDeliverModal(null); setDeliverContent(''); setFormError(''); }}
+                className="flex-1 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeliverSubmit}
+                disabled={deliverSubmitting || !deliverContent.trim()}
+                className="flex-1 py-2.5 rounded-xl font-semibold bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
+              >
+                {deliverSubmitting ? 'Sending…' : '📤 Send Delivery'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
       <aside className="w-full md:w-64 lg:w-72 border-b md:border-b-0 md:border-r border-m4m-gray-200 bg-white shrink-0">
         <div className="p-4 border-b border-m4m-gray-200">
@@ -962,6 +1030,11 @@ export default function SellerDashboardPage() {
                   const canSetDelivered = status === 'processing';
                   const items = order.order_items ?? order.orderItems ?? [];
                   const productTitles = items.map((i) => i.product?.name).filter(Boolean).join(', ') || 'Order';
+                  // Detect if any item is manual delivery
+                  const hasManualItem = items.some((i) => i.product?.delivery_type !== 'instant');
+                  const hasInstantItem = items.some((i) => i.product?.delivery_type === 'instant');
+                  // For manual orders in processing: show "Send Delivery" instead of "Mark as Delivered"
+                  const canSendDelivery = canSetDelivered && hasManualItem;
                   return (
                     <li
                       key={order.id}
@@ -969,10 +1042,20 @@ export default function SellerDashboardPage() {
                     >
                       <div className="p-4 md:p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                          <span className="font-mono font-semibold text-m4m-black">M4M-{String(order.id).padStart(6, '0')}</span>
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${style.badge}`}>
-                            {style.label}
+                          <span className="font-mono font-semibold text-m4m-black">
+                            {order.order_number ?? `M4M-${String(order.id).padStart(6, '0')}`}
                           </span>
+                          <div className="flex items-center gap-2">
+                            {hasInstantItem && (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">⚡ Instant</span>
+                            )}
+                            {hasManualItem && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">📦 Manual</span>
+                            )}
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${style.badge}`}>
+                              {style.label}
+                            </span>
+                          </div>
                         </div>
                         <p className="mt-2 text-m4m-black line-clamp-2">{productTitles}</p>
                         <p className="mt-1 text-sm text-m4m-gray-600">
@@ -995,7 +1078,15 @@ export default function SellerDashboardPage() {
                                 Mark as Processing
                               </button>
                             )}
-                            {canSetDelivered && (
+                            {canSendDelivery ? (
+                              <button
+                                type="button"
+                                onClick={() => handleDeliverOpen(order)}
+                                className="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700"
+                              >
+                                📤 Send Delivery
+                              </button>
+                            ) : canSetDelivered && (
                               <button
                                 type="button"
                                 onClick={() => handleUpdateOrderStatus(order.id, 'delivered')}

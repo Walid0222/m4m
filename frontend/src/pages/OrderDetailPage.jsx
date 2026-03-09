@@ -9,6 +9,7 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!id || !getToken()) {
@@ -47,6 +48,13 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleCopy = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12 text-center text-m4m-gray-500">
@@ -76,29 +84,124 @@ export default function OrderDetailPage() {
   }
 
   const items = order.order_items ?? order.orderItems ?? [];
+  const status = (order.status || '').toLowerCase();
+  const isDelivered = status === 'delivered';
+  const isCompleted = status === 'completed';
+
+  // Delivery content: order-level (instant delivery stores here) or per item
+  const orderDeliveryContent = order.delivery_content ?? null;
+  const itemCredentials = items.map((i) => i.delivery_credentials).filter(Boolean).join('\n');
+  const deliveryContent = orderDeliveryContent || itemCredentials || null;
+
+  // Delivery type from order or first item's product
+  const deliveryType = order.delivery_type
+    ?? items[0]?.product?.delivery_type
+    ?? 'manual';
+  const deliveryTime = items[0]?.product?.delivery_time ?? null;
+
+  const hasCredentials = Boolean(deliveryContent);
+  const showDeliverySection = isDelivered || isCompleted || hasCredentials;
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Link to="/orders" className="text-sm text-m4m-purple hover:underline mb-6 inline-block">
         ← Back to Orders
       </Link>
-      <h1 className="text-2xl font-bold text-m4m-black mb-2">Order #{order.id}</h1>
-      <p className="text-m4m-gray-500 mb-2">
-        Status: <span className="capitalize font-medium text-m4m-black">{order.status}</span>
-      </p>
-      {(order.status || '').toLowerCase() === 'delivered' && (
-        <div className="mb-6">
+
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-bold text-m4m-black">
+          Order #{order.order_number ?? order.id}
+        </h1>
+        <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${statusBadge(status)}`}>
+          {status}
+        </span>
+      </div>
+
+      {/* Confirm delivery button */}
+      {isDelivered && (
+        <div className="mb-6 p-4 bg-green-50 rounded-xl border border-green-200">
+          <p className="text-sm text-green-800 mb-3 font-medium">
+            ✅ Your order has been delivered. Please confirm once you have verified the credentials.
+          </p>
           <button
             type="button"
             onClick={handleConfirmDelivery}
             disabled={confirming}
-            className="px-5 py-2.5 rounded-xl font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60"
+            className="px-5 py-2.5 rounded-xl font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition-colors"
           >
-            {confirming ? 'Confirming…' : 'Confirm delivery'}
+            {confirming ? 'Confirming…' : 'Confirm Delivery'}
           </button>
         </div>
       )}
+
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+      {/* ── Delivery information section ─────────────────────────────────── */}
+      {showDeliverySection && (
+        <div className={`mb-6 rounded-xl border overflow-hidden ${hasCredentials ? 'border-green-300 bg-green-50' : 'border-amber-200 bg-amber-50'}`}>
+          <div className={`px-4 py-3 flex items-center justify-between ${hasCredentials ? 'bg-green-100 border-b border-green-200' : 'bg-amber-100 border-b border-amber-200'}`}>
+            <span className={`font-semibold text-sm ${hasCredentials ? 'text-green-900' : 'text-amber-900'}`}>
+              {hasCredentials ? '🔑 Delivery Information' : '⏳ Waiting for Delivery'}
+            </span>
+            {deliveryType === 'instant' && (
+              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+                ⚡ Instant Delivery
+              </span>
+            )}
+          </div>
+
+          <div className="px-4 py-4">
+            {hasCredentials ? (
+              <>
+                <p className="text-xs text-green-700 mb-3">
+                  Keep these credentials safe. Do not share them with anyone.
+                </p>
+                <div className="relative">
+                  <pre className="bg-white rounded-lg border border-green-200 p-4 text-sm font-mono text-gray-900 whitespace-pre-wrap break-all select-all">
+                    {deliveryContent}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(deliveryContent)}
+                    className="absolute top-2 right-2 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                  >
+                    {copied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+                {/* Per-item credentials if multiple products */}
+                {items.length > 1 && items.some((i) => i.delivery_credentials) && (
+                  <div className="mt-4 space-y-3">
+                    {items.map((item) => item.delivery_credentials ? (
+                      <div key={item.id} className="rounded-lg border border-green-200 overflow-hidden">
+                        <div className="bg-green-100 px-3 py-2 text-xs font-medium text-green-900">
+                          {item.product?.name ?? 'Product'}
+                        </div>
+                        <pre className="p-3 text-sm font-mono text-gray-900 whitespace-pre-wrap bg-white">
+                          {item.delivery_credentials}
+                        </pre>
+                      </div>
+                    ) : null)}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-sm text-amber-800">
+                <p className="font-medium mb-1">Seller will deliver soon.</p>
+                <p className="text-amber-700">
+                  {deliveryTime
+                    ? `Expected delivery time: ${deliveryTime}`
+                    : 'The seller will send your delivery details shortly.'}
+                </p>
+                <p className="mt-2 text-xs text-amber-600">
+                  You will be notified when the delivery is ready.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Order items ──────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-m4m-gray-200 overflow-hidden">
         <ul className="divide-y divide-m4m-gray-200">
           {items.map((item) => (
@@ -106,18 +209,42 @@ export default function OrderDetailPage() {
               <div>
                 <p className="font-medium text-m4m-black">{item.product?.name ?? 'Product'}</p>
                 <p className="text-sm text-m4m-gray-500">
-                  Qty: {item.quantity} × ${Number(item.unit_price ?? 0).toFixed(2)}
+                  Qty: {item.quantity} × {Number(item.unit_price ?? 0).toFixed(2)} MAD
                 </p>
+                {item.product?.delivery_type && (
+                  <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full font-medium ${item.product.delivery_type === 'instant' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                    {item.product.delivery_type === 'instant' ? '⚡ Instant' : '📦 Manual'}
+                  </span>
+                )}
               </div>
-              <p className="font-semibold">${Number(item.total_price ?? 0).toFixed(2)}</p>
+              <p className="font-semibold">{Number(item.total_price ?? 0).toFixed(2)} MAD</p>
             </li>
           ))}
         </ul>
         <div className="px-4 py-3 bg-m4m-gray-100 font-bold text-m4m-black flex justify-between">
           <span>Total</span>
-          <span>${Number(order.total_amount ?? 0).toFixed(2)}</span>
+          <span>{Number(order.total_amount ?? 0).toFixed(2)} MAD</span>
         </div>
       </div>
+
+      {/* Completed info */}
+      {isCompleted && (
+        <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-600">
+          ✅ Order completed. Funds have been released to the seller.
+        </div>
+      )}
     </div>
   );
+}
+
+function statusBadge(status) {
+  const map = {
+    pending: 'bg-gray-100 text-gray-700',
+    processing: 'bg-blue-100 text-blue-700',
+    delivered: 'bg-orange-100 text-orange-700',
+    completed: 'bg-green-100 text-green-700',
+    cancelled: 'bg-red-100 text-red-700',
+    dispute: 'bg-red-100 text-red-800',
+  };
+  return map[status] ?? 'bg-gray-100 text-gray-700';
 }

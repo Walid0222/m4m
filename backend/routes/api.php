@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\SellerOrderController;
 use App\Http\Controllers\Api\SellerProfileController;
 use App\Http\Controllers\Api\SellerVerificationController;
+use App\Http\Controllers\Api\SellerWarningsController;
 use App\Http\Controllers\Api\StatsController;
 use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\WalletController;
@@ -57,11 +58,15 @@ Route::prefix('v1')->group(function () {
 
         // Products (seller management) — banned sellers blocked
         Route::middleware('not.banned')->group(function () {
-            Route::get('/my-products',                    [ProductController::class, 'myIndex']);
-            Route::post('/my-products',                   [ProductController::class, 'store']);
-            Route::put('/my-products/{my_product}',       [ProductController::class, 'update']);
-            Route::patch('/my-products/{my_product}',     [ProductController::class, 'update']);
-            Route::delete('/my-products/{my_product}',    [ProductController::class, 'destroy']);
+            Route::get('/my-products',                            [ProductController::class, 'myIndex']);
+            Route::post('/my-products',                           [ProductController::class, 'store']);
+            Route::put('/my-products/{my_product}',               [ProductController::class, 'update']);
+            Route::patch('/my-products/{my_product}',             [ProductController::class, 'update']);
+            Route::delete('/my-products/{my_product}',            [ProductController::class, 'destroy']);
+
+            // Instant-delivery account stock
+            Route::post('/seller/products/{my_product}/accounts', [ProductController::class, 'addAccounts']);
+            Route::get('/seller/products/{my_product}/accounts',  [ProductController::class, 'listAccounts']);
         });
 
         // Orders (buyer) — banned users cannot place orders
@@ -82,14 +87,19 @@ Route::prefix('v1')->group(function () {
 
         // Seller order management — banned sellers blocked
         Route::middleware('not.banned')->group(function () {
-            Route::get('/seller/orders',                      [SellerOrderController::class, 'index']);
-            Route::get('/seller/orders/{order}',              [SellerOrderController::class, 'show']);
-            Route::patch('/seller/orders/{order}/status',     [SellerOrderController::class, 'updateStatus']);
+            Route::get('/seller/orders',                          [SellerOrderController::class, 'index']);
+            Route::get('/seller/orders/{order}',                  [SellerOrderController::class, 'show']);
+            Route::patch('/seller/orders/{order}/status',         [SellerOrderController::class, 'updateStatus']);
+            Route::post('/seller/orders/{order}/deliver',         [SellerOrderController::class, 'deliver']);
         });
 
         // Seller verification
         Route::post('/seller/verification-request', [SellerVerificationController::class, 'store']);
         Route::get('/seller/verification-request',  [SellerVerificationController::class, 'show']);
+
+        // Seller warnings + moderation status (authenticated seller)
+        Route::get('/seller/warnings',            [SellerWarningsController::class, 'index']);
+        Route::get('/seller/moderation-status',   [SellerWarningsController::class, 'status']);
 
         // Stats
         Route::get('/stats/seller', [StatsController::class, 'sellerStats']);
@@ -134,9 +144,18 @@ Route::prefix('v1')->group(function () {
         Route::post('/reports/{report}/resolve',       [AdminReportController::class, 'resolve']);
         Route::post('/reports/{report}/action',        [AdminReportController::class, 'action']);
 
-        // Seller management
-        Route::post('/sellers/{seller}/ban',           [AdminSellerController::class, 'ban']);
-        Route::post('/sellers/{seller}/unban',         [AdminSellerController::class, 'unban']);
+        // Seller management — list + detail
+        Route::get('/sellers',                                  [AdminSellerController::class, 'index']);
+        Route::get('/sellers/{seller}',                         [AdminSellerController::class, 'show']);
+
+        // Moderation actions
+        Route::post('/sellers/{seller}/warn',                   [AdminSellerController::class, 'warn']);
+        Route::post('/sellers/{seller}/temporary-ban',          [AdminSellerController::class, 'temporaryBan']);
+        Route::post('/sellers/{seller}/permanent-ban',          [AdminSellerController::class, 'permanentBan']);
+        Route::post('/sellers/{seller}/ban',                    [AdminSellerController::class, 'ban']);   // backward compat
+        Route::post('/sellers/{seller}/unban',                  [AdminSellerController::class, 'unban']);
+        Route::get('/sellers/{seller}/warnings',                [AdminSellerController::class, 'warnings']);
+        Route::get('/sellers/{seller}/moderation-history',      [AdminSellerController::class, 'moderationHistory']);
 
         // Seller verification — new-style separate endpoints
         Route::get('/verifications',                               [AdminVerificationController::class, 'index']);

@@ -70,23 +70,42 @@ class EscrowService
         }
 
         DB::transaction(function () use ($order, $sellerId, $sellerAmount, $platformFee, $totalAmount) {
-            // Pay seller
+            // Pay seller (skip payout if seller is currently banned)
             if ($sellerId) {
                 $seller = User::find($sellerId);
                 if ($seller) {
-                    $sellerWallet = $this->getOrCreateWallet($seller);
-                    $sellerWallet->increment('balance', $sellerAmount);
-                    $sellerWallet->transactions()->create([
-                        'type'           => 'seller_payout',
-                        'status'         => 'completed',
-                        'amount'         => $sellerAmount,
-                        'balance_after'  => (float) $sellerWallet->fresh()->balance,
-                        'reference_type' => Order::class,
-                        'reference_id'   => $order->id,
-                        'description'    => "Payout for order #{$order->order_number} (after {$this->commissionPct()}% commission)",
-                    ]);
+                    $isBanned = $seller->is_banned && (
+                        $seller->ban_type === 'permanent'
+                        || ($seller->ban_type === 'temporary' && $seller->banned_until?->isFuture())
+                    );
 
-                    // Update seller stats
+                    if (! $isBanned) {
+                        $sellerWallet = $this->getOrCreateWallet($seller);
+                        $sellerWallet->increment('balance', $sellerAmount);
+                        $sellerWallet->transactions()->create([
+                            'type'           => 'seller_payout',
+                            'status'         => 'completed',
+                            'amount'         => $sellerAmount,
+                            'balance_after'  => (float) $sellerWallet->fresh()->balance,
+                            'reference_type' => Order::class,
+                            'reference_id'   => $order->id,
+                            'description'    => "Payout for order #{$order->order_number} (after {$this->commissionPct()}% commission)",
+                        ]);
+                    } else {
+                        // Banned seller — payout held, credited to platform instead
+                        $sellerWallet = $this->getOrCreateWallet($seller);
+                        $sellerWallet->transactions()->create([
+                            'type'           => 'seller_payout',
+                            'status'         => 'held_banned',
+                            'amount'         => $sellerAmount,
+                            'balance_after'  => (float) $sellerWallet->balance,
+                            'reference_type' => Order::class,
+                            'reference_id'   => $order->id,
+                            'description'    => "Payout HELD — seller is banned. Order #{$order->order_number}",
+                        ]);
+                    }
+
+                    // Always update seller stats regardless of ban
                     $this->incrementSellerStats($seller, $sellerAmount, $order);
                 }
             }
