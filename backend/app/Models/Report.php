@@ -20,6 +20,11 @@ class Report extends Model
         'target_name',
         'status',
         'admin_action',
+        'resolved_at',
+    ];
+
+    protected $casts = [
+        'resolved_at' => 'datetime',
     ];
 
     public function reporter(): BelongsTo

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Notifications\OrderDeliveredNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -60,10 +61,26 @@ class SellerOrderController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => ['required', 'in:processing,delivered,completed,cancelled,dispute'],
+            'status' => ['required', 'in:processing,delivered,cancelled'],
         ]);
 
-        $order->update(['status' => $validated['status']]);
+        $updates = ['status' => $validated['status']];
+
+        if ($validated['status'] === 'delivered' && ! $order->delivered_at) {
+            $autoConfirmHours = (int) config('platform.auto_confirm_hours', 24);
+            $updates['delivered_at']    = now();
+            $updates['auto_confirm_at'] = now()->addHours($autoConfirmHours);
+        }
+
+        $order->update($updates);
+
+        // Notify buyer when order is marked delivered
+        if ($validated['status'] === 'delivered') {
+            $order->load('buyer');
+            if ($order->buyer) {
+                $order->buyer->notify(new OrderDeliveredNotification($order));
+            }
+        }
 
         return $this->success($order->fresh(), 'Order status updated.');
     }

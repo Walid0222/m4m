@@ -265,18 +265,23 @@ export function getAdminReports() {
 }
 
 export function resolveAdminReport(reportId, action) {
-  return api.patch(`/admin/reports/${reportId}`, { action }).then(() => {}).catch(() => {
+  // Real backend: PATCH /admin/reports/{id} { action }
+  return api.patch(`/admin/reports/${reportId}`, { action }).then(unwrap).catch(() => {
     const key = 'm4m_reports';
     const existing = JSON.parse(localStorage.getItem(key) || '[]');
-    const updated = existing.map((r) => r.id === reportId ? { ...r, status: action === 'ignore' ? 'ignored' : 'resolved' } : r);
+    const updated = existing.map((r) =>
+      r.id === reportId ? { ...r, status: action === 'ignore' ? 'ignored' : 'resolved', admin_action: action } : r
+    );
     localStorage.setItem(key, JSON.stringify(updated));
   });
 }
 
 // --- Seller verification (admin) ---
 
-export function getAdminVerificationRequests() {
-  return api.get('/admin/verification-requests').then(unwrap).catch(() => {
+export function getAdminVerificationRequests(params = {}) {
+  // Real backend endpoint: GET /admin/verification-requests
+  return api.get('/admin/verification-requests', { params }).then(unwrap).catch(() => {
+    // localStorage fallback for dev environments without a running backend
     const key = 'm4m_verif_requests';
     const items = JSON.parse(localStorage.getItem(key) || '[]');
     return { data: items };
@@ -284,12 +289,41 @@ export function getAdminVerificationRequests() {
 }
 
 export function resolveVerificationRequest(requestId, action) {
-  return api.patch(`/admin/verification-requests/${requestId}`, { action }).then(() => {}).catch(() => {
+  // Real backend endpoint: PATCH /admin/verification-requests/{id} { action }
+  return api.patch(`/admin/verification-requests/${requestId}`, { action }).then(unwrap).catch(() => {
     const key = 'm4m_verif_requests';
     const existing = JSON.parse(localStorage.getItem(key) || '[]');
     const updated = existing.map((r) => r.id === requestId ? { ...r, status: action } : r);
     localStorage.setItem(key, JSON.stringify(updated));
   });
+}
+
+// --- Support chat (admin) ---
+
+export function getAdminSupportConversations(params = {}) {
+  return api.get('/admin/support-conversations', { params }).then(unwrap);
+}
+
+export function getAdminSupportMessages(conversationId) {
+  return api.get(`/admin/support-conversations/${conversationId}/messages`).then(unwrap);
+}
+
+export function sendAdminSupportReply(conversationId, body) {
+  return api.post(`/admin/support-conversations/${conversationId}/reply`, { body }).then(unwrap);
+}
+
+// --- Support chat (user-facing) ---
+
+export function getSupportConversation() {
+  return api.get('/support/conversation').then(unwrap);
+}
+
+export function getSupportMessages() {
+  return api.get('/support/messages').then(unwrap);
+}
+
+export function sendSupportMessage(body) {
+  return api.post('/support/messages', { body }).then(unwrap);
 }
 
 /**

@@ -18,12 +18,21 @@ class Order extends Model
         'order_number',
         'status',
         'total_amount',
+        'escrow_amount',
+        'escrow_status',
+        'delivered_at',
+        'completed_at',
+        'auto_confirm_at',
     ];
 
     protected function casts(): array
     {
         return [
             'total_amount' => 'decimal:2',
+            'escrow_amount' => 'decimal:2',
+            'delivered_at' => 'datetime',
+            'completed_at' => 'datetime',
+            'auto_confirm_at' => 'datetime',
         ];
     }
 
@@ -74,5 +83,17 @@ class Order extends Model
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
+    }
+
+    /** Seller who fulfilled this order. */
+    public function seller(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'seller_id');
+    }
+
+    /** Active dispute for this order, if any. */
+    public function dispute(): HasOne
+    {
+        return $this->hasOne(Dispute::class);
     }
 }

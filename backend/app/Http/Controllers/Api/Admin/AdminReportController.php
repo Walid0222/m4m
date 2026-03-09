@@ -6,62 +6,213 @@ use App\Http\Controllers\Api\Controller;
 use App\Models\Product;
 use App\Models\Report;
 use App\Models\User;
+use App\Notifications\SellerBannedNotification;
+use App\Services\AdminLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdminReportController extends Controller
 {
+    /**
+     * GET /admin/reports
+     * Supports ?status= and ?type= filters.
+     */
     public function index(Request $request): JsonResponse
     {
-        $query = Report::with(['reporter:id,name,email', 'reportedProduct:id,name,slug', 'reportedSeller:id,name,email'])
-            ->latest();
+        $query = Report::with([
+            'reporter:id,name,email',
+            'reportedProduct:id,name,slug',
+            'reportedSeller:id,name,email',
+        ])->latest();
 
-        if ($request->has('status')) {
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        if ($request->has('type')) {
+        if ($request->filled('type')) {
             $query->where('type', $request->type);
         }
 
-        $reports = $query->paginate($request->integer('per_page', 20));
+        $reports = $query->paginate($request->integer('per_page', 50));
+
+        $reports->getCollection()->transform(function ($r) {
+            $r->target_id   = $r->reported_product_id ?? $r->reported_seller_id;
+            $r->target_name = $r->target_name
+                ?? $r->reportedProduct?->name
+                ?? $r->reportedSeller?->name;
+            return $r;
+        });
 
         return $this->success($reports);
     }
 
+    /**
+     * Normalise the frontend's short action names to internal canonical names.
+     *
+     * Frontend sends: ignore | warn | suspend | ban | delete
+     *                 (also accepts the long forms for backward compat)
+     * Internal:       ignore | warn_seller | suspend_seller | ban_seller | delete_product
+     */
+    private function normaliseAction(string $raw): string
+    {
+        return match ($raw) {
+            'warn'           => 'warn_seller',
+            'suspend'        => 'suspend_seller',
+            'ban'            => 'ban_seller',
+            'delete'         => 'delete_product',
+            default          => $raw,   // already canonical or 'ignore'
+        };
+    }
+
+    /**
+     * PATCH /admin/reports/{id}            ← shape the React frontend uses
+     * POST  /admin/reports/{id}/resolve     ← backward compatibility
+     * POST  /admin/reports/{id}/action      ← alias requested by user spec
+     *
+     * Body: { "action": "ignore|warn|suspend|ban|delete" }
+     *   (also accepts the long forms: warn_seller, ban_seller, etc.)
+     */
+    public function update(Request $request, Report $report): JsonResponse
+    {
+        return $this->applyAction($request, $report);
+    }
+
     public function resolve(Request $request, Report $report): JsonResponse
     {
+        return $this->applyAction($request, $report);
+    }
+
+    public function action(Request $request, Report $report): JsonResponse
+    {
+        return $this->applyAction($request, $report);
+    }
+
+    // ─── shared logic ────────────────────────────────────────────────────────
+
+    private function applyAction(Request $request, Report $report): JsonResponse
+    {
         $validated = $request->validate([
-            'action' => ['required', 'in:ignore,delete_product,warn_seller,suspend_seller,ban_seller'],
+            'action' => [
+                'required',
+                'in:ignore,warn,suspend,ban,delete,'
+                  . 'warn_seller,suspend_seller,ban_seller,delete_product',
+            ],
         ]);
 
-        $action = $validated['action'];
+        $raw    = $validated['action'];
+        $action = $this->normaliseAction($raw);
+        $admin  = $request->user();
 
+        // ── Delete product ─────────────────────────────────────────────────
         if ($action === 'delete_product' && $report->reported_product_id) {
-            Product::where('id', $report->reported_product_id)->delete();
+            $product = Product::find($report->reported_product_id);
+            if ($product) {
+                $product->delete();
+                AdminLogService::log(
+                    $admin,
+                    'delete_product',
+                    "Deleted product #{$product->id} ({$product->name}) via report #{$report->id}",
+                    null,
+                    $product->id
+                );
+            }
         }
 
-        if (in_array($action, ['warn_seller', 'suspend_seller', 'ban_seller']) && $report->reported_seller_id) {
-            $seller = User::find($report->reported_seller_id);
-            if ($seller) {
-                if ($action === 'suspend_seller') {
-                    $seller->update([
-                        'is_banned' => true,
-                        'ban_type' => 'temporary',
-                        'banned_until' => now()->addDays(7),
-                    ]);
-                } elseif ($action === 'ban_seller') {
-                    $seller->update([
-                        'is_banned' => true,
-                        'ban_type' => 'permanent',
-                        'banned_until' => null,
-                    ]);
+        // ── Seller actions ──────────────────────────────────────────────────
+        if (in_array($action, ['warn_seller', 'suspend_seller', 'ban_seller'])) {
+            $sellerId = $report->reported_seller_id
+                ?? ($report->reportedProduct?->user_id);
+
+            if ($sellerId) {
+                $seller = User::find($sellerId);
+                if ($seller) {
+                    $this->applySellerPenalty($seller, $action, $admin, $report->id);
                 }
             }
         }
 
-        $report->update(['status' => 'resolved', 'admin_action' => $action]);
+        $report->update([
+            'status'       => $action === 'ignore' ? 'ignored' : 'resolved',
+            'admin_action' => $raw,   // store the exact value the admin sent
+            'resolved_at'  => now(),
+        ]);
 
-        return $this->success($report, 'Report resolved.');
+        AdminLogService::log(
+            $admin,
+            'resolve_report',
+            "Resolved report #{$report->id} with action: {$raw}"
+        );
+
+        return $this->success(
+            $report->fresh()->load([
+                'reporter:id,name,email',
+                'reportedProduct:id,name',
+                'reportedSeller:id,name',
+            ]),
+            "Report resolved with action: {$raw}."
+        );
+    }
+
+    /**
+     * Apply a penalty to a seller with notification and token revocation.
+     */
+    private function applySellerPenalty(User $seller, string $action, User $admin, int $reportId): void
+    {
+        if ($action === 'warn_seller') {
+            $seller->notify(new SellerBannedNotification(
+                banType: 'warning',
+                bannedUntil: null,
+                reason: "You received a warning due to a report (#{$reportId}) on your account."
+            ));
+            AdminLogService::log(
+                $admin,
+                'warn_seller',
+                "Warned seller {$seller->name} (report #{$reportId})",
+                $seller->id
+            );
+            return;
+        }
+
+        if ($action === 'suspend_seller') {
+            $bannedUntil = now()->addDays(7);
+            $seller->update([
+                'is_banned'    => true,
+                'ban_type'     => 'temporary',
+                'banned_until' => $bannedUntil,
+            ]);
+            $seller->tokens()->delete();
+            $seller->notify(new SellerBannedNotification(
+                banType: 'temporary',
+                bannedUntil: $bannedUntil->toDateString(),
+                reason: "Your account was suspended following a report (#{$reportId})."
+            ));
+            AdminLogService::log(
+                $admin,
+                'ban_seller',
+                "Suspended seller {$seller->name} 7 days (report #{$reportId})",
+                $seller->id
+            );
+            return;
+        }
+
+        if ($action === 'ban_seller') {
+            $seller->update([
+                'is_banned'    => true,
+                'ban_type'     => 'permanent',
+                'banned_until' => null,
+            ]);
+            $seller->tokens()->delete();
+            $seller->notify(new SellerBannedNotification(
+                banType: 'permanent',
+                bannedUntil: null,
+                reason: "Your account was permanently banned following a report (#{$reportId})."
+            ));
+            AdminLogService::log(
+                $admin,
+                'ban_seller',
+                "Permanently banned seller {$seller->name} (report #{$reportId})",
+                $seller->id
+            );
+        }
     }
 }

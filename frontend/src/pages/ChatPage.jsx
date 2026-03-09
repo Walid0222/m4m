@@ -6,6 +6,9 @@ import {
   getConversations,
   getConversation,
   sendMessage as apiSendMessage,
+  getSupportConversation,
+  getSupportMessages,
+  sendSupportMessage,
   paginatedItems,
   getToken,
 } from '../services/api';
@@ -110,15 +113,31 @@ export default function ChatPage() {
   }, []);
 
   // ── Load support messages + poll for admin replies ────────────────────────
+  const loadSupportMessages = useCallback(async () => {
+    if (!user?.id || !getToken()) return;
+    try {
+      const msgs = await getSupportMessages();
+      const arr = Array.isArray(msgs) ? msgs : (msgs?.data ?? []);
+      // Merge with localStorage messages to avoid losing optimistic updates
+      const localMsgs = loadSupportMsgs(user.id);
+      const serverIds = new Set(arr.map((m) => m.id));
+      const localOnly = localMsgs.filter((m) => !serverIds.has(m.id) && m._local);
+      const combined = [...arr, ...localOnly].sort(
+        (a, b) => new Date(a.created_at) - new Date(b.created_at)
+      );
+      setSupportMessages(combined);
+    } catch {
+      // Backend unavailable — fall back to localStorage
+      setSupportMessages(loadSupportMsgs(user.id));
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (!user?.id) { setSupportMessages([]); return; }
-    setSupportMessages(loadSupportMsgs(user.id));
-    // Poll every 3 seconds so admin replies appear quickly
-    const interval = setInterval(() => {
-      setSupportMessages(loadSupportMsgs(user.id));
-    }, 3000);
+    loadSupportMessages();
+    const interval = setInterval(loadSupportMessages, 5000);
     return () => clearInterval(interval);
-  }, [user?.id]);
+  }, [user?.id, loadSupportMessages]);
 
   // ── Auto-select conversation from URL ────────────────────────────────────
   const convIdFromUrl = searchParams.get('conversation');
@@ -254,20 +273,33 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!newMessage.trim() || !selected?.id || sending) return;
 
-    // M4M Support chat — stored in global support store visible to admin
+    // M4M Support chat — send to backend, fallback to localStorage
     if (selected.id === 'support') {
       if (!user?.id) return;
-      const msg = {
+      const optimisticMsg = {
         id: `s_${Date.now()}`,
         body: newMessage.trim(),
         user_id: user.id,
         _from: 'user',
+        _local: true,
         sender: { id: user.id, name: user.name, email: user.email },
         created_at: new Date().toISOString(),
       };
-      appendSupportMsg(user.id, { name: user.name, email: user.email }, msg);
-      setSupportMessages((prev) => [...prev, msg]);
+      setSupportMessages((prev) => [...prev, optimisticMsg]);
       setNewMessage('');
+
+      try {
+        const saved = await sendSupportMessage(optimisticMsg.body);
+        // Replace optimistic with real message from server
+        setSupportMessages((prev) =>
+          prev.map((m) => (m.id === optimisticMsg.id ? { ...saved, _from: 'user' } : m))
+        );
+        // Also persist to localStorage as backup
+        appendSupportMsg(user.id, { name: user.name, email: user.email }, optimisticMsg);
+      } catch {
+        // Backend failed — keep in localStorage only
+        appendSupportMsg(user.id, { name: user.name, email: user.email }, optimisticMsg);
+      }
       return;
     }
 

@@ -127,6 +127,24 @@ class User extends Authenticatable
         return $this->hasMany(Report::class, 'reporter_id');
     }
 
+    /** Seller statistics. */
+    public function sellerStats(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(SellerStat::class, 'seller_id');
+    }
+
+    /** Buyer statistics. */
+    public function buyerStats(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(BuyerStat::class, 'buyer_id');
+    }
+
+    /** Disputes raised by this user as buyer. */
+    public function disputes(): HasMany
+    {
+        return $this->hasMany(Dispute::class, 'buyer_id');
+    }
+
     /** Database notifications (override to use app model). */
     public function notifications(): \Illuminate\Database\Eloquent\Relations\MorphMany
     {

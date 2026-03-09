@@ -14,7 +14,7 @@ class NotificationController extends Controller
             ->limit(60)
             ->get()
             ->map(function ($n) {
-                $data = $n->data ?? [];
+                $data = is_array($n->data) ? $n->data : (json_decode($n->data, true) ?? []);
 
                 return [
                     'id'         => $n->id,
@@ -28,12 +28,8 @@ class NotificationController extends Controller
                 ];
             });
 
-        $unreadCount = $notifications->where('read', false)->count();
-
-        return $this->success([
-            'notifications' => $notifications,
-            'unread_count'  => $unreadCount,
-        ]);
+        // Return the array directly — the Navbar checks Array.isArray(list)
+        return $this->success($notifications);
     }
 
     public function markAsRead(Request $request, string $id): JsonResponse

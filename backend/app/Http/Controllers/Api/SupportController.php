@@ -59,10 +59,13 @@ class SupportController extends Controller
 
         $message = $conversation->messages()->create([
             'user_id' => $user->id,
-            'body' => $validated['body'],
+            'body'    => $validated['body'],
         ]);
 
         $message->load('sender:id,name,email');
+
+        // Bump updated_at so the admin list sorts this thread to the top
+        $conversation->touch();
 
         return $this->success($message, 'Message sent.', 201);
     }

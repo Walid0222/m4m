@@ -10,6 +10,9 @@ import {
   resolveAdminReport,
   getAdminVerificationRequests,
   resolveVerificationRequest,
+  getAdminSupportConversations,
+  getAdminSupportMessages,
+  sendAdminSupportReply,
   paginatedItems,
 } from '../services/api';
 
@@ -424,7 +427,7 @@ function VerificationPanel() {
   );
 }
 
-/* ── Support store helpers (mirror of ChatPage helpers, same key) ─────────── */
+/* ── Support store helpers (localStorage fallback when API unavailable) ─── */
 const SUPPORT_STORE_KEY = 'm4m_support_store';
 
 function readSupportStore() {
@@ -435,76 +438,188 @@ function writeSupportStore(store) {
   localStorage.setItem(SUPPORT_STORE_KEY, JSON.stringify(store));
 }
 
+/** Merge API conversations with any localStorage threads not yet in the DB */
+function mergeThreads(apiThreads, localStore) {
+  const byId = {};
+  // Start from API threads
+  apiThreads.forEach((t) => {
+    const uid = t.user?.id ?? t.user_one_id;
+    if (!uid) return;
+    const msgs = (t.messages ?? []).map((m) => ({
+      id: m.id,
+      body: m.body,
+      _from: m.user_id === uid ? 'user' : 'admin',
+      user_id: m.user_id,
+      sender: m.sender,
+      created_at: m.created_at,
+      _readByAdmin: !!m.read_at,
+    }));
+    byId[uid] = {
+      conversationId: t.id,
+      userId: String(uid),
+      userName: t.user?.name ?? `User #${uid}`,
+      userEmail: t.user?.email ?? '',
+      msgs,
+      unreadCount: t.unread_count ?? 0,
+      lastMsg: msgs[msgs.length - 1],
+    };
+  });
+
+  // Overlay any localStorage-only threads (created before backend was wired)
+  Object.entries(localStore).forEach(([uid, lt]) => {
+    if (!byId[uid] && lt.msgs?.length > 0) {
+      const unreadCount = lt.msgs.filter(
+        (m) => m._from !== 'admin' && m.user_id !== 'admin' && !m._readByAdmin
+      ).length;
+      byId[uid] = {
+        conversationId: null,
+        userId: uid,
+        userName: lt.userName ?? `User #${uid}`,
+        userEmail: lt.userEmail ?? '',
+        msgs: lt.msgs,
+        unreadCount,
+        lastMsg: lt.msgs[lt.msgs.length - 1],
+      };
+    }
+  });
+
+  return Object.values(byId).sort(
+    (a, b) => new Date(b.lastMsg?.created_at || 0) - new Date(a.lastMsg?.created_at || 0)
+  );
+}
+
 /* ── Support Chat Panel ───────────────────────────────────────────────────── */
 function SupportChatPanel({ adminUser }) {
   const [userThreads, setUserThreads] = useState([]);
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedConvId, setSelectedConvId] = useState(null);
+  const [threadMessages, setThreadMessages] = useState([]);
   const [replyText, setReplyText] = useState('');
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Read global support store and build thread list
-  const loadAllThreads = useCallback(() => {
-    const store = readSupportStore();
-    const threads = Object.values(store)
-      .filter((t) => t.msgs && t.msgs.length > 0)
-      .map((t) => {
-        const unreadCount = t.msgs.filter(
-          (m) => m._from !== 'admin' && m.user_id !== 'admin' && !m._readByAdmin
-        ).length;
-        const lastMsg = t.msgs[t.msgs.length - 1];
-        return { ...t, unreadCount, lastMsg };
-      })
-      .sort((a, b) => new Date(b.lastMsg?.created_at || 0) - new Date(a.lastMsg?.created_at || 0));
-    setUserThreads(threads);
+  // Load all threads: try API first, fall back to localStorage
+  const loadAllThreads = useCallback(async () => {
+    try {
+      const res = await getAdminSupportConversations({ per_page: 50 });
+      const apiThreads = res?.data ?? (Array.isArray(res) ? res : []);
+      const merged = mergeThreads(apiThreads, readSupportStore());
+      setUserThreads(merged);
+    } catch {
+      // API unavailable — use localStorage only
+      const store = readSupportStore();
+      const threads = Object.values(store)
+        .filter((t) => t.msgs?.length > 0)
+        .map((t) => {
+          const unreadCount = t.msgs.filter(
+            (m) => m._from !== 'admin' && m.user_id !== 'admin' && !m._readByAdmin
+          ).length;
+          const lastMsg = t.msgs[t.msgs.length - 1];
+          return { ...t, conversationId: null, unreadCount, lastMsg };
+        })
+        .sort((a, b) => new Date(b.lastMsg?.created_at || 0) - new Date(a.lastMsg?.created_at || 0));
+      setUserThreads(threads);
+    }
   }, []);
 
-  // Initial load + poll every 3 seconds for new user messages
+  // Load messages for the selected thread
+  const loadMessages = useCallback(async (convId, userId) => {
+    if (convId) {
+      try {
+        const msgs = await getAdminSupportMessages(convId);
+        const arr = Array.isArray(msgs) ? msgs : msgs?.data ?? [];
+        setThreadMessages(arr.map((m) => ({
+          id: m.id,
+          body: m.body,
+          _from: m.user_id === userId ? 'user' : 'admin',
+          user_id: m.user_id,
+          sender: m.sender,
+          created_at: m.created_at,
+          _readByAdmin: !!m.read_at,
+        })));
+        return;
+      } catch { /* fall through to localStorage */ }
+    }
+    // Fallback: localStorage
+    const store = readSupportStore();
+    setThreadMessages(store[userId]?.msgs ?? []);
+  }, []);
+
+  // Initial load + poll every 5 seconds
   useEffect(() => {
     loadAllThreads();
-    const interval = setInterval(loadAllThreads, 3000);
+    const interval = setInterval(loadAllThreads, 5000);
     return () => clearInterval(interval);
   }, [loadAllThreads]);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [selectedUserId, userThreads]);
+  }, [threadMessages]);
 
-  // Focus reply input when thread is selected
+  // Focus input when thread selected
   useEffect(() => {
     if (selectedUserId) inputRef.current?.focus();
   }, [selectedUserId]);
 
   const selectedThread = userThreads.find((t) => t.userId === selectedUserId);
 
-  // Mark all user messages as read when admin opens a thread
-  useEffect(() => {
-    if (!selectedUserId) return;
-    const store = readSupportStore();
-    if (!store[selectedUserId]) return;
-    store[selectedUserId].msgs = store[selectedUserId].msgs.map((m) =>
-      m._from !== 'admin' && m.user_id !== 'admin' ? { ...m, _readByAdmin: true } : m
-    );
-    writeSupportStore(store);
-    loadAllThreads();
-  }, [selectedUserId, loadAllThreads]);
+  // Open a thread: load its messages and mark as read
+  const openThread = useCallback(async (thread) => {
+    setSelectedUserId(thread.userId);
+    setSelectedConvId(thread.conversationId ?? null);
+    await loadMessages(thread.conversationId, thread.userId);
 
-  const sendReply = () => {
-    if (!replyText.trim() || !selectedUserId) return;
+    // Mark read in localStorage
     const store = readSupportStore();
-    if (!store[selectedUserId]) return;
-    const reply = {
+    if (store[thread.userId]) {
+      store[thread.userId].msgs = store[thread.userId].msgs.map((m) =>
+        m._from !== 'admin' && m.user_id !== 'admin' ? { ...m, _readByAdmin: true } : m
+      );
+      writeSupportStore(store);
+    }
+    loadAllThreads();
+  }, [loadMessages, loadAllThreads]);
+
+  const sendReply = async () => {
+    if (!replyText.trim() || !selectedUserId || sending) return;
+    setSending(true);
+    const body = replyText.trim();
+
+    // Optimistic update
+    const optimistic = {
       id: `admin_${Date.now()}`,
-      body: replyText.trim(),
+      body,
       _from: 'admin',
       user_id: 'admin',
       sender: { id: 'admin', name: adminUser?.name || 'M4M Support', email: adminUser?.email },
       created_at: new Date().toISOString(),
     };
-    store[selectedUserId].msgs = [...store[selectedUserId].msgs, reply];
-    writeSupportStore(store);
+    setThreadMessages((prev) => [...prev, optimistic]);
     setReplyText('');
+
+    if (selectedConvId) {
+      try {
+        await sendAdminSupportReply(selectedConvId, body);
+      } catch {
+        // Persist to localStorage as fallback
+        const store = readSupportStore();
+        if (store[selectedUserId]) {
+          store[selectedUserId].msgs = [...(store[selectedUserId].msgs ?? []), optimistic];
+          writeSupportStore(store);
+        }
+      }
+    } else {
+      // No conversation in DB yet — save to localStorage only
+      const store = readSupportStore();
+      if (store[selectedUserId]) {
+        store[selectedUserId].msgs = [...(store[selectedUserId].msgs ?? []), optimistic];
+        writeSupportStore(store);
+      }
+    }
+
+    setSending(false);
     loadAllThreads();
   };
 
@@ -539,7 +654,7 @@ function SupportChatPanel({ adminUser }) {
               <button
                 key={t.userId}
                 type="button"
-                onClick={() => setSelectedUserId(t.userId)}
+                onClick={() => openThread(t)}
                 className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-start gap-2.5 ${
                   selectedUserId === t.userId
                     ? 'bg-m4m-purple text-white shadow-sm'
@@ -607,14 +722,17 @@ function SupportChatPanel({ adminUser }) {
                   <span className="text-xs text-gray-300">·</span>
                   <p className="text-xs text-gray-400">User ID: {selectedThread.userId}</p>
                   <span className="text-xs text-gray-300">·</span>
-                  <p className="text-xs text-gray-400">{selectedThread.msgs.length} message{selectedThread.msgs.length !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-gray-400">{threadMessages.length} message{threadMessages.length !== 1 ? 's' : ''}</p>
                 </div>
               </div>
             </div>
 
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2 min-h-0 bg-gray-50/40">
-              {selectedThread.msgs.map((m) => {
+              {threadMessages.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-6">No messages yet.</p>
+              )}
+              {threadMessages.map((m) => {
                 const isAdminMsg = m._from === 'admin' || m.user_id === 'admin';
                 return (
                   <div key={m.id} className={`flex ${isAdminMsg ? 'justify-end' : 'justify-start'}`}>
@@ -627,7 +745,7 @@ function SupportChatPanel({ adminUser }) {
                         {m.body}
                       </div>
                       <span className={`text-[10px] text-gray-400 mt-0.5 ${isAdminMsg ? 'text-right' : 'text-left'}`}>
-                        {isAdminMsg ? (adminUser?.name || 'M4M Support') : (selectedThread.userName || 'User')}
+                        {isAdminMsg ? (adminUser?.name || 'M4M Support') : (selectedThread?.userName || 'User')}
                         {m.created_at && ` · ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                       </span>
                     </div>
@@ -646,7 +764,7 @@ function SupportChatPanel({ adminUser }) {
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
-                  placeholder={`Reply to ${selectedThread.userName || 'user'} as M4M Support…`}
+                  placeholder={`Reply to ${selectedThread?.userName || 'user'} as M4M Support…`}
                   className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-gray-50 focus:bg-white transition-colors"
                 />
                 <button

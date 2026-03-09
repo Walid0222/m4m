@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\OrderItem;
 use App\Models\Review;
+use App\Models\SellerStat;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,15 +35,18 @@ class SellerProfileController extends Controller
             ->with('seller:id,name,is_verified_seller,last_activity_at')
             ->get();
 
+        $stats = SellerStat::where('seller_id', $seller->id)->first();
+
         $data = [
-            'id' => $seller->id,
-            'name' => $seller->name,
+            'id'               => $seller->id,
+            'name'             => $seller->name,
             'is_verified_seller' => (bool) $seller->is_verified_seller,
             'last_activity_at' => $seller->last_activity_at?->toIso8601String(),
-            'rating' => $rating,
-            'total_sales' => (int) $totalSales,
-            'total_reviews' => $totalReviews,
-            'products' => $products,
+            'rating'           => $rating,
+            'total_sales'      => (int) $totalSales,
+            'total_reviews'    => $totalReviews,
+            'badge'            => $stats?->badge ?? 'new',
+            'products'         => $products,
         ];
 
         return $this->success($data);

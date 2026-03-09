@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Api\Controller;
 use App\Models\SellerVerification;
 use App\Notifications\VerificationStatusNotification;
+use App\Services\AdminLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,7 +24,7 @@ class AdminVerificationController extends Controller
         return $this->success($verifications);
     }
 
-    public function approve(SellerVerification $verification): JsonResponse
+    public function approve(Request $request, SellerVerification $verification): JsonResponse
     {
         if ($verification->status === 'approved') {
             return $this->error('Already approved.', 422);
@@ -32,10 +33,15 @@ class AdminVerificationController extends Controller
         $verification->update(['status' => 'approved']);
         $verification->seller()->update(['is_verified_seller' => true]);
 
-        // Load fresh seller to notify
         $seller = $verification->seller()->first();
         if ($seller) {
             $seller->notify(new VerificationStatusNotification('approved'));
+            AdminLogService::log(
+                $request->user(),
+                'approve_verification',
+                "Approved verification for seller {$seller->name}",
+                $seller->id
+            );
         }
 
         return $this->success(
@@ -44,7 +50,7 @@ class AdminVerificationController extends Controller
         );
     }
 
-    public function reject(SellerVerification $verification): JsonResponse
+    public function reject(Request $request, SellerVerification $verification): JsonResponse
     {
         if ($verification->status === 'rejected') {
             return $this->error('Already rejected.', 422);
@@ -56,6 +62,12 @@ class AdminVerificationController extends Controller
         $seller = $verification->seller()->first();
         if ($seller) {
             $seller->notify(new VerificationStatusNotification('rejected'));
+            AdminLogService::log(
+                $request->user(),
+                'reject_verification',
+                "Rejected verification for seller {$seller->name}",
+                $seller->id
+            );
         }
 
         return $this->success(

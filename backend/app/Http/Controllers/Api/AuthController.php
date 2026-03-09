@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\User;
+use App\Services\SecurityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -60,6 +61,8 @@ class AuthController extends Controller
         $user->tokens()->where('name', 'auth')->delete();
         $token = $user->createToken('auth')->plainTextToken;
 
+        SecurityLogService::log($user, 'login', $request);
+
         return $this->success([
             'user' => $this->userFields($user),
             'token' => $token,
@@ -90,6 +93,10 @@ class AuthController extends Controller
 
         if (isset($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
+        }
+
+        if (isset($validated['password'])) {
+            SecurityLogService::log($user, 'password_change', $request);
         }
 
         $user->update($validated);
