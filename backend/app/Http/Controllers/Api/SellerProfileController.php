@@ -32,7 +32,9 @@ class SellerProfileController extends Controller
 
         $products = $seller->products()
             ->where('status', 'active')
-            ->with('seller:id,name,is_verified_seller,last_activity_at')
+            ->with('seller:id,name,is_verified_seller,last_activity_at,vacation_mode')
+            ->orderByDesc('is_pinned')
+            ->latest()
             ->get();
 
         $stats = SellerStat::where('seller_id', $seller->id)->first();

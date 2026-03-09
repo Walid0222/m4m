@@ -117,6 +117,7 @@ class OrderController extends Controller
             'items'              => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
             'items.*.quantity'   => ['required', 'integer', 'min:1'],
+            'buyer_note'         => ['nullable', 'string', 'max:2000'],
         ]);
 
         $items      = $validated['items'];
@@ -125,6 +126,17 @@ class OrderController extends Controller
 
         $orderLineItems = [];
         $subtotal       = 0.0;
+
+        // Vacation mode: reject if any product's seller is in vacation mode
+        $sellerIds = collect($items)
+            ->map(fn ($i) => $products->get($i['product_id'])?->user_id)
+            ->filter()
+            ->unique()
+            ->values();
+        $sellersOnVacation = \App\Models\User::whereIn('id', $sellerIds)->where('vacation_mode', true)->exists();
+        if ($sellersOnVacation) {
+            return $this->error('One or more sellers are currently in vacation mode and cannot accept orders.', 422);
+        }
 
         foreach ($items as $item) {
             $product = $products->get($item['product_id']);
@@ -198,7 +210,8 @@ class OrderController extends Controller
 
         $autoConfirmHours = (int) config('platform.auto_confirm_hours', 24);
 
-        $order = DB::transaction(function () use ($user, $finalTotal, $subtotal, $orderLineItems, $autoConfirmHours, $coupon) {
+        $buyerNote = $validated['buyer_note'] ?? null;
+        $order = DB::transaction(function () use ($user, $finalTotal, $subtotal, $orderLineItems, $autoConfirmHours, $coupon, $buyerNote) {
             do {
                 $orderNumber = 'M4M-' . strtoupper(Str::random(6));
             } while (Order::where('order_number', $orderNumber)->exists());
@@ -216,6 +229,7 @@ class OrderController extends Controller
                 'escrow_amount'   => $finalTotal,
                 'escrow_status'   => 'held',
                 'auto_confirm_at' => now()->addHours($autoConfirmHours + 48),
+                'buyer_note'      => $buyerNote,
             ]);
 
             $isInstant          = false;

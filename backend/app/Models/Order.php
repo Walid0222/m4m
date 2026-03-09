@@ -25,6 +25,8 @@ class Order extends Model
         'auto_confirm_at',
         'delivery_content',
         'delivery_type',
+        'buyer_note',
+        'seller_note',
     ];
 
     protected function casts(): array

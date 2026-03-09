@@ -23,10 +23,16 @@ class ProductController extends Controller
         }
 
         if ($request->has('seller_id')) {
-            $query->where('user_id', $request->seller_id);
+            $query->where('user_id', $request->seller_id)
+                ->orderByDesc('is_pinned');
         }
 
-        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at,created_at')
+        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode')
+            ->withCount([
+                'orders as completed_orders_count' => function ($q) {
+                    $q->where('status', Order::STATUS_COMPLETED);
+                },
+            ])
             ->latest()
             ->paginate($request->integer('per_page', 15));
 
@@ -44,7 +50,7 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->where('status', 'active')
-            ->with('seller:id,name,is_verified_seller,last_activity_at,created_at')
+            ->with('seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
@@ -58,13 +64,20 @@ class ProductController extends Controller
         return $this->success($products);
     }
 
-    public function show(Product $product): JsonResponse
+    public function show(Request $request, Product $product): JsonResponse
     {
         if ($product->status !== 'active') {
             return $this->error('Product not available.', 404);
         }
 
-        $product->load(['seller:id,name,is_verified_seller,last_activity_at,created_at', 'reviews.reviewer:id,name']);
+        if ($request->boolean('record_view', true)) {
+            $product->increment('views');
+        }
+        $product->load([
+            'seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode',
+            'reviews.reviewer:id,name',
+            'faqs',
+        ]);
 
         return $this->success($product);
     }
@@ -82,7 +95,7 @@ class ProductController extends Controller
         $query = Product::query()
             ->where('status', 'active')
             ->where('id', '!=', $product->id)
-            ->with('seller:id,name,is_verified_seller,last_activity_at,created_at')
+            ->with('seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
@@ -109,6 +122,9 @@ class ProductController extends Controller
 
         $products = $request->user()
             ->products()
+            ->with('faqs')
+            ->withCount('orders')
+            ->orderByDesc('is_pinned')
             ->latest()
             ->paginate($request->integer('per_page', 15));
 
@@ -132,7 +148,12 @@ class ProductController extends Controller
             });
         }
 
-        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at,created_at')
+        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode')
+            ->withCount([
+                'orders as completed_orders_count' => function ($q) {
+                    $q->where('status', Order::STATUS_COMPLETED);
+                },
+            ])
             ->latest()
             ->limit(20)
             ->get();
@@ -178,9 +199,14 @@ class ProductController extends Controller
             'delivery_time' => ['nullable', 'string', 'max:50'],
             'delivery_type' => ['sometimes', 'in:manual,instant'],
             'delivery_content' => ['nullable', 'string'],
+            'delivery_instructions' => ['nullable', 'string', 'max:5000'],
             'seller_reminder' => ['nullable', 'string', 'max:2000'],
             'features' => ['nullable', 'array'],
             'features.*' => ['string', 'max:100'],
+            'is_pinned' => ['sometimes', 'boolean'],
+            'faqs' => ['nullable', 'array'],
+            'faqs.*.question' => ['required_with:faqs.*', 'string', 'max:500'],
+            'faqs.*.answer' => ['required_with:faqs.*', 'string', 'max:2000'],
         ]);
 
         $slug = Str::slug($validated['name']);
@@ -201,7 +227,24 @@ class ProductController extends Controller
             $validated['stock'] = count($lines);
         }
 
+        $faqs = $validated['faqs'] ?? null;
+        unset($validated['faqs']);
+
+        // When pinning a new product: only one product per seller can be pinned
+        if (! empty($validated['is_pinned'])) {
+            $request->user()->products()->update(['is_pinned' => false]);
+        }
+
         $product = $request->user()->products()->create($validated);
+
+        if (! empty($faqs)) {
+            foreach ($faqs as $faq) {
+                $product->faqs()->create([
+                    'question' => $faq['question'],
+                    'answer' => $faq['answer'],
+                ]);
+            }
+        }
 
         // Seed product_accounts for instant delivery
         if ($isInstant && ! empty($validated['delivery_content'])) {
@@ -218,7 +261,7 @@ class ProductController extends Controller
         }
 
         return $this->success(
-            $this->productWithStock($product->fresh()),
+            $this->productWithStock($product->fresh()->load('faqs')),
             'Product created.',
             201
         );
@@ -241,12 +284,26 @@ class ProductController extends Controller
             'delivery_time' => ['nullable', 'string', 'max:50'],
             'delivery_type' => ['sometimes', 'in:manual,instant'],
             'delivery_content' => ['nullable', 'string'],
+            'delivery_instructions' => ['nullable', 'string', 'max:5000'],
             'seller_reminder' => ['nullable', 'string', 'max:2000'],
             'features' => ['nullable', 'array'],
             'features.*' => ['string', 'max:100'],
+            'is_pinned' => ['sometimes', 'boolean'],
+            'faqs' => ['nullable', 'array'],
+            'faqs.*.question' => ['required_with:faqs.*', 'string', 'max:500'],
+            'faqs.*.answer' => ['required_with:faqs.*', 'string', 'max:2000'],
         ]);
 
         $isInstant = ($validated['delivery_type'] ?? $my_product->delivery_type) === 'instant';
+        $faqs = $validated['faqs'] ?? null;
+        unset($validated['faqs']);
+
+        // When pinning: only one product per seller can be pinned
+        if (isset($validated['is_pinned']) && $validated['is_pinned'] === true) {
+            $my_product->user->products()
+                ->where('id', '!=', $my_product->id)
+                ->update(['is_pinned' => false]);
+        }
 
         // If delivery_content updated for instant product, replace account stock
         if ($isInstant && isset($validated['delivery_content'])) {
@@ -271,7 +328,17 @@ class ProductController extends Controller
 
         $my_product->update($validated);
 
-        return $this->success($this->productWithStock($my_product->fresh()), 'Product updated.');
+        if (isset($faqs)) {
+            $my_product->faqs()->delete();
+            foreach ($faqs as $faq) {
+                $my_product->faqs()->create([
+                    'question' => $faq['question'],
+                    'answer' => $faq['answer'],
+                ]);
+            }
+        }
+
+        return $this->success($this->productWithStock($my_product->fresh()->load('faqs')), 'Product updated.');
     }
 
     public function destroy(Request $request, Product $my_product): JsonResponse
@@ -283,6 +350,31 @@ class ProductController extends Controller
         $my_product->delete();
 
         return $this->success(null, 'Product deleted.', 204);
+    }
+
+    /**
+     * POST /products/{product}/pin
+     *
+     * Pin a product as the seller's featured product.
+     * Unpins all other products from this seller first.
+     */
+    public function pin(Request $request, Product $product): JsonResponse
+    {
+        if (! $request->user()->is_seller) {
+            return $this->error('Forbidden. Seller access required.', 403);
+        }
+
+        if ($product->user_id !== $request->user()->id) {
+            return $this->error('Forbidden. You can only pin your own products.', 403);
+        }
+
+        // Unpin all products from this seller
+        $request->user()->products()->update(['is_pinned' => false]);
+
+        // Pin the selected product
+        $product->update(['is_pinned' => true]);
+
+        return $this->success($this->productWithStock($product->fresh()->load('faqs')), 'Product pinned.');
     }
 
     // ─── Account stock management ─────────────────────────────────────────────

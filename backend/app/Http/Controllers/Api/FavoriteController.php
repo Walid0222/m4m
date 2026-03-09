@@ -15,9 +15,14 @@ class FavoriteController extends Controller
         $favorites = Favorite::where('user_id', $request->user()->id)
             ->with(['product' => function ($q) {
                 $q->with(['seller:id,name,is_verified_seller,last_activity_at']);
-                $q->withCount(['orderItems as completed_sales' => function ($q) {
-                    $q->whereHas('order', fn ($o) => $o->where('status', 'completed'));
-                }]);
+                $q->withCount([
+                    'orderItems as completed_sales' => function ($q) {
+                        $q->whereHas('order', fn ($o) => $o->where('status', 'completed'));
+                    },
+                    'orders as completed_orders_count' => function ($q) {
+                        $q->where('status', \App\Models\Order::STATUS_COMPLETED);
+                    },
+                ]);
             }])
             ->latest('created_at')
             ->paginate($request->integer('per_page', 24));

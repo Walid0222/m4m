@@ -28,7 +28,10 @@ class Product extends Model
         'delivery_type',
         'delivery_content',
         'seller_reminder',
+        'delivery_instructions',
         'features',
+        'views',
+        'is_pinned',
     ];
 
     protected function casts(): array
@@ -41,6 +44,8 @@ class Product extends Model
             'flash_end'    => 'datetime',
             'images'       => 'array',
             'features'     => 'array',
+            'views'        => 'integer',
+            'is_pinned'    => 'boolean',
         ];
     }
 
@@ -65,6 +70,12 @@ class Product extends Model
     public function orders(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
     {
         return $this->hasManyThrough(Order::class, OrderItem::class, 'product_id', 'id', 'id', 'order_id');
+    }
+
+    /** FAQ entries for this product. */
+    public function faqs(): HasMany
+    {
+        return $this->hasMany(ProductFaq::class);
     }
 
     /** Account stock entries for instant-delivery products. */

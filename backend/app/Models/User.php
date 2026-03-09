@@ -36,6 +36,7 @@ class User extends Authenticatable
         'product_limit',
         'limits_overridden',
         'show_recent_sales_notifications',
+        'vacation_mode',
     ];
 
     /**
@@ -75,6 +76,7 @@ class User extends Authenticatable
             'is_banned' => 'boolean',
             'is_verified_seller' => 'boolean',
             'show_recent_sales_notifications' => 'boolean',
+            'vacation_mode' => 'boolean',
         ];
     }
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\AdminStatsController;
 use App\Http\Controllers\Api\Admin\AdminSupportController;
 use App\Http\Controllers\Api\Admin\AdminVerificationController;
 use App\Http\Controllers\Api\Admin\AdminVerificationRequestController;
+use App\Http\Controllers\Api\Admin\AdminAnnouncementController;
 use App\Http\Controllers\Api\Admin\AdminCouponController;
 use App\Http\Controllers\Api\Admin\DepositVerificationController;
 use App\Http\Controllers\Api\Admin\WithdrawVerificationController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\SellerAutoReplyController;
 use App\Http\Controllers\Api\SellerOrderController;
+use App\Http\Controllers\Api\SellerVacationController;
 use App\Http\Controllers\Api\SellerProfileController;
 use App\Http\Controllers\Api\SellerVerificationController;
 use App\Http\Controllers\Api\SellerWarningsController;
@@ -73,6 +75,7 @@ Route::prefix('v1')->group(function () {
             Route::put('/my-products/{my_product}',               [ProductController::class, 'update']);
             Route::patch('/my-products/{my_product}',             [ProductController::class, 'update']);
             Route::delete('/my-products/{my_product}',            [ProductController::class, 'destroy']);
+            Route::post('/products/{product}/pin',                [ProductController::class, 'pin']);
 
             // Instant-delivery account stock
             Route::post('/seller/products/{my_product}/accounts', [ProductController::class, 'addAccounts']);
@@ -103,6 +106,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/seller/orders',                          [SellerOrderController::class, 'index']);
             Route::get('/seller/orders/{order}',                  [SellerOrderController::class, 'show']);
             Route::patch('/seller/orders/{order}/status',         [SellerOrderController::class, 'updateStatus']);
+            Route::patch('/seller/orders/{order}/note',           [SellerOrderController::class, 'updateNote']);
             Route::post('/seller/orders/{order}/deliver',         [SellerOrderController::class, 'deliver']);
         });
 
@@ -113,6 +117,7 @@ Route::prefix('v1')->group(function () {
         // Seller warnings + moderation status (authenticated seller)
         Route::get('/seller/warnings',            [SellerWarningsController::class, 'index']);
         Route::get('/seller/moderation-status',   [SellerWarningsController::class, 'status']);
+        Route::post('/seller/vacation-mode',      [SellerVacationController::class, 'toggle']);
 
         // Stats
         Route::get('/stats/seller', [StatsController::class, 'sellerStats']);
@@ -212,5 +217,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/coupons',    [AdminCouponController::class, 'index']);
         Route::post('/coupons',   [AdminCouponController::class, 'store']);
         Route::delete('/coupons/{coupon}', [AdminCouponController::class, 'destroy']);
+
+        // Announcements
+        Route::get('/announcements',           [AdminAnnouncementController::class, 'index']);
+        Route::post('/announcements',          [AdminAnnouncementController::class, 'store']);
+        Route::put('/announcements/{announcement}', [AdminAnnouncementController::class, 'update']);
+        Route::patch('/announcements/{announcement}', [AdminAnnouncementController::class, 'update']);
+        Route::delete('/announcements/{announcement}', [AdminAnnouncementController::class, 'destroy']);
     });
 });

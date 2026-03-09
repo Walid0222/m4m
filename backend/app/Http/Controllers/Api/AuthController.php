@@ -115,6 +115,7 @@ class AuthController extends Controller
             'password' => ['sometimes', 'confirmed', Password::defaults()],
             'is_seller' => ['sometimes', 'boolean'],
             'show_recent_sales_notifications' => ['sometimes', 'boolean'],
+            'vacation_mode' => ['sometimes', 'boolean'],
         ]);
 
         if (isset($validated['password'])) {
@@ -138,6 +139,7 @@ class AuthController extends Controller
             'ban_reason', 'warning_count', 'last_activity_at',
             'auto_reply_message', 'product_limit', 'limits_overridden',
             'show_recent_sales_notifications',
+            'vacation_mode',
         ]);
     }
 }

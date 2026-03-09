@@ -170,4 +170,33 @@ class SellerOrderController extends Controller
 
         return $this->success($order->fresh(), 'Delivery sent successfully. Order marked as delivered.');
     }
+
+    // ─── Update seller note ──────────────────────────────────────────────────
+
+    /**
+     * PATCH /seller/orders/{order}/note
+     *
+     * Seller can add or update a note on the order.
+     */
+    public function updateNote(Request $request, Order $order): JsonResponse
+    {
+        if (! $request->user()->is_seller) {
+            return $this->error('Forbidden. Seller access required.', 403);
+        }
+
+        $sellerProductIds = $request->user()->products()->pluck('id');
+        $hasItems = $order->orderItems()->whereIn('product_id', $sellerProductIds)->exists();
+
+        if (! $hasItems) {
+            return $this->error('Order not found or you are not the seller.', 404);
+        }
+
+        $validated = $request->validate([
+            'seller_note' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $order->update(['seller_note' => $validated['seller_note'] ?? null]);
+
+        return $this->success($order->fresh(), 'Seller note updated.');
+    }
 }
