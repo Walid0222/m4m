@@ -13,6 +13,9 @@ import {
   paginatedItems,
 } from '../services/api';
 import { isSellerOnline } from '../lib/sellerOnline';
+import { getSellerSalesBadge } from '../lib/sellerBadge';
+import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
+import ReportModal from '../components/ReportModal';
 
 function getRating(product) {
   const r = product?.rating;
@@ -32,10 +35,13 @@ const FEATURE_ICONS = {
 function PurchaseConfirmModal({ product, quantity, onConfirm, onCancel, isLoading }) {
   const price = Number(product.price || 0);
   const total = price * quantity;
+  const seller = product.seller || {};
+  const salesBadge = getSellerSalesBadge(seller.completed_sales ?? seller.completedSales ?? 0);
+  const isVerified = seller.is_verified === true || seller.is_verified === 1;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onCancel}>
       <div className="rounded-2xl bg-white shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="text-center mb-5">
+        <div className="text-center mb-4">
           <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-3">
             <svg className="w-7 h-7 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -45,6 +51,15 @@ function PurchaseConfirmModal({ product, quantity, onConfirm, onCancel, isLoadin
           <p className="text-sm text-gray-600 leading-relaxed">
             Before completing your purchase, please check the seller reviews and product description carefully.
           </p>
+        </div>
+        {/* Seller trust info */}
+        <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 mb-4 flex items-start gap-2">
+          <svg className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <div className="text-xs text-blue-700 space-y-1">
+            {isVerified && <p>✅ <strong>Verified seller</strong> — identity confirmed by M4M team.</p>}
+            {salesBadge && <p>🏅 <strong>{salesBadge.label}</strong> — seller has a strong track record.</p>}
+            {!isVerified && !salesBadge && <p>ℹ️ Check seller reviews before purchasing. Sellers with badges have proven track records.</p>}
+          </div>
         </div>
         <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 mb-5 space-y-2">
           <div className="flex justify-between text-sm">
@@ -71,44 +86,6 @@ function PurchaseConfirmModal({ product, quantity, onConfirm, onCancel, isLoadin
   );
 }
 
-function ReportModal({ productName, onClose }) {
-  const [reason, setReason] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
-      <div className="rounded-2xl bg-white shadow-xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
-        {submitted ? (
-          <div className="text-center">
-            <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-            </div>
-            <p className="font-semibold text-gray-900 mb-1">Report submitted</p>
-            <p className="text-sm text-gray-500 mb-4">Our team will review this listing.</p>
-            <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">Close</button>
-          </div>
-        ) : (
-          <>
-            <h3 className="text-lg font-bold text-gray-900 mb-1">Report listing</h3>
-            <p className="text-sm text-gray-500 mb-4">Reporting: <span className="font-medium">{productName}</span></p>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Reason for report</label>
-            <select value={reason} onChange={(e) => setReason(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple outline-none mb-4">
-              <option value="">Select a reason</option>
-              <option value="fake">Fake or misleading product</option>
-              <option value="scam">Potential scam</option>
-              <option value="inappropriate">Inappropriate content</option>
-              <option value="duplicate">Duplicate listing</option>
-              <option value="other">Other</option>
-            </select>
-            <div className="flex gap-3">
-              <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-              <button type="button" disabled={!reason} onClick={() => setSubmitted(true)} className="flex-1 py-2.5 rounded-xl font-semibold bg-red-500 text-white hover:bg-red-600 disabled:opacity-60 transition-colors">Submit</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default function ProductPage() {
   const { id } = useParams();
@@ -283,6 +260,8 @@ export default function ProductPage() {
   const price = Number(product.price || 0);
   const stock = Number(product.stock ?? 0);
   const isOutOfStock = stock <= 0;
+  const salesBadge = getSellerSalesBadge(seller.completed_sales ?? seller.completedSales ?? 0);
+  const isSellerVerified = seller.is_verified === true || seller.is_verified === 1;
   const rating = getRating(product);
   const reviews = product.reviews ?? [];
   const avgRatingFromReviews = reviews.length > 0 ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length : null;
@@ -312,14 +291,32 @@ export default function ProductPage() {
       )}
 
       {/* Report modal */}
-      {reportOpen && <ReportModal productName={product.name} onClose={() => setReportOpen(false)} />}
+      {reportOpen && (
+        <ReportModal
+          type="product"
+          targetName={product.name}
+          onSubmit={(reason, description) =>
+            import('../services/api').then(({ submitReport: sr }) =>
+              sr({
+                type: 'product',
+                target_id: product.id,
+                target_name: product.name,
+                reason,
+                description,
+                reporter: user ? { id: user.id, name: user.name, email: user.email } : null,
+              })
+            )
+          }
+          onClose={() => setReportOpen(false)}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8 lg:gap-12">
         {/* Left: image + reviews */}
         <div className="space-y-6">
-          {/* Product image */}
+          {/* Product image — max 400px, not full-screen */}
           <div className="space-y-3">
-            <div className="rounded-2xl border border-gray-200 overflow-hidden bg-gray-100 aspect-square flex items-center justify-center">
+            <div className="rounded-2xl border border-gray-200 overflow-hidden bg-gray-100 aspect-[4/3] max-h-80 flex items-center justify-center">
               {mainImage ? (
                 <img src={mainImage} alt={product.name} className="w-full h-full object-cover" />
               ) : (
@@ -364,13 +361,37 @@ export default function ProductPage() {
                 {reviewError && <p className="mb-3 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{reviewError}</p>}
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Order</label>
-                    <select value={reviewOrderId} onChange={(e) => setReviewOrderId(e.target.value)} required className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple outline-none">
-                      <option value="">Select order</option>
-                      {eligibleOrders.map((o) => (
-                        <option key={o.id} value={o.id}>Order #{o.id} – {o.created_at ? new Date(o.created_at).toLocaleDateString() : ''}</option>
-                      ))}
-                    </select>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Select your order</label>
+                    <div className="space-y-2">
+                      {eligibleOrders.map((o) => {
+                        const items = o.order_items ?? o.orderItems ?? [];
+                        const thisItem = items.find((i) => Number(i.product_id) === Number(product.id));
+                        const img = thisItem?.product?.images?.[0] ?? product.images?.[0];
+                        const sellerName = thisItem?.product?.seller?.name ?? seller?.name ?? 'Seller';
+                        const orderRef = `M4M-${String(o.id).padStart(6, '0')}`;
+                        const isSelected = reviewOrderId === String(o.id);
+                        return (
+                          <button
+                            key={o.id}
+                            type="button"
+                            onClick={() => setReviewOrderId(String(o.id))}
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-colors ${isSelected ? 'border-m4m-purple bg-purple-50' : 'border-gray-200 hover:border-gray-300 bg-white'}`}
+                          >
+                            <div className="w-12 h-12 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
+                              {img ? <img src={img} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" /></svg></div>}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-semibold text-gray-900 truncate">{product.name}</p>
+                              <p className="text-xs text-gray-500">by {sellerName}</p>
+                              <p className="text-xs text-gray-400 font-mono">{orderRef} · {o.created_at ? new Date(o.created_at).toLocaleDateString() : ''}</p>
+                            </div>
+                            {isSelected && <svg className="w-5 h-5 text-m4m-purple flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l3-3z" clipRule="evenodd" /></svg>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* Hidden input for form validation */}
+                    <input type="hidden" value={reviewOrderId} required />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
@@ -502,17 +523,23 @@ export default function ProductPage() {
 
           {/* Seller card */}
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
-            <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-start justify-between gap-3 mb-3">
               <Link to={`/seller/${seller.id}`} className="flex items-center gap-3 group">
                 <span className="w-10 h-10 rounded-full bg-m4m-purple text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
                   {seller.name?.charAt(0)?.toUpperCase() || 'S'}
                 </span>
                 <div>
-                  <p className="font-semibold text-gray-900 text-sm group-hover:text-m4m-purple transition-colors">{seller.name || 'Seller'}</p>
-                  <p className="text-xs text-gray-400">View seller profile</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="font-semibold text-gray-900 text-sm group-hover:text-m4m-purple transition-colors">{seller.name || 'Seller'}</p>
+                    {isSellerVerified && <VerifiedBadge />}
+                  </div>
+                  <div className="mt-0.5">
+                    <SellerSalesBadge completedSales={seller.completed_sales ?? seller.completedSales ?? 0} />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">View seller profile</p>
                 </div>
               </Link>
-              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${sellerOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${sellerOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${sellerOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
                 {sellerOnline ? 'Online' : 'Offline'}
               </span>

@@ -13,8 +13,12 @@ class ConversationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $conversations = Conversation::where('user_one_id', $request->user()->id)
-            ->orWhere('user_two_id', $request->user()->id)
+        $userId = $request->user()->id;
+
+        $conversations = Conversation::where('type', 'regular')
+            ->where(function ($q) use ($userId) {
+                $q->where('user_one_id', $userId)->orWhere('user_two_id', $userId);
+            })
             ->with(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id,status', 'product:id,name'])
             ->withCount(['messages'])
             ->latest('updated_at')
@@ -51,7 +55,8 @@ class ConversationController extends Controller
                 'user_two_id' => $userTwoId,
                 'order_id' => $validated['order_id'] ?? null,
                 'product_id' => $validated['product_id'] ?? null,
-            ]
+            ],
+            ['type' => 'regular']
         );
 
         $conversation->load(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id', 'product:id,name']);
@@ -62,7 +67,8 @@ class ConversationController extends Controller
     public function show(Request $request, Conversation $conversation): JsonResponse
     {
         $userId = $request->user()->id;
-        if ($conversation->user_one_id !== $userId && $conversation->user_two_id !== $userId) {
+        $isSupportConvo = $conversation->type === 'support' && $conversation->user_one_id === $userId;
+        if (! $isSupportConvo && $conversation->user_one_id !== $userId && $conversation->user_two_id !== $userId) {
             return $this->error('Forbidden.', 403);
         }
 
@@ -83,7 +89,8 @@ class ConversationController extends Controller
     public function storeMessage(Request $request, Conversation $conversation): JsonResponse
     {
         $userId = $request->user()->id;
-        if ($conversation->user_one_id !== $userId && $conversation->user_two_id !== $userId) {
+        $isSupportConvo = $conversation->type === 'support' && $conversation->user_one_id === $userId;
+        if (! $isSupportConvo && $conversation->user_one_id !== $userId && $conversation->user_two_id !== $userId) {
             return $this->error('Forbidden.', 403);
         }
 

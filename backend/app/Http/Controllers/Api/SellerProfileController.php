@@ -29,13 +29,20 @@ class SellerProfileController extends Controller
 
         $totalSales = OrderItem::whereIn('product_id', $productIds)->sum('quantity');
 
+        $products = $seller->products()
+            ->where('status', 'active')
+            ->with('seller:id,name,is_verified_seller,last_activity_at')
+            ->get();
+
         $data = [
             'id' => $seller->id,
             'name' => $seller->name,
+            'is_verified_seller' => (bool) $seller->is_verified_seller,
             'last_activity_at' => $seller->last_activity_at?->toIso8601String(),
             'rating' => $rating,
             'total_sales' => (int) $totalSales,
             'total_reviews' => $totalReviews,
+            'products' => $products,
         ];
 
         return $this->success($data);

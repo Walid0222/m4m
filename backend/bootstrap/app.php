@@ -14,7 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'admin'       => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'not.banned'  => \App\Http\Middleware\EnsureSellerNotBanned::class,
             'update.last_activity' => \App\Http\Middleware\UpdateUserLastActivity::class,
         ]);
     })

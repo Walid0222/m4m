@@ -24,7 +24,7 @@ class ProductController extends Controller
             $query->where('user_id', $request->seller_id);
         }
 
-        $products = $query->with('seller:id,name,last_activity_at')
+        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at')
             ->latest()
             ->paginate($request->integer('per_page', 15));
 
@@ -37,7 +37,7 @@ class ProductController extends Controller
             return $this->error('Product not available.', 404);
         }
 
-        $product->load(['seller:id,name,last_activity_at', 'reviews.reviewer:id,name']);
+        $product->load(['seller:id,name,is_verified_seller,last_activity_at', 'reviews.reviewer:id,name']);
 
         return $this->success($product);
     }
@@ -54,6 +54,31 @@ class ProductController extends Controller
         return $this->success($products);
     }
 
+    public function search(Request $request): JsonResponse
+    {
+        $q = $request->string('q', '')->trim();
+        $query = Product::query()->where('status', 'active');
+
+        if ($q !== '') {
+            $terms = preg_split('/\s+/', strtolower($q));
+            $query->where(function ($qb) use ($q, $terms) {
+                $qb->where('name', 'like', "%{$q}%")
+                    ->orWhere('description', 'like', "%{$q}%");
+                foreach ($terms as $term) {
+                    $qb->orWhere('name', 'like', "%{$term}%")
+                        ->orWhere('description', 'like', "%{$term}%");
+                }
+            });
+        }
+
+        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at')
+            ->latest()
+            ->limit(20)
+            ->get();
+
+        return $this->success($products);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $this->authorizeSeller($request);
@@ -62,10 +87,16 @@ class ProductController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'price' => ['required', 'numeric', 'min:0'],
-            'stock' => ['required', 'integer', 'min:0'],
+            'stock' => ['sometimes', 'integer', 'min:0'],
             'images' => ['nullable', 'array'],
             'images.*' => ['string', 'max:500'],
             'status' => ['sometimes', 'in:draft,active,sold_out,inactive'],
+            'delivery_time' => ['nullable', 'string', 'max:50'],
+            'delivery_type' => ['sometimes', 'in:manual,instant'],
+            'delivery_content' => ['nullable', 'string'],
+            'seller_reminder' => ['nullable', 'string', 'max:2000'],
+            'features' => ['nullable', 'array'],
+            'features.*' => ['string', 'max:100'],
         ]);
 
         $slug = Str::slug($validated['name']);
@@ -75,6 +106,12 @@ class ProductController extends Controller
             $slug = $baseSlug . '-' . (++$count);
         }
         $validated['slug'] = $slug;
+
+        // Auto-calculate stock for instant delivery based on line count
+        if (($validated['delivery_type'] ?? 'manual') === 'instant' && !empty($validated['delivery_content'])) {
+            $lines = array_filter(explode("\n", trim($validated['delivery_content'])));
+            $validated['stock'] = count($lines);
+        }
 
         $product = $request->user()->products()->create($validated);
 
@@ -95,7 +132,19 @@ class ProductController extends Controller
             'images' => ['nullable', 'array'],
             'images.*' => ['string', 'max:500'],
             'status' => ['sometimes', 'in:draft,active,sold_out,inactive'],
+            'delivery_time' => ['nullable', 'string', 'max:50'],
+            'delivery_type' => ['sometimes', 'in:manual,instant'],
+            'delivery_content' => ['nullable', 'string'],
+            'seller_reminder' => ['nullable', 'string', 'max:2000'],
+            'features' => ['nullable', 'array'],
+            'features.*' => ['string', 'max:100'],
         ]);
+
+        // Auto-calculate stock for instant delivery
+        if (($validated['delivery_type'] ?? $my_product->delivery_type) === 'instant' && isset($validated['delivery_content'])) {
+            $lines = array_filter(explode("\n", trim($validated['delivery_content'])));
+            $validated['stock'] = count($lines);
+        }
 
         $my_product->update($validated);
 

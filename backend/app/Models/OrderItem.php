@@ -18,6 +18,7 @@ class OrderItem extends Model
         'quantity',
         'unit_price',
         'total_price',
+        'delivery_credentials',
     ];
 
     protected function casts(): array

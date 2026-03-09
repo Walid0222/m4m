@@ -342,6 +342,28 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Trust bar */}
+      <div className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+            {[
+              { icon: '🔒', title: 'Secure marketplace', desc: 'All transactions are encrypted & protected' },
+              { icon: '✅', title: 'Verified sellers', desc: 'Sellers are reviewed and badge-approved' },
+              { icon: '🛡️', title: 'Buyer protection', desc: 'Full refund if you don\'t receive your order' },
+              { icon: '⚡', title: 'Instant delivery', desc: 'Many products delivered automatically' },
+            ].map(({ icon, title, desc }) => (
+              <div key={title} className="flex items-center gap-3">
+                <span className="text-2xl flex-shrink-0">{icon}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{title}</p>
+                  <p className="text-xs text-gray-500 leading-tight hidden sm:block">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div id="marketplace" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
         {/* Z2U-style top section: search + filters in one card */}
         <section className="mb-6 md:mb-8">

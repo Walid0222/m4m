@@ -32,7 +32,7 @@ class AuthController extends Controller
         $token = $user->createToken('auth')->plainTextToken;
 
         return $this->success([
-            'user' => $user->only(['id', 'name', 'email', 'is_seller', 'is_admin']),
+            'user' => $this->userFields($user),
             'token' => $token,
             'token_type' => 'Bearer',
         ], 'Registered successfully', 201);
@@ -53,11 +53,15 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->is_banned && ($user->ban_type === 'permanent' || ($user->banned_until && $user->banned_until->isFuture()))) {
+            return $this->error('Your account has been banned.', 403);
+        }
+
         $user->tokens()->where('name', 'auth')->delete();
         $token = $user->createToken('auth')->plainTextToken;
 
         return $this->success([
-            'user' => $user->only(['id', 'name', 'email', 'is_seller', 'is_admin']),
+            'user' => $this->userFields($user),
             'token' => $token,
             'token_type' => 'Bearer',
         ]);
@@ -72,8 +76,33 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->only(['id', 'name', 'email', 'is_seller', 'is_admin']);
+        return $this->success($this->userFields($request->user()));
+    }
 
-        return $this->success($user);
+    public function updateMe(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $validated = $request->validate([
+            'email' => ['sometimes', 'email', 'max:255', 'unique:users,email,' . $user->id],
+            'password' => ['sometimes', 'confirmed', Password::defaults()],
+            'is_seller' => ['sometimes', 'boolean'],
+        ]);
+
+        if (isset($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
+        }
+
+        $user->update($validated);
+
+        return $this->success($this->userFields($user->fresh()), 'Profile updated.');
+    }
+
+    private function userFields(User $user): array
+    {
+        return $user->only([
+            'id', 'name', 'email', 'is_seller', 'is_admin',
+            'is_verified_seller', 'is_banned', 'ban_type', 'banned_until',
+            'last_activity_at',
+        ]);
     }
 }

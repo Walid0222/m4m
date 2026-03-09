@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getOrderStatusStyle } from '../lib/orderStatus';
+import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
 
 function ConfirmDeliveryModal({ onConfirm, onCancel, isLoading }) {
   return (
@@ -59,6 +60,9 @@ export default function OrderCard({ order, onConfirmDelivery, confirmingOrderId,
 
   const sellerId = items.map((i) => i.product?.seller?.id).find(Boolean);
   const sellerName = items.map((i) => i.product?.seller?.name).find(Boolean) ?? '—';
+  const sellerObj = items.map((i) => i.product?.seller).find(Boolean);
+  const sellerIsVerified = sellerObj?.is_verified === true || sellerObj?.is_verified === 1;
+  const sellerCompletedSales = sellerObj?.completed_sales ?? sellerObj?.completedSales ?? 0;
   const isChatting = chattingSellerId === sellerId;
 
   const price = Number(order.total_amount ?? 0);
@@ -118,11 +122,11 @@ export default function OrderCard({ order, onConfirmDelivery, confirmingOrderId,
           )}
 
           {/* Seller */}
-          <div className="mt-1.5 flex items-center gap-1.5">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <span className="text-sm text-gray-500">Seller:</span>
             {sellerId ? (
               <span
-                className="text-sm font-medium text-m4m-purple hover:underline cursor-pointer"
+                className="text-sm font-medium text-m4m-purple cursor-pointer"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/seller/${sellerId}`; }}
               >
                 {sellerName}
@@ -130,6 +134,8 @@ export default function OrderCard({ order, onConfirmDelivery, confirmingOrderId,
             ) : (
               <span className="text-sm text-gray-600">{sellerName}</span>
             )}
+            {sellerIsVerified && <VerifiedBadge />}
+            <SellerSalesBadge completedSales={sellerCompletedSales} />
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-2">

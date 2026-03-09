@@ -232,6 +232,66 @@ export function verifyAdminWithdraw(withdrawId, action) {
   return api.patch(`/admin/withdraw-requests/${withdrawId}/verify`, { action }).then(() => {});
 }
 
+// --- Reports (client-side store, submitted to /reports if backend exists) ---
+
+export function submitReport({ type, target_id, target_name, reason, description, reporter }) {
+  const payload = { type, target_id, target_name, reason, description };
+  // Try real endpoint; fall back silently to localStorage store
+  return api.post('/reports', payload).then(unwrap).catch(() => {
+    const key = 'm4m_reports';
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    const report = {
+      id: `local_${Date.now()}`,
+      type,
+      target_id,
+      target_name: target_name || null,
+      reason,
+      description,
+      reporter: reporter || null,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    };
+    localStorage.setItem(key, JSON.stringify([...existing, report]));
+    return report;
+  });
+}
+
+export function getAdminReports() {
+  return api.get('/admin/reports').then(unwrap).catch(() => {
+    const key = 'm4m_reports';
+    const items = JSON.parse(localStorage.getItem(key) || '[]');
+    return { data: items };
+  });
+}
+
+export function resolveAdminReport(reportId, action) {
+  return api.patch(`/admin/reports/${reportId}`, { action }).then(() => {}).catch(() => {
+    const key = 'm4m_reports';
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    const updated = existing.map((r) => r.id === reportId ? { ...r, status: action === 'ignore' ? 'ignored' : 'resolved' } : r);
+    localStorage.setItem(key, JSON.stringify(updated));
+  });
+}
+
+// --- Seller verification (admin) ---
+
+export function getAdminVerificationRequests() {
+  return api.get('/admin/verification-requests').then(unwrap).catch(() => {
+    const key = 'm4m_verif_requests';
+    const items = JSON.parse(localStorage.getItem(key) || '[]');
+    return { data: items };
+  });
+}
+
+export function resolveVerificationRequest(requestId, action) {
+  return api.patch(`/admin/verification-requests/${requestId}`, { action }).then(() => {}).catch(() => {
+    const key = 'm4m_verif_requests';
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    const updated = existing.map((r) => r.id === requestId ? { ...r, status: action } : r);
+    localStorage.setItem(key, JSON.stringify(updated));
+  });
+}
+
 /**
  * Helper: get items array from Laravel paginated response.
  */

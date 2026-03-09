@@ -28,6 +28,7 @@ const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: 'chart' },
   { id: 'products', label: 'Products', icon: 'box' },
   { id: 'orders', label: 'Orders', icon: 'order' },
+  { id: 'verification', label: 'Get Verified', icon: 'verify' },
 ];
 
 function StatCard({ title, value, subtitle, icon }) {
@@ -63,6 +64,157 @@ function StatCard({ title, value, subtitle, icon }) {
         </div>
         <span className="text-m4m-purple/30">{icons[icon] || icons.chart}</span>
       </div>
+    </div>
+  );
+}
+
+function VerificationSection({ user }) {
+  const isVerified = user?.is_verified === true || user?.is_verified === 1;
+  const [idFront, setIdFront] = useState('');
+  const [idBack, setIdBack] = useState('');
+  const [bankStatement, setBankStatement] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!idFront.trim() || !idBack.trim()) return;
+    setSubmitting(true);
+    // Store in localStorage so admin can review in Admin Dashboard → Verifications
+    try {
+      const key = 'm4m_verif_requests';
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      const request = {
+        id: `vr_${Date.now()}`,
+        seller_id: user?.id,
+        seller: { id: user?.id, name: user?.name, email: user?.email },
+        id_front_url: idFront.trim(),
+        id_back_url: idBack.trim(),
+        bank_statement_url: bankStatement.trim() || null,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      };
+      const updated = existing.filter((r) => r.seller_id !== user?.id);
+      localStorage.setItem(key, JSON.stringify([...updated, request]));
+    } catch {}
+    await new Promise((r) => setTimeout(r, 800));
+    setSubmitting(false);
+    setSubmitted(true);
+  };
+
+  if (isVerified) {
+    return (
+      <div>
+        <h1 className="text-xl font-bold text-m4m-black mb-6">Seller Verification</h1>
+        <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center shadow-sm">
+          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <p className="text-xl font-bold text-green-800 mb-1">You are a Verified Seller ✅</p>
+          <p className="text-green-700 text-sm">Your identity has been confirmed by the M4M team. A verified badge is displayed on your profile and products.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (submitted) {
+    return (
+      <div>
+        <h1 className="text-xl font-bold text-m4m-black mb-6">Seller Verification</h1>
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-8 text-center shadow-sm">
+          <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <p className="text-xl font-bold text-blue-800 mb-1">Request submitted!</p>
+          <p className="text-blue-700 text-sm max-w-md mx-auto">Your verification request has been submitted. The M4M admin team will review your documents within 1–3 business days. You will be notified when your account is verified.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h1 className="text-xl font-bold text-m4m-black mb-2">Get Verified</h1>
+      <p className="text-m4m-gray-500 text-sm mb-6">Become a Verified Seller to build trust with buyers and increase your sales.</p>
+
+      {/* Benefits */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        {[
+          { icon: '🏅', title: 'Verified badge', desc: 'A blue checkmark badge appears on your profile and all your products.' },
+          { icon: '📈', title: 'More visibility', desc: 'Verified sellers are ranked higher in search results.' },
+          { icon: '🛡️', title: 'Buyer trust', desc: 'Buyers feel safer purchasing from verified sellers.' },
+        ].map(({ icon, title, desc }) => (
+          <div key={title} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+            <span className="text-2xl">{icon}</span>
+            <p className="font-semibold text-gray-900 mt-2 text-sm">{title}</p>
+            <p className="text-xs text-gray-500 mt-1 leading-relaxed">{desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* How it works */}
+      <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 mb-6 text-sm text-amber-800">
+        <p className="font-semibold mb-2">How verification works:</p>
+        <ol className="list-decimal list-inside space-y-1">
+          <li>Submit your national ID card (front and back).</li>
+          <li>Optionally attach a bank statement for faster approval.</li>
+          <li>The M4M admin team reviews your documents within 1–3 business days.</li>
+          <li>Once approved, a ✅ Verified badge appears on your profile and products.</li>
+        </ol>
+      </div>
+
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5 max-w-lg">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">National ID card — front <span className="text-red-500">*</span></label>
+          <p className="text-xs text-gray-400 mb-2">Paste a publicly accessible image URL (e.g. from Google Drive, Imgur).</p>
+          <input
+            type="url"
+            value={idFront}
+            onChange={(e) => setIdFront(e.target.value)}
+            placeholder="https://i.imgur.com/your-id-front.jpg"
+            required
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+          />
+          {idFront && <img src={idFront} alt="ID front preview" className="mt-2 h-20 rounded-lg object-contain bg-gray-100 border" onError={(e) => { e.target.style.display = 'none'; }} />}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">National ID card — back <span className="text-red-500">*</span></label>
+          <input
+            type="url"
+            value={idBack}
+            onChange={(e) => setIdBack(e.target.value)}
+            placeholder="https://i.imgur.com/your-id-back.jpg"
+            required
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+          />
+          {idBack && <img src={idBack} alt="ID back preview" className="mt-2 h-20 rounded-lg object-contain bg-gray-100 border" onError={(e) => { e.target.style.display = 'none'; }} />}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Bank statement <span className="text-gray-400 font-normal">(optional)</span></label>
+          <input
+            type="url"
+            value={bankStatement}
+            onChange={(e) => setBankStatement(e.target.value)}
+            placeholder="https://i.imgur.com/bank-statement.jpg"
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+          />
+        </div>
+        <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-xs text-gray-500">
+          🔒 Your documents are confidential and will only be reviewed by the M4M admin team. They will never be shared with third parties.
+        </div>
+        <button
+          type="submit"
+          disabled={submitting || !idFront.trim() || !idBack.trim()}
+          className="w-full py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors"
+        >
+          {submitting ? 'Submitting…' : 'Submit verification request'}
+        </button>
+      </form>
     </div>
   );
 }
@@ -376,7 +528,6 @@ export default function SellerDashboardPage() {
     { id: 'mac', label: 'Works on Mac' },
     { id: 'linux', label: 'Works on Linux' },
     { id: 'global', label: 'Global access' },
-    { id: 'instant', label: 'Instant delivery' },
     { id: 'assurance', label: '30-day assurance' },
   ];
 
@@ -428,6 +579,11 @@ export default function SellerDashboardPage() {
               {s.id === 'orders' && (
                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+              )}
+              {s.id === 'verification' && (
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               )}
               {s.label}
@@ -857,6 +1013,10 @@ export default function SellerDashboardPage() {
               </ul>
             )}
           </>
+        )}
+
+        {section === 'verification' && (
+          <VerificationSection user={user} />
         )}
       </main>
     </div>

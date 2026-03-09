@@ -25,6 +25,10 @@ class User extends Authenticatable
         'password',
         'is_seller',
         'is_admin',
+        'is_banned',
+        'ban_type',
+        'banned_until',
+        'is_verified_seller',
         'last_activity_at',
     ];
 
@@ -48,9 +52,12 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'last_activity_at' => 'datetime',
+            'banned_until' => 'datetime',
             'password' => 'hashed',
             'is_seller' => 'boolean',
             'is_admin' => 'boolean',
+            'is_banned' => 'boolean',
+            'is_verified_seller' => 'boolean',
         ];
     }
 
@@ -106,6 +113,18 @@ class User extends Authenticatable
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class);
+    }
+
+    /** Seller verification request. */
+    public function sellerVerification(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(SellerVerification::class, 'seller_id');
+    }
+
+    /** Reports filed by this user. */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(Report::class, 'reporter_id');
     }
 
     /** Database notifications (override to use app model). */

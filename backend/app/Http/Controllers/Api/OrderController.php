@@ -10,6 +10,7 @@ use App\Notifications\NewOrderNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class OrderController extends Controller
 {
@@ -17,7 +18,7 @@ class OrderController extends Controller
     {
         $orders = $request->user()
             ->orders()
-            ->with(['orderItems.product:id,name,slug,user_id', 'orderItems.product.seller:id,name'])
+            ->with(['orderItems.product:id,name,slug,user_id,images', 'orderItems.product.seller:id,name,is_verified_seller'])
             ->latest()
             ->paginate($request->integer('per_page', 15));
 
@@ -30,7 +31,7 @@ class OrderController extends Controller
             return $this->error('Forbidden.', 403);
         }
 
-        $order->load(['orderItems.product:id,name,slug,price', 'buyer:id,name']);
+        $order->load(['orderItems.product:id,name,slug,price,images', 'orderItems', 'buyer:id,name']);
 
         return $this->success($order);
     }
@@ -46,7 +47,7 @@ class OrderController extends Controller
         }
 
         $order->update(['status' => Order::STATUS_COMPLETED]);
-        $order->load(['orderItems.product:id,name,slug,price', 'buyer:id,name']);
+        $order->load(['orderItems.product:id,name,slug,price,images', 'orderItems', 'buyer:id,name']);
 
         return $this->success($order, 'Order marked as completed.');
     }
@@ -96,15 +97,51 @@ class OrderController extends Controller
             return $this->error('Insufficient wallet balance.', 422);
         }
 
-        $order = DB::transaction(function () use ($user, $totalAmount, $orderItems, $wallet) {
+        $order = DB::transaction(function () use ($user, $totalAmount, $orderItems, $wallet, $products) {
+            // Generate unique order number M4M-XXXXXX
+            do {
+                $orderNumber = 'M4M-' . strtoupper(Str::random(6));
+            } while (Order::where('order_number', $orderNumber)->exists());
+
+            // Determine primary seller (first product's seller)
+            $firstProductId = $orderItems[0]['product_id'];
+            $firstProduct = $products->get($firstProductId);
+            $sellerId = $firstProduct?->user_id;
+
             $order = $user->orders()->create([
+                'order_number' => $orderNumber,
+                'seller_id' => $sellerId,
                 'status' => Order::STATUS_PAID,
                 'total_amount' => $totalAmount,
             ]);
 
+            $isInstant = false;
             foreach ($orderItems as $oi) {
-                $order->orderItems()->create($oi);
-                Product::where('id', $oi['product_id'])->decrement('stock', $oi['quantity']);
+                $product = $products->get($oi['product_id']);
+                $credentials = null;
+
+                if ($product && $product->delivery_type === 'instant' && $product->delivery_content) {
+                    $lines = array_values(array_filter(explode("\n", trim($product->delivery_content))));
+                    $credentials = implode("\n", array_splice($lines, 0, $oi['quantity']));
+                    // Remove used credentials from the product
+                    $remaining = implode("\n", $lines);
+                    $product->update([
+                        'delivery_content' => $remaining,
+                        'stock' => max(0, $product->stock - $oi['quantity']),
+                    ]);
+                    $isInstant = true;
+                } else {
+                    Product::where('id', $oi['product_id'])->decrement('stock', $oi['quantity']);
+                }
+
+                $order->orderItems()->create(array_merge($oi, [
+                    'delivery_credentials' => $credentials,
+                ]));
+            }
+
+            // Auto-mark delivered for instant delivery
+            if ($isInstant) {
+                $order->update(['status' => Order::STATUS_DELIVERED]);
             }
 
             $wallet->decrement('balance', $totalAmount);
@@ -114,7 +151,7 @@ class OrderController extends Controller
                 'balance_after' => $wallet->fresh()->balance,
                 'reference_type' => Order::class,
                 'reference_id' => $order->id,
-                'description' => "Payment for order #{$order->id}",
+                'description' => "Payment for order #{$order->order_number}",
             ]);
 
             return $order;

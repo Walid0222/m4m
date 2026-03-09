@@ -20,6 +20,11 @@ class Product extends Model
         'stock',
         'images',
         'status',
+        'delivery_time',
+        'delivery_type',
+        'delivery_content',
+        'seller_reminder',
+        'features',
     ];
 
     protected function casts(): array
@@ -27,6 +32,7 @@ class Product extends Model
         return [
             'price' => 'decimal:2',
             'images' => 'array',
+            'features' => 'array',
         ];
     }
 

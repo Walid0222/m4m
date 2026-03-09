@@ -1,13 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getWallet, getNotifications, markNotificationRead, getToken } from '../services/api';
+import { getWallet, getNotifications, markNotificationRead, getProducts, getToken } from '../services/api';
 
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, logout, avatar } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const searchRef = useRef(null);
+  const suggestAbortRef = useRef(null);
   const [walletBalance, setWalletBalance] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -49,10 +54,50 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', outside);
   }, []);
 
+  // Autocomplete: fetch suggestions when query changes
+  const fetchSuggestions = useCallback(async (q) => {
+    if (!q || q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    setSuggestionLoading(true);
+    try {
+      const result = await getProducts({ search: q, per_page: 6 });
+      const items = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
+      setSuggestions(items.slice(0, 6));
+      setShowSuggestions(items.length > 0);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setSuggestionLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q || q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    const t = setTimeout(() => fetchSuggestions(q), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery, fetchSuggestions]);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) setShowSuggestions(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const handleSearch = (e) => {
     e.preventDefault();
     const q = searchQuery.trim();
+    setShowSuggestions(false);
     navigate(q ? `/?search=${encodeURIComponent(q)}` : '/');
+    setMobileMenuOpen(false);
+  };
+
+  const handleSuggestionClick = (product) => {
+    setShowSuggestions(false);
+    setSearchQuery('');
+    navigate(`/product/${product.id}`);
     setMobileMenuOpen(false);
   };
 
@@ -118,22 +163,55 @@ export default function Navbar() {
             M4M
           </Link>
 
-          {/* Center: search */}
-          <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-lg mx-auto">
+          {/* Center: search with autocomplete */}
+          <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-lg mx-auto" ref={searchRef}>
             <div className="relative w-full">
               <input
                 type="search"
                 placeholder="Search products..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); }}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                 className="w-full h-10 pl-4 pr-10 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:border-transparent text-sm"
                 aria-label="Search products"
+                autoComplete="off"
               />
               <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-m4m-purple transition-colors" aria-label="Search">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+                {suggestionLoading
+                  ? <span className="w-4 h-4 border-2 border-gray-300 border-t-m4m-purple rounded-full animate-spin block" />
+                  : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                }
               </button>
+              {/* Suggestions dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                  {suggestions.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onMouseDown={() => handleSuggestionClick(p)}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
+                        {p.images?.[0]
+                          ? <img src={p.images[0]} alt="" className="w-full h-full object-cover" />
+                          : <div className="w-full h-full flex items-center justify-center text-gray-300"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>
+                        }
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
+                        <p className="text-xs text-gray-400">{Number(p.price || 0).toFixed(2)} MAD · {p.seller?.name || 'Seller'}</p>
+                      </div>
+                    </button>
+                  ))}
+                  <button
+                    type="submit"
+                    className="w-full px-4 py-2.5 text-sm text-m4m-purple font-medium text-center hover:bg-purple-50 border-t border-gray-100 transition-colors"
+                  >
+                    See all results for &quot;{searchQuery}&quot; →
+                  </button>
+                </div>
+              )}
             </div>
           </form>
 
@@ -213,8 +291,11 @@ export default function Navbar() {
                     className="flex items-center gap-2 px-2 py-1.5 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                     aria-expanded={profileOpen}
                   >
-                    <span className="w-8 h-8 rounded-full bg-m4m-purple text-white flex items-center justify-center text-sm font-bold">
-                      {user.name?.charAt(0)?.toUpperCase() || '?'}
+                    <span className="w-8 h-8 rounded-full bg-m4m-purple text-white flex items-center justify-center text-sm font-bold overflow-hidden">
+                      {avatar
+                        ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+                        : (user.name?.charAt(0)?.toUpperCase() || '?')
+                      }
                     </span>
                     <span className="hidden lg:inline max-w-[96px] truncate text-gray-700">{user.name}</span>
                     <svg className={`w-4 h-4 text-gray-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -342,8 +423,11 @@ export default function Navbar() {
               {user ? (
                 <>
                   <div className="flex items-center gap-3 px-4 py-3 mb-1">
-                    <span className="w-9 h-9 rounded-full bg-m4m-purple text-white flex items-center justify-center font-bold text-sm shrink-0">
-                      {user.name?.charAt(0)?.toUpperCase() || '?'}
+                    <span className="w-9 h-9 rounded-full bg-m4m-purple text-white flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
+                      {avatar
+                        ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+                        : (user.name?.charAt(0)?.toUpperCase() || '?')
+                      }
                     </span>
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 text-sm truncate">{user.name}</p>

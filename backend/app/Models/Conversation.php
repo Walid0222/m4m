@@ -16,6 +16,7 @@ class Conversation extends Model
         'user_two_id',
         'order_id',
         'product_id',
+        'type',
     ];
 
     /** First participant. */
