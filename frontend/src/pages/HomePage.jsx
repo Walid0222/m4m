@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
-import { getProducts, paginatedItems } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
+import { getProducts, paginatedItems, getFavoriteIds, toggleFavorite, getToken } from '../services/api';
 
 const TESTIMONIALS = [
   {
@@ -86,6 +87,7 @@ function getProductRating(p) {
 }
 
 export default function HomePage() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchFromUrl = searchParams.get('search') ?? '';
   const [products, setProducts] = useState([]);
@@ -95,12 +97,60 @@ export default function HomePage() {
   const [search, setSearch] = useState(searchFromUrl);
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const [paginationMeta, setPaginationMeta] = useState({ currentPage: 1, lastPage: 1, total: 0 });
+  const [favoriteIds, setFavoriteIds] = useState([]);
 
   // Sync search input with URL when URL changes (e.g. back button)
   useEffect(() => {
     setSearch(searchFromUrl);
     setSearchInput(searchFromUrl);
   }, [searchFromUrl]);
+
+  // Load favorites once for logged-in users
+  useEffect(() => {
+    if (!getToken() || !user) {
+      setFavoriteIds([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const ids = await getFavoriteIds();
+        if (!cancelled && Array.isArray(ids)) {
+          setFavoriteIds(ids.map((v) => Number(v)));
+        }
+      } catch {
+        if (!cancelled) setFavoriteIds([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const handleToggleFavorite = useCallback(
+    async (productId) => {
+      if (!getToken()) return;
+      setFavoriteIds((prev) => {
+        const idNum = Number(productId);
+        return prev.includes(idNum) ? prev.filter((id) => id !== idNum) : [...prev, idNum];
+      });
+      try {
+        const res = await toggleFavorite(productId);
+        const shouldBeFav = !!res?.favorited;
+        const idNum = Number(productId);
+        setFavoriteIds((prev) =>
+          shouldBeFav ? (prev.includes(idNum) ? prev : [...prev, idNum]) : prev.filter((id) => id !== idNum)
+        );
+      } catch {
+        // revert on failure
+        setFavoriteIds((prev) => {
+          const idNum = Number(productId);
+          return prev.includes(idNum) ? prev.filter((id) => id !== idNum) : [...prev, idNum];
+        });
+      }
+    },
+    []
+  );
 
   // Debounced search: after user stops typing, update search and URL (reset to page 1)
   useEffect(() => {
@@ -546,8 +596,13 @@ export default function HomePage() {
           ) : (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} />
+              {filteredProducts.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    isFavorited={favoriteIds.includes(Number(product.id))}
+                    onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
+                  />
                 ))}
               </div>
               {lastPage > 1 && (

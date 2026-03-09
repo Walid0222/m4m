@@ -32,6 +32,9 @@ class User extends Authenticatable
         'warning_count',
         'is_verified_seller',
         'last_activity_at',
+        'auto_reply_message',
+        'product_limit',
+        'limits_overridden',
     ];
 
     /**
@@ -163,5 +166,25 @@ class User extends Authenticatable
     public function notifications(): \Illuminate\Database\Eloquent\Relations\MorphMany
     {
         return $this->morphMany(Notification::class, 'notifiable')->orderByDesc('created_at');
+    }
+
+    /** Favorites saved by this user. */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(Favorite::class);
+    }
+
+    /** Resolved seller level name. */
+    public function getSellerLevelAttribute(): string
+    {
+        $sales = $this->sellerStats?->total_sales ?? 0;
+        return match (true) {
+            $sales >= 1000 => 'Elite',
+            $sales >= 500  => 'Expert',
+            $sales >= 100  => 'Professional',
+            $sales >= 10   => 'Trusted',
+            $sales >= 1    => 'Beginner',
+            default        => 'New Seller',
+        };
     }
 }

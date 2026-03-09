@@ -11,6 +11,8 @@ import {
   getOrders,
   getToken,
   paginatedItems,
+  toggleFavorite,
+  getFavoriteIds,
 } from '../services/api';
 import { isSellerOnline } from '../lib/sellerOnline';
 import { getSellerSalesBadge } from '../lib/sellerBadge';
@@ -108,6 +110,8 @@ export default function ProductPage() {
   const [reviewError, setReviewError] = useState('');
   const [similarProducts, setSimilarProducts] = useState([]);
   const [reportOpen, setReportOpen] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favToggling, setFavToggling] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +131,29 @@ export default function ProductPage() {
     fetchProduct();
     return () => { cancelled = true; };
   }, [id]);
+
+  // Check if product is in favorites
+  useEffect(() => {
+    if (!id || !getToken()) return;
+    let cancelled = false;
+    getFavoriteIds().then((ids) => {
+      if (!cancelled && Array.isArray(ids)) {
+        setIsFavorited(ids.includes(Number(id)) || ids.includes(String(id)));
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [id]);
+
+  const handleToggleFavorite = async () => {
+    if (!getToken() || favToggling) return;
+    setFavToggling(true);
+    try {
+      const result = await toggleFavorite(id);
+      setIsFavorited(result?.favorited ?? !isFavorited);
+    } catch { /* ignore */ } finally {
+      setFavToggling(false);
+    }
+  };
 
   // Fetch similar products
   useEffect(() => {
@@ -444,17 +471,33 @@ export default function ProductPage() {
 
         {/* Right: product info + purchase */}
         <div className="space-y-5">
-          {/* Title + report */}
+          {/* Title + actions */}
           <div className="flex items-start justify-between gap-3">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">{product.name}</h1>
-            <button
-              type="button"
-              onClick={() => setReportOpen(true)}
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-gray-400 border border-gray-200 hover:border-red-300 hover:text-red-500 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
-              Report
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {getToken() && (
+                <button
+                  type="button"
+                  onClick={handleToggleFavorite}
+                  disabled={favToggling}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${isFavorited ? 'text-pink-600 border-pink-200 bg-pink-50 hover:bg-pink-100' : 'text-gray-400 border-gray-200 hover:border-pink-300 hover:text-pink-500'}`}
+                  title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                >
+                  <svg className="w-4 h-4" fill={isFavorited ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                  </svg>
+                  {isFavorited ? 'Saved' : 'Save'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setReportOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-gray-400 border border-gray-200 hover:border-red-300 hover:text-red-500 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
+                Report
+              </button>
+            </div>
           </div>
 
           {/* Rating */}
@@ -578,6 +621,20 @@ export default function ProductPage() {
             {!user && (
               <p className="text-xs text-gray-400 text-center mt-2">You need to <Link to="/login" className="text-m4m-purple font-medium hover:underline">sign in</Link> to purchase</p>
             )}
+
+            {/* Trust signals */}
+            <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+              {[
+                { icon: '🔒', text: 'M4M holds payment securely until you confirm delivery' },
+                { icon: '⚡', text: product.delivery_type === 'instant' ? 'Instant delivery — credentials sent automatically' : `Delivery within ${product.delivery_time ?? 'stated time'}` },
+                { icon: '🛡', text: 'Dispute protection if delivery fails' },
+              ].map(({ icon, text }) => (
+                <p key={text} className="flex items-start gap-2 text-xs text-gray-500">
+                  <span className="shrink-0">{icon}</span>
+                  {text}
+                </p>
+              ))}
+            </div>
           </div>
         </div>
       </div>

@@ -49,7 +49,11 @@ export function BuyerPurchaseBadge({ completedPurchases, size = 'sm' }) {
 /** Convenience: seller info row — name + online dot + verified + sales badge */
 export function SellerTrustRow({ seller, size = 'sm', showName = false, className = '' }) {
   if (!seller) return null;
-  const isVerified = seller.is_verified === true || seller.is_verified === 1;
+  const isVerified =
+    seller.is_verified === true ||
+    seller.is_verified === 1 ||
+    seller.is_verified_seller === true ||
+    seller.is_verified_seller === 1;
   const completedSales = seller.completed_sales ?? seller.completedSales ?? 0;
   return (
     <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>

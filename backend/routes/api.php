@@ -13,11 +13,13 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DepositRequestController;
 use App\Http\Controllers\Api\DisputeController;
+use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\SellerAutoReplyController;
 use App\Http\Controllers\Api\SellerOrderController;
 use App\Http\Controllers\Api\SellerProfileController;
 use App\Http\Controllers\Api\SellerVerificationController;
@@ -116,6 +118,16 @@ Route::prefix('v1')->group(function () {
         Route::get('/support/messages',      [SupportController::class, 'messages']);
         Route::post('/support/messages',     [SupportController::class, 'sendMessage']);
 
+        // Favorites / Wishlist
+        Route::get('/favorites',             [FavoriteController::class, 'index']);
+        Route::get('/favorites/ids',         [FavoriteController::class, 'ids']);
+        Route::post('/favorites/{product}',  [FavoriteController::class, 'toggle']);
+        Route::delete('/favorites/{product}',[FavoriteController::class, 'destroy']);
+
+        // Seller auto-reply message
+        Route::get('/seller/auto-reply',  [SellerAutoReplyController::class, 'show']);
+        Route::put('/seller/auto-reply',  [SellerAutoReplyController::class, 'update']);
+
         // Reports
         Route::post('/reports', [ReportController::class, 'store']);
 
@@ -180,6 +192,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/disputes/{dispute}/resolve',     [AdminDisputeController::class, 'resolve']);
 
         // Platform stats, logs, earnings
+        Route::get('/stats',              [AdminStatsController::class, 'overview']);
         Route::get('/platform-earnings',  [AdminStatsController::class, 'platformEarnings']);
         Route::get('/admin-logs',         [AdminStatsController::class, 'adminLogs']);
         Route::get('/security-logs',      [AdminStatsController::class, 'securityLogs']);

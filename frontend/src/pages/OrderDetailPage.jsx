@@ -1,15 +1,22 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getToken } from '../services/api';
-import { getOrder, confirmOrderDelivery } from '../services/api';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { getToken, getOrder, confirmOrderDelivery, openDispute } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function OrderDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('product_invalid');
+  const [disputeDesc, setDisputeDesc] = useState('');
+  const [disputeSubmitting, setDisputeSubmitting] = useState(false);
+  const [disputeError, setDisputeError] = useState('');
 
   useEffect(() => {
     if (!id || !getToken()) {
@@ -55,6 +62,27 @@ export default function OrderDetailPage() {
     });
   };
 
+  const handleOpenDispute = async (e) => {
+    e.preventDefault();
+    if (!order || disputeSubmitting) return;
+    setDisputeSubmitting(true);
+    setDisputeError('');
+    try {
+      await openDispute({
+        order_id: order.id,
+        reason: disputeReason,
+        description: disputeDesc,
+      });
+      setDisputeOpen(false);
+      const updated = await getOrder(id);
+      setOrder(updated);
+    } catch (err) {
+      setDisputeError(err.message || 'Could not open dispute.');
+    } finally {
+      setDisputeSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12 text-center text-m4m-gray-500">
@@ -87,6 +115,9 @@ export default function OrderDetailPage() {
   const status = (order.status || '').toLowerCase();
   const isDelivered = status === 'delivered';
   const isCompleted = status === 'completed';
+  const isDisputed = status === 'disputed' || status === 'dispute';
+  const isBuyer = !user?.is_seller || order.user_id === user?.id;
+  const canDispute = isBuyer && ['delivered', 'processing', 'paid', 'pending'].includes(status) && !isDisputed;
 
   // Delivery content: order-level (instant delivery stores here) or per item
   const orderDeliveryContent = order.delivery_content ?? null;
@@ -135,6 +166,80 @@ export default function OrderDetailPage() {
       )}
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+      {/* Disputed status banner */}
+      {isDisputed && (
+        <div className="mb-6 p-4 bg-red-50 rounded-xl border border-red-200 text-sm text-red-800">
+          <p className="font-semibold">⚠ Dispute opened</p>
+          <p className="mt-0.5 text-red-600">Our team is reviewing this order. Funds are held until resolved.</p>
+          <Link to="/disputes" className="mt-2 inline-block text-xs font-semibold text-red-700 hover:underline">View dispute status →</Link>
+        </div>
+      )}
+
+      {/* Open Dispute button */}
+      {canDispute && !disputeOpen && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => setDisputeOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            Open Dispute
+          </button>
+          <p className="text-xs text-gray-400 mt-1">Use this if the delivery is wrong or not working.</p>
+        </div>
+      )}
+
+      {/* Dispute form */}
+      {disputeOpen && (
+        <form onSubmit={handleOpenDispute} className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5">
+          <h3 className="font-semibold text-red-800 mb-4">Open a Dispute</h3>
+          {disputeError && <p className="text-sm text-red-600 mb-3">{disputeError}</p>}
+          <div className="mb-3">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Reason</label>
+            <select
+              value={disputeReason}
+              onChange={(e) => setDisputeReason(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+            >
+              <option value="product_invalid">Product is invalid / not working</option>
+              <option value="account_not_working">Account credentials don&apos;t work</option>
+              <option value="wrong_delivery">Wrong product delivered</option>
+              <option value="seller_did_not_deliver">Seller did not deliver</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Description (optional)</label>
+            <textarea
+              value={disputeDesc}
+              onChange={(e) => setDisputeDesc(e.target.value)}
+              rows={3}
+              placeholder="Describe the issue..."
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={disputeSubmitting}
+              className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-60 transition-colors"
+            >
+              {disputeSubmitting ? 'Submitting…' : 'Submit Dispute'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setDisputeOpen(false); setDisputeError(''); }}
+              className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* ── Delivery information section ─────────────────────────────────── */}
       {showDeliverySection && (

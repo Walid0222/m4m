@@ -154,6 +154,14 @@ class SellerOrderController extends Controller
             'auto_confirm_at'  => $deliveredAt->copy()->addHours($autoConfirmHours),
         ]);
 
+        // Log delivery for audit / dispute purposes
+        \App\Models\AccountDelivery::create([
+            'order_id'           => $order->id,
+            'product_account_id' => null,
+            'account_data'       => $validated['delivery_content'],
+            'delivered_at'       => $deliveredAt,
+        ]);
+
         // Notify buyer
         $order->load('buyer');
         if ($order->buyer) {

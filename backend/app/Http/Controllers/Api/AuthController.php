@@ -135,6 +135,7 @@ class AuthController extends Controller
             'id', 'name', 'email', 'is_seller', 'is_admin',
             'is_verified_seller', 'is_banned', 'ban_type', 'banned_until',
             'ban_reason', 'warning_count', 'last_activity_at',
+            'auto_reply_message', 'product_limit', 'limits_overridden',
         ]);
     }
 }

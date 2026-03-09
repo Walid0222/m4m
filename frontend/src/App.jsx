@@ -12,6 +12,9 @@ import SellerDashboardPage from './pages/SellerDashboardPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import UserProfilePage from './pages/UserProfilePage';
+import FavoritesPage from './pages/FavoritesPage';
+import DisputesPage from './pages/DisputesPage';
+import HelpPage from './pages/HelpPage';
 
 export default function App() {
   return (
@@ -81,6 +84,25 @@ export default function App() {
                 </AdminRoute>
               }
             />
+            <Route
+              path="favorites"
+              element={
+                <ProtectedRoute>
+                  <FavoritesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="disputes"
+              element={
+                <ProtectedRoute>
+                  <DisputesPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* Help center — public pages */}
+            <Route path="help/:slug" element={<HelpPage />} />
+            <Route path="help" element={<Navigate to="/help/faq" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

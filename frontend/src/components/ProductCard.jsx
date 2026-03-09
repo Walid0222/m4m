@@ -2,7 +2,14 @@ import { Link } from 'react-router-dom';
 import { isSellerOnline } from '../lib/sellerOnline';
 import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
 
-export default function ProductCard({ product }) {
+/**
+ * Product card used on HomePage, seller profile, favorites, etc.
+ *
+ * Optional favorites props:
+ * - isFavorited: boolean
+ * - onToggleFavorite: () => void
+ */
+export default function ProductCard({ product, isFavorited = false, onToggleFavorite }) {
   const { id, name, price, seller, rating, stock } = product;
   const isOutOfStock = Number(stock ?? 0) <= 0;
   const sellerName = seller?.name ?? 'Seller';
@@ -10,11 +17,15 @@ export default function ProductCard({ product }) {
   const displayRating = typeof rating === 'number' ? rating : parseFloat(rating) || 0;
 
   const completedSales = seller?.completed_sales ?? seller?.completedSales ?? 0;
-  const isVerified = seller?.is_verified === true || seller?.is_verified === 1;
+  const isVerified =
+    seller?.is_verified === true ||
+    seller?.is_verified === 1 ||
+    seller?.is_verified_seller === true ||
+    seller?.is_verified_seller === 1;
 
   return (
     <article className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group">
-      {/* Product image */}
+      {/* Product image + favorite/verified badges */}
       <Link to={`/product/${id}`} className="block flex-shrink-0 relative">
         {isOutOfStock && (
           <span className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-lg bg-red-500/90 text-white text-[10px] font-semibold uppercase tracking-wide">
@@ -25,6 +36,31 @@ export default function ProductCard({ product }) {
           <span className="absolute top-2 right-2 z-10">
             <VerifiedBadge />
           </span>
+        )}
+        {onToggleFavorite && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleFavorite();
+            }}
+            aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+            className={`absolute bottom-2 right-2 z-10 w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-colors ${
+              isFavorited
+                ? 'bg-pink-500 text-white'
+                : 'bg-white/95 text-gray-400 hover:bg-pink-50 hover:text-pink-500'
+            }`}
+          >
+            <svg className="w-4 h-4" fill={isFavorited ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+              />
+            </svg>
+          </button>
         )}
         <div className="aspect-[4/3] bg-gray-100 flex items-center justify-center overflow-hidden">
           {product.images?.[0] ? (

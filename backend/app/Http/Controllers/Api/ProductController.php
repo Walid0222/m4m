@@ -84,6 +84,29 @@ class ProductController extends Controller
     {
         $this->authorizeSeller($request);
 
+        $seller = $request->user();
+
+        // Check seller product limit
+        if (! $seller->limits_overridden) {
+            $limit = $seller->product_limit ?? 5;
+            $currentCount = $seller->products()->where('status', '!=', 'inactive')->count();
+            if ($currentCount >= $limit) {
+                return $this->error(
+                    "You have reached your product limit ({$limit} products). Get verified to increase your limit.",
+                    422,
+                    ['seller_limit' => $limit, 'current_count' => $currentCount]
+                );
+            }
+        }
+
+        // Anti-spam: max 3 products in 5 minutes
+        $recentCount = $seller->products()
+            ->where('created_at', '>=', now()->subMinutes(5))
+            ->count();
+        if ($recentCount >= 3) {
+            return $this->error('You are creating products too quickly. Please wait a few minutes.', 429);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],

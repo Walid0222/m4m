@@ -12,6 +12,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
   const [confirmingOrderId, setConfirmingOrderId] = useState(null);
   const [chattingSellerId, setChattingSellerId] = useState(null);
 
@@ -69,9 +70,17 @@ export default function OrdersPage() {
   }, [user, navigate]);
 
   const filteredOrders = useMemo(() => {
-    if (!statusFilter) return orders;
-    return orders.filter((o) => (o.status || '').toLowerCase() === statusFilter.toLowerCase());
-  }, [orders, statusFilter]);
+    let list = orders;
+    if (statusFilter) {
+      list = list.filter((o) => (o.status || '').toLowerCase() === statusFilter.toLowerCase());
+    }
+    const sorted = [...list].sort((a, b) => {
+      const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return sortOrder === 'oldest' ? da - db : db - da;
+    });
+    return sorted;
+  }, [orders, statusFilter, sortOrder]);
 
   const deliveredOrders = useMemo(
     () => orders.filter((o) => (o.status || '').toLowerCase() === 'delivered'),
@@ -166,22 +175,38 @@ export default function OrdersPage() {
             </div>
           )}
 
-          <div className="mb-6">
-            <label htmlFor="order-status-filter" className="block text-sm font-medium text-m4m-gray-700 mb-2">
-              Filter by status
-            </label>
-            <select
-              id="order-status-filter"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2.5 rounded-xl border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none min-w-[180px]"
-            >
-              {ORDER_STATUSES.map((opt) => (
-                <option key={opt.value || 'all'} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+          <div className="mb-6 flex flex-wrap items-end gap-4">
+            <div>
+              <label htmlFor="order-status-filter" className="block text-sm font-medium text-m4m-gray-700 mb-2">
+                Filter by status
+              </label>
+              <select
+                id="order-status-filter"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-4 py-2.5 rounded-xl border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none min-w-[180px]"
+              >
+                {ORDER_STATUSES.map((opt) => (
+                  <option key={opt.value || 'all'} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="order-sort" className="block text-sm font-medium text-m4m-gray-700 mb-2">
+                Sort by
+              </label>
+              <select
+                id="order-sort"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className="px-4 py-2.5 rounded-xl border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none min-w-[160px]"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+            </div>
           </div>
 
           {filteredOrders.length === 0 ? (

@@ -102,8 +102,17 @@ export default function ChatBox({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                 </svg>
               )}
-              {!isSupport && (otherUser.is_verified === true || otherUser.is_verified === 1) && <VerifiedBadge />}
-              {!isSupport && <SellerSalesBadge completedSales={otherUser.completed_sales ?? otherUser.completedSales ?? 0} />}
+              {!isSupport && (
+                <>
+                  {(otherUser.is_verified === true ||
+                    otherUser.is_verified === 1 ||
+                    otherUser.is_verified_seller === true ||
+                    otherUser.is_verified_seller === 1) && <VerifiedBadge />}
+                  <SellerSalesBadge
+                    completedSales={otherUser.completed_sales ?? otherUser.completedSales ?? 0}
+                  />
+                </>
+              )}
             </div>
             <p className={`text-xs flex items-center gap-1 mt-0.5 ${isSupport ? 'text-blue-600' : online ? 'text-green-600' : 'text-gray-400'}`}>
               {isSupport ? (

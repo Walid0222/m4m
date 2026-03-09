@@ -46,7 +46,9 @@ export default function SellerProfilePage() {
             rating: profileRes.rating,
             total_sales: profileRes.total_sales ?? 0,
             total_reviews: profileRes.total_reviews ?? 0,
-            is_verified: profileRes.is_verified,
+            // backend exposes is_verified_seller
+            is_verified: profileRes.is_verified_seller ?? profileRes.is_verified,
+            is_verified_seller: profileRes.is_verified_seller ?? profileRes.is_verified,
             completed_sales: profileRes.completed_sales ?? profileRes.total_sales ?? 0,
           });
         } else {

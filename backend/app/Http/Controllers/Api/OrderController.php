@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\AccountDelivery;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductAccount;
@@ -36,11 +37,27 @@ class OrderController extends Controller
         return $this->success($orders);
     }
 
-    // ─── Buyer: order detail (with delivery content) ──────────────────────────
+    // ─── Order detail (with delivery content) ─────────────────────────────────
 
     public function show(Request $request, Order $order): JsonResponse
     {
-        if ($order->user_id !== $request->user()->id) {
+        $user = $request->user();
+
+        // Buyer can always see their own order
+        $isBuyer = $order->user_id === $user->id;
+
+        // Admin can see any order
+        $isAdmin = (bool) $user->is_admin;
+
+        // Seller can see orders that include their products
+        $isSeller = false;
+        if ($user->is_seller) {
+            $isSeller = $order->orderItems()
+                ->whereHas('product', fn ($q) => $q->where('user_id', $user->id))
+                ->exists();
+        }
+
+        if (! $isBuyer && ! $isAdmin && ! $isSeller) {
             return $this->error('Forbidden.', 403);
         }
 
@@ -250,6 +267,14 @@ class OrderController extends Controller
                     'delivered_at'    => $deliveredAt,
                     'delivery_content'=> $deliveryContent,
                     'auto_confirm_at' => $deliveredAt->copy()->addHours($autoConfirmHours),
+                ]);
+
+                // Log delivery for audit / dispute purposes
+                AccountDelivery::create([
+                    'order_id'           => $order->id,
+                    'product_account_id' => null,
+                    'account_data'       => $deliveryContent,
+                    'delivered_at'       => $deliveredAt,
                 ]);
             }
 

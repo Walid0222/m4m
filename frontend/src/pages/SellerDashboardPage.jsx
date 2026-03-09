@@ -24,6 +24,10 @@ import {
   getSellerVerification,
   submitSellerVerification,
   getSellerWarnings,
+  getSellerStats,
+  getSellerAutoReply,
+  updateSellerAutoReply,
+  addProductAccounts,
 } from '../services/api';
 import OrderCard from '../components/OrderCard';
 import { getOrderStatusStyle } from '../lib/orderStatus';
@@ -32,6 +36,7 @@ const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: 'chart' },
   { id: 'products', label: 'Products', icon: 'box' },
   { id: 'orders', label: 'Orders', icon: 'order' },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
   { id: 'verification', label: 'Get Verified', icon: 'verify' },
 ];
 
@@ -254,6 +259,14 @@ export default function SellerDashboardPage() {
     return SECTIONS.some((x) => x.id === s) ? s : 'overview';
   });
   const [sellerWarnings, setSellerWarnings] = useState([]);
+  const [sellerStats, setSellerStats] = useState(null);
+  const [autoReplyMsg, setAutoReplyMsg] = useState('');
+  const [autoReplySaving, setAutoReplySaving] = useState(false);
+  const [autoReplySaved, setAutoReplySaved] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(() => {
+    if (typeof window === 'undefined') return 'off';
+    return localStorage.getItem('m4m_seller_refresh_interval') || 'off';
+  });
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [formError, setFormError] = useState('');
@@ -340,6 +353,47 @@ export default function SellerDashboardPage() {
   useEffect(() => {
     fetchWarnings();
   }, [fetchWarnings]);
+
+  // Fetch seller stats
+  useEffect(() => {
+    if (!getToken() || !user?.is_seller) return;
+    getSellerStats().then(setSellerStats).catch(() => {});
+  }, [user?.is_seller]);
+
+  // Fetch auto-reply message
+  useEffect(() => {
+    if (!getToken() || !user?.is_seller) return;
+    getSellerAutoReply().then((d) => setAutoReplyMsg(d?.auto_reply_message ?? '')).catch(() => {});
+  }, [user?.is_seller]);
+
+  const saveAutoReply = async () => {
+    setAutoReplySaving(true);
+    try {
+      await updateSellerAutoReply(autoReplyMsg);
+      setAutoReplySaved(true);
+      setTimeout(() => setAutoReplySaved(false), 2500);
+    } catch { /* ignore */ } finally {
+      setAutoReplySaving(false);
+    }
+  };
+
+  // Auto-refresh products & orders based on interval
+  useEffect(() => {
+    if (!refreshInterval || refreshInterval === 'off') return;
+    const msMap = { '2s': 2000, '5s': 5000, '10s': 10000, '30s': 30000 };
+    const ms = msMap[refreshInterval] ?? 0;
+    if (!ms) return;
+    const id = setInterval(() => {
+      fetchProducts();
+      fetchOrders();
+    }, ms);
+    return () => clearInterval(id);
+  }, [refreshInterval, fetchProducts, fetchOrders]);
+
+  const handleManualRefresh = () => {
+    fetchProducts();
+    fetchOrders();
+  };
 
   useEffect(() => {
     if (!actionMessage) return;
@@ -515,7 +569,12 @@ export default function SellerDashboardPage() {
       description: product.description || '',
       price: product.price != null ? String(product.price) : '',
       stock: product.stock != null ? String(product.stock) : '',
-      images: product.images?.[0] || '',
+      delivery_type: product.delivery_type || 'manual',
+      delivery_time: product.delivery_time || '',
+      features: Array.isArray(product.features) ? product.features : [],
+      seller_reminder: product.seller_reminder || '',
+      image_urls: Array.isArray(product.images) ? product.images.join('\n') : (product.images?.[0] || ''),
+      instant_add_accounts: '',
     });
     setFormError('');
   };
@@ -539,18 +598,41 @@ export default function SellerDashboardPage() {
       setFormError('Please enter a valid stock quantity.');
       return;
     }
-    const imageUrl = (editingProduct.images || '').trim();
-    const images = imageUrl ? [imageUrl] : [];
+    const imageLines = (editingProduct.image_urls || '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const images = imageLines;
 
     setFormSubmitting(true);
     try {
-      await updateProduct(editingProduct.id, {
+      const payload = {
         name: title,
         description: editingProduct.description || null,
         price,
         stock,
         images,
-      });
+        delivery_type: editingProduct.delivery_type || 'manual',
+        delivery_time: editingProduct.delivery_time || null,
+        seller_reminder: editingProduct.seller_reminder || null,
+        features: Array.isArray(editingProduct.features) ? editingProduct.features : [],
+      };
+
+      const extraAccounts = (editingProduct.instant_add_accounts || '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+      if (extraAccounts.length > 0 && payload.delivery_type === 'instant') {
+        payload.stock = stock + extraAccounts.length;
+      }
+
+      await updateProduct(editingProduct.id, payload);
+
+      if (extraAccounts.length > 0 && payload.delivery_type === 'instant') {
+        await addProductAccounts(editingProduct.id, extraAccounts.join('\n'));
+      }
+
       setEditingProduct(null);
       await fetchProducts();
       setActionMessage({ type: 'success', text: 'Product updated.' });
@@ -690,6 +772,11 @@ export default function SellerDashboardPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                 </svg>
               )}
+              {s.id === 'settings' && (
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              )}
               {s.id === 'verification' && (
                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -750,13 +837,74 @@ export default function SellerDashboardPage() {
 
         {section === 'overview' && (
           <>
-            <h1 className="text-xl font-bold text-m4m-black mb-6">Overview</h1>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+              <h1 className="text-xl font-bold text-m4m-black">Overview</h1>
+              <div className="flex items-center gap-3 text-xs">
+                <button
+                  type="button"
+                  onClick={handleManualRefresh}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19A9 9 0 0119 5" />
+                  </svg>
+                  Refresh
+                </button>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-m4m-gray-500">Auto refresh</span>
+                  <select
+                    value={refreshInterval}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setRefreshInterval(v);
+                      if (typeof window !== 'undefined') {
+                        localStorage.setItem('m4m_seller_refresh_interval', v);
+                      }
+                    }}
+                    className="px-2 py-1 rounded-lg border border-m4m-gray-200 bg-white text-xs text-m4m-gray-700 focus:ring-1 focus:ring-m4m-purple focus:border-transparent outline-none"
+                  >
+                    <option value="off">Off</option>
+                    <option value="2s">2s</option>
+                    <option value="5s">5s</option>
+                    <option value="10s">10s</option>
+                    <option value="30s">30s</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Seller limit info banner */}
+            {user && !user.limits_overridden && (
+                <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 flex gap-3">
+                <svg className="w-5 h-5 shrink-0 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="font-semibold">New seller limits apply to your account</p>
+                  <p className="mt-0.5 text-blue-700">
+                      You can list up to <strong>{user.product_limit ?? 5} products</strong>. Get verified to increase your
+                      limit and build buyer trust.{' '}
+                      <Link to="/help/rules" className="underline text-blue-900 font-semibold">
+                        Review marketplace rules
+                      </Link>
+                    </p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
               <StatCard
                 title="Total sales"
-                value={loadingOrders ? '—' : totalSales}
-                subtitle="Orders with your products"
+                value={loadingOrders ? '—' : (sellerStats?.total_sales ?? totalSales)}
+                subtitle="Completed orders"
                 icon="order"
+              />
+              <StatCard
+                title="Total earnings"
+                value={sellerStats ? `${Number(sellerStats.total_revenue ?? 0).toFixed(2)} MAD` : '—'}
+                subtitle="After 10% platform fee"
+                icon="dollar"
               />
               <StatCard
                 title="Active orders"
@@ -765,18 +913,39 @@ export default function SellerDashboardPage() {
                 icon="chart"
               />
               <StatCard
-                title="Completed orders"
-                value={loadingOrders ? '—' : completedOrders}
-                subtitle="Buyer confirmed delivery"
-                icon="order"
-              />
-              <StatCard
                 title="Wallet balance"
                 value={walletBalance != null ? `${Number(walletBalance).toFixed(2)} MAD` : '—'}
                 subtitle="Available balance"
                 icon="dollar"
               />
             </div>
+
+            {/* Extra analytics row */}
+            {sellerStats && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <p className="text-xs text-gray-500 mb-1">Rating</p>
+                  <p className="text-xl font-bold text-gray-900">{Number(sellerStats.rating_average ?? 0).toFixed(1)} ⭐</p>
+                  <p className="text-xs text-gray-400">{sellerStats.rating_count ?? 0} review(s)</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <p className="text-xs text-gray-500 mb-1">Seller Badge</p>
+                  <p className="text-lg font-bold text-m4m-purple">🏅 {sellerStats.badge ?? 'New'}</p>
+                  <p className="text-xs text-gray-400">{sellerStats.total_sales ?? 0} sales</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <p className="text-xs text-gray-500 mb-1">Disputes</p>
+                  <p className={`text-xl font-bold ${(sellerStats.dispute_count ?? 0) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{sellerStats.dispute_count ?? 0}</p>
+                  <p className="text-xs text-gray-400">Total disputes</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                  <p className="text-xs text-gray-500 mb-1">Verified</p>
+                  <p className="text-lg font-bold">{user?.is_verified_seller ? '✅ Yes' : '❌ No'}</p>
+                  <p className="text-xs text-gray-400">{user?.is_verified_seller ? 'Verified seller' : 'Not verified'}</p>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-xl border border-m4m-gray-200 bg-white p-6 shadow-sm mb-8">
                 <h2 className="text-lg font-semibold text-m4m-black mb-4">Sales history (last 7 days)</h2>
                 <div className="h-64">
@@ -986,14 +1155,138 @@ export default function SellerDashboardPage() {
                       />
                     </div>
                   </div>
+                  {/* Delivery type */}
                   <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Image URL</label>
-                    <input
-                      type="url"
-                      value={editingProduct.images || ''}
-                      onChange={(e) => setEditingProduct((f) => ({ ...f, images: e.target.value }))}
-                      placeholder="https://..."
-                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Delivery type</label>
+                    <div className="flex gap-3">
+                      {['manual', 'instant'].map((dt) => (
+                        <button
+                          key={dt}
+                          type="button"
+                          onClick={() => setEditingProduct((f) => ({ ...f, delivery_type: dt }))}
+                          className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors capitalize ${
+                            editingProduct.delivery_type === dt
+                              ? 'bg-m4m-purple text-white border-m4m-purple'
+                              : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'
+                          }`}
+                        >
+                          {dt === 'instant' ? '⚡ Instant delivery' : '📦 Manual delivery'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Instant: add more stock lines */}
+                  {editingProduct.delivery_type === 'instant' ? (
+                    <div className="rounded-xl bg-green-50 border border-green-200 p-4">
+                      <label className="block text-sm font-semibold text-green-800 mb-1">
+                        Add more instant delivery accounts <span className="font-normal text-green-600">(one per line)</span>
+                      </label>
+                      <p className="text-xs text-green-700 mb-2">
+                        Existing stock will be kept. Each new line adds one account and increases available stock.
+                      </p>
+                      <textarea
+                        value={editingProduct.instant_add_accounts}
+                        onChange={(e) => setEditingProduct((f) => ({ ...f, instant_add_accounts: e.target.value }))}
+                        placeholder={"email1:password1\nemail2:password2"}
+                        rows={4}
+                        className="w-full px-3 py-2 rounded-lg border border-green-300 text-gray-900 text-sm focus:ring-2 focus:ring-green-500 outline-none resize-y font-mono"
+                      />
+                    </div>
+                  ) : null}
+
+                  {/* Delivery time */}
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Delivery time</label>
+                    <div className="flex flex-wrap gap-2">
+                      {DELIVERY_TIME_OPTIONS.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() =>
+                            setEditingProduct((f) => ({
+                              ...f,
+                              delivery_time: f.delivery_time === opt ? '' : opt,
+                            }))
+                          }
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                            editingProduct.delivery_time === opt
+                              ? 'bg-m4m-purple text-white border-m4m-purple'
+                              : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Feature icons */}
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Features</label>
+                    <div className="flex flex-wrap gap-2">
+                      {FEATURE_OPTIONS.map((fOpt) => {
+                        const selected = editingProduct.features?.includes(fOpt.id);
+                        return (
+                          <button
+                            key={fOpt.id}
+                            type="button"
+                            onClick={() =>
+                              setEditingProduct((prev) => {
+                                const features = Array.isArray(prev.features) ? prev.features : [];
+                                return {
+                                  ...prev,
+                                  features: selected
+                                    ? features.filter((x) => x !== fOpt.id)
+                                    : [...features, fOpt.id],
+                                };
+                              })
+                            }
+                            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                              selected
+                                ? 'bg-m4m-purple text-white border-m4m-purple'
+                                : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'
+                            }`}
+                          >
+                            {fOpt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Image URLs */}
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">
+                      Image URLs <span className="font-normal text-m4m-gray-400">(one per line)</span>
+                    </label>
+                    <textarea
+                      value={editingProduct.image_urls || ''}
+                      onChange={(e) => setEditingProduct((f) => ({ ...f, image_urls: e.target.value }))}
+                      placeholder={
+                        'https://example.com/image1.jpg\nhttps://example.com/image2.jpg'
+                      }
+                      rows={3}
+                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* Seller reminder */}
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">
+                      Seller note / reminder{' '}
+                      <span className="font-normal text-m4m-gray-400">
+                        (shown to buyers on product page)
+                      </span>
+                    </label>
+                    <textarea
+                      value={editingProduct.seller_reminder || ''}
+                      onChange={(e) =>
+                        setEditingProduct((f) => ({ ...f, seller_reminder: e.target.value }))
+                      }
+                      placeholder="e.g. Please provide your game username after purchase."
+                      rows={2}
+                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none"
                     />
                   </div>
                   <div className="flex gap-3 pt-2">
@@ -1166,6 +1459,51 @@ export default function SellerDashboardPage() {
                 })}
               </ul>
             )}
+          </>
+        )}
+
+        {section === 'settings' && (
+          <>
+            <h1 className="text-xl font-bold text-m4m-black mb-6">Settings</h1>
+
+            {/* Auto-reply message */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 mb-6">
+              <h2 className="font-semibold text-gray-900 mb-1">Auto-Reply Message</h2>
+              <p className="text-sm text-gray-500 mb-4">This message is automatically shown to buyers when they open a chat with you.</p>
+              <textarea
+                value={autoReplyMsg}
+                onChange={(e) => setAutoReplyMsg(e.target.value)}
+                rows={3}
+                maxLength={500}
+                placeholder="e.g. Hello! Delivery time: 15 minutes. Contact me if you have any issues."
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-m4m-purple"
+              />
+              <div className="flex items-center justify-between mt-3">
+                <p className="text-xs text-gray-400">{autoReplyMsg.length}/500</p>
+                <button
+                  type="button"
+                  onClick={saveAutoReply}
+                  disabled={autoReplySaving}
+                  className="px-4 py-2 rounded-xl bg-m4m-purple text-white text-sm font-semibold hover:bg-purple-700 disabled:opacity-60 transition-colors"
+                >
+                  {autoReplySaving ? 'Saving…' : autoReplySaved ? '✓ Saved' : 'Save'}
+                </button>
+              </div>
+            </div>
+
+            {/* Platform commission info */}
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+              <h2 className="font-semibold text-amber-900 mb-2">Platform Commission</h2>
+              <p className="text-sm text-amber-800">M4M takes a <strong>10% commission</strong> on each completed order. You receive 90% of the sale price, credited to your wallet after the buyer confirms delivery.</p>
+              <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+                {[['Sale price', '100 MAD'], ['Commission (10%)', '10 MAD'], ['You receive', '90 MAD']].map(([label, val]) => (
+                  <div key={label} className="rounded-lg bg-white border border-amber-200 p-2">
+                    <p className="text-[11px] text-amber-700">{label}</p>
+                    <p className="font-bold text-amber-900 text-sm">{val}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </>
         )}
 

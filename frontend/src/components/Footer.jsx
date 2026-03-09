@@ -48,12 +48,12 @@ export default function Footer() {
             <h4 className="text-white font-semibold text-sm mb-4">Company</h4>
             <ul className="space-y-2.5">
               {[
-                { label: 'About Us', to: '#' },
-                { label: 'Blog', to: '#' },
-                { label: 'Careers', to: '#' },
-                { label: 'Contact', to: '#' },
+                { label: 'About Us', to: '/help/about' },
+                { label: 'How to Buy', to: '/help/how-to-buy' },
+                { label: 'How to Sell', to: '/help/how-to-sell' },
+                { label: 'Marketplace Rules', to: '/help/rules' },
               ].map(({ label, to }) => (
-                <li key={label}><a href={to} className="text-sm text-gray-400 hover:text-white transition-colors">{label}</a></li>
+                <li key={label}><Link to={to} className="text-sm text-gray-400 hover:text-white transition-colors">{label}</Link></li>
               ))}
             </ul>
           </div>
@@ -63,12 +63,12 @@ export default function Footer() {
             <h4 className="text-white font-semibold text-sm mb-4">Support</h4>
             <ul className="space-y-2.5">
               {[
-                { label: 'Help Center', to: '#' },
-                { label: 'FAQ', to: '#' },
-                { label: 'Privacy Policy', to: '#' },
-                { label: 'Terms of Service', to: '#' },
+                { label: 'Help Center', to: '/help/faq' },
+                { label: 'How Disputes Work', to: '/help/disputes' },
+                { label: 'Privacy Policy', to: '/help/privacy' },
+                { label: 'Terms of Service', to: '/help/terms' },
               ].map(({ label, to }) => (
-                <li key={label}><a href={to} className="text-sm text-gray-400 hover:text-white transition-colors">{label}</a></li>
+                <li key={label}><Link to={to} className="text-sm text-gray-400 hover:text-white transition-colors">{label}</Link></li>
               ))}
             </ul>
           </div>
@@ -120,9 +120,9 @@ export default function Footer() {
         <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-gray-500">&copy; {year} M4M Marketplace. All rights reserved.</p>
           <div className="flex items-center gap-4">
-            <a href="#" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Privacy</a>
-            <a href="#" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Terms</a>
-            <a href="#" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Cookies</a>
+            <Link to="/help/privacy" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Privacy</Link>
+            <Link to="/help/terms" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Terms</Link>
+            <Link to="/help/faq" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">FAQ</Link>
           </div>
         </div>
       </div>

@@ -156,8 +156,18 @@ export default function OrderCard({ order, onConfirmDelivery, confirmingOrderId,
         </Link>
 
         {/* Action buttons */}
-        {((sellerId && onChatSeller) || (isDelivered && onConfirmDelivery)) && (
-          <div className="px-4 md:px-5 pb-4 pt-0 flex flex-wrap items-center gap-2 border-t border-gray-100">
+        <div className="px-4 md:px-5 pb-4 pt-0 flex flex-wrap items-center gap-2 border-t border-gray-100">
+          <Link
+            to={`/orders/${order.id}`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            View Order
+          </Link>
+          {((sellerId && onChatSeller) || (isDelivered && onConfirmDelivery)) && (
+            <>
             {sellerId && onChatSeller && (
               <button
                 type="button"
@@ -184,8 +194,9 @@ export default function OrderCard({ order, onConfirmDelivery, confirmingOrderId,
                 {isConfirming ? 'Confirming…' : 'Confirm Delivery'}
               </button>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </li>
     </>
   );

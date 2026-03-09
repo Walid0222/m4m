@@ -13,13 +13,18 @@ import {
   getAdminSupportConversations,
   getAdminSupportMessages,
   sendAdminSupportReply,
+  getAdminDisputes,
+  resolveAdminDispute,
+  getAdminStats,
   paginatedItems,
 } from '../services/api';
 
 const TABS = [
+  { id: 'overview', label: '📊 Overview' },
   { id: 'deposits', label: 'Deposits' },
   { id: 'withdrawals', label: 'Withdrawals' },
   { id: 'reports', label: 'Reports' },
+  { id: 'disputes', label: '⚖ Disputes' },
   { id: 'verification', label: 'Verifications' },
   { id: 'support', label: '💬 Support Chat' },
 ];
@@ -786,10 +791,184 @@ function SupportChatPanel({ adminUser }) {
   );
 }
 
+/* ── Overview (stats) ─────────────────────────────────────────────────────── */
+function OverviewPanel() {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getAdminStats().then(setStats).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      {[...Array(8)].map((_, i) => <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />)}
+    </div>
+  );
+
+  if (!stats) return <p className="text-gray-500 text-sm">Could not load statistics.</p>;
+
+  const cards = [
+    { label: 'Total Users', value: stats.users?.total ?? 0, color: 'bg-blue-50 text-blue-700', icon: '👥' },
+    { label: 'Total Sellers', value: stats.users?.sellers ?? 0, color: 'bg-purple-50 text-purple-700', icon: '🏪' },
+    { label: 'Verified Sellers', value: stats.users?.verified_sellers ?? 0, color: 'bg-green-50 text-green-700', icon: '✅' },
+    { label: 'Banned Users', value: stats.users?.banned ?? 0, color: 'bg-red-50 text-red-700', icon: '🚫' },
+    { label: 'Total Orders', value: stats.orders?.total ?? 0, color: 'bg-indigo-50 text-indigo-700', icon: '📦' },
+    { label: 'Completed Orders', value: stats.orders?.completed ?? 0, color: 'bg-emerald-50 text-emerald-700', icon: '✔' },
+    { label: 'Disputed Orders', value: stats.orders?.disputed ?? 0, color: 'bg-orange-50 text-orange-700', icon: '⚠' },
+    { label: 'Platform Revenue', value: `${Number(stats.platform?.total_revenue ?? 0).toFixed(2)} MAD`, color: 'bg-yellow-50 text-yellow-700', icon: '💰' },
+  ];
+
+  const pending = [
+    { label: 'Pending Reports', value: stats.moderation?.pending_reports ?? 0 },
+    { label: 'Pending Verifications', value: stats.moderation?.pending_verifications ?? 0 },
+    { label: 'Pending Deposits', value: stats.moderation?.pending_deposits ?? 0 },
+    { label: 'Pending Withdrawals', value: stats.moderation?.pending_withdraws ?? 0 },
+  ];
+
+  return (
+    <div>
+      <h2 className="font-semibold text-gray-900 mb-4">Platform Statistics</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+        {cards.map(({ label, value, color, icon }) => (
+          <div key={label} className={`rounded-xl p-4 ${color}`}>
+            <p className="text-2xl mb-1">{icon}</p>
+            <p className="text-2xl font-bold">{value}</p>
+            <p className="text-xs font-medium mt-0.5 opacity-80">{label}</p>
+          </div>
+        ))}
+      </div>
+      <h2 className="font-semibold text-gray-900 mb-3">Pending Actions</h2>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {pending.map(({ label, value }) => (
+          <div key={label} className={`rounded-xl p-4 border ${value > 0 ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
+            <p className={`text-xl font-bold ${value > 0 ? 'text-red-600' : 'text-gray-600'}`}>{value}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Disputes ─────────────────────────────────────────────────────────────── */
+const DISPUTE_STATUS_STYLE = {
+  open:         'bg-yellow-100 text-yellow-700',
+  under_review: 'bg-blue-100 text-blue-700',
+  resolved:     'bg-green-100 text-green-700',
+  refunded:     'bg-purple-100 text-purple-700',
+};
+
+function DisputesPanel() {
+  const [disputes, setDisputes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [flash, setFlash] = useState(null);
+  const [expanded, setExpanded] = useState(null);
+  const [resolving, setResolving] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getAdminDisputes({ per_page: 50 });
+      setDisputes(paginatedItems(data) ?? []);
+    } catch { setDisputes([]); } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 3000); return () => clearTimeout(t); }, [flash]);
+
+  const handleResolve = async (disputeId, decision) => {
+    setResolving(disputeId);
+    try {
+      await resolveAdminDispute(disputeId, { decision });
+      setDisputes((prev) => prev.map((d) => d.id === disputeId ? {
+        ...d,
+        status: decision === 'refund_buyer' ? 'refunded' : 'resolved',
+        admin_decision: decision,
+      } : d));
+      setFlash({ type: 'success', text: decision === 'refund_buyer' ? 'Buyer refunded.' : 'Funds released to seller.' });
+      setExpanded(null);
+    } catch (e) {
+      setFlash({ type: 'error', text: e.message || 'Action failed.' });
+    } finally {
+      setResolving(null);
+    }
+  };
+
+  if (loading) return <div className="text-center py-8 text-gray-400">Loading disputes…</div>;
+
+  return (
+    <div>
+      <Flash msg={flash} />
+      <h2 className="font-semibold text-gray-900 mb-4">Disputes ({disputes.length})</h2>
+      {disputes.length === 0 ? (
+        <p className="text-gray-500 text-sm text-center py-8">No disputes found.</p>
+      ) : (
+        <div className="space-y-3">
+          {disputes.map((d) => (
+            <div key={d.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <div
+                className="p-4 flex flex-wrap items-start justify-between gap-3 cursor-pointer hover:bg-gray-50"
+                onClick={() => setExpanded(expanded === d.id ? null : d.id)}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${DISPUTE_STATUS_STYLE[d.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {d.status?.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <p className="font-semibold text-sm text-gray-900">Order: {d.order?.order_number ?? `#${d.order_id}`}</p>
+                  <p className="text-xs text-gray-500">Buyer: {d.buyer?.name} · Seller: {d.seller?.name}</p>
+                  <p className="text-sm text-gray-700 mt-1"><span className="font-medium">Reason:</span> {d.reason}</p>
+                </div>
+                <p className="text-xs text-gray-400 shrink-0">{d.created_at ? new Date(d.created_at).toLocaleDateString() : ''}</p>
+              </div>
+
+              {expanded === d.id && (
+                <div className="border-t border-gray-100 p-4 bg-gray-50">
+                  {d.description && <p className="text-sm text-gray-600 mb-4">{d.description}</p>}
+                  {!d.admin_decision && (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleResolve(d.id, 'refund_buyer')}
+                        disabled={resolving === d.id}
+                        className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 disabled:opacity-50"
+                      >
+                        {resolving === d.id ? '…' : '↩ Refund Buyer'}
+                      </button>
+                      <button
+                        onClick={() => handleResolve(d.id, 'release_to_seller')}
+                        disabled={resolving === d.id}
+                        className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {resolving === d.id ? '…' : '→ Release to Seller'}
+                      </button>
+                    </div>
+                  )}
+                  {d.admin_decision && (
+                    <p className="text-sm text-gray-500 italic">
+                      Decision: {d.admin_decision === 'refund_buyer' ? 'Buyer was refunded' : 'Funds released to seller'}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Main admin page ──────────────────────────────────────────────────────── */
 export default function AdminDashboardPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('deposits');
+  const [activeTab, setActiveTab] = useState('overview');
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [refreshInterval, setRefreshInterval] = useState(() => {
+    if (typeof window === 'undefined') return 'off';
+    return localStorage.getItem('m4m_admin_refresh_interval') || 'off';
+  });
 
   if (!getToken()) {
     return (
@@ -799,14 +978,59 @@ export default function AdminDashboardPage() {
     );
   }
 
+  // Auto-refresh by remounting panels
+  useEffect(() => {
+    if (!refreshInterval || refreshInterval === 'off') return;
+    const msMap = { '2s': 2000, '5s': 5000, '10s': 10000, '30s': 30000 };
+    const ms = msMap[refreshInterval] ?? 0;
+    if (!ms) return;
+    const id = setInterval(() => setRefreshToken((t) => t + 1), ms);
+    return () => clearInterval(id);
+  }, [refreshInterval]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-7">
-        <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Manage deposits, withdrawals, reports, and seller verifications.
-          {user?.name && <span className="ml-1 text-m4m-purple font-medium">({user.name})</span>}
-        </p>
+      <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Manage deposits, withdrawals, reports, disputes and verifications.
+            {user?.name && <span className="ml-1 text-m4m-purple font-medium">({user.name})</span>}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          <button
+            type="button"
+            onClick={() => setRefreshToken((t) => t + 1)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19A9 9 0 0119 5" />
+            </svg>
+            Refresh
+          </button>
+          <div className="flex items-center gap-1.5">
+            <span className="text-gray-500">Auto refresh</span>
+            <select
+              value={refreshInterval}
+              onChange={(e) => {
+                const v = e.target.value;
+                setRefreshInterval(v);
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem('m4m_admin_refresh_interval', v);
+                }
+              }}
+              className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:ring-1 focus:ring-m4m-purple focus:border-transparent outline-none"
+            >
+              <option value="off">Off</option>
+              <option value="2s">2s</option>
+              <option value="5s">5s</option>
+              <option value="10s">10s</option>
+              <option value="30s">30s</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -818,11 +1042,13 @@ export default function AdminDashboardPage() {
 
       {/* Panel */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 md:p-6 shadow-sm">
-        {activeTab === 'deposits' && <DepositsPanel />}
-        {activeTab === 'withdrawals' && <WithdrawalsPanel />}
-        {activeTab === 'reports' && <ReportsPanel />}
-        {activeTab === 'verification' && <VerificationPanel />}
-        {activeTab === 'support' && <SupportChatPanel adminUser={user} />}
+        {activeTab === 'overview' && <OverviewPanel key={`ov-${refreshToken}`} />}
+        {activeTab === 'deposits' && <DepositsPanel key={`dep-${refreshToken}`} />}
+        {activeTab === 'withdrawals' && <WithdrawalsPanel key={`wd-${refreshToken}`} />}
+        {activeTab === 'reports' && <ReportsPanel key={`rep-${refreshToken}`} />}
+        {activeTab === 'disputes' && <DisputesPanel key={`dis-${refreshToken}`} />}
+        {activeTab === 'verification' && <VerificationPanel key={`ver-${refreshToken}`} />}
+        {activeTab === 'support' && <SupportChatPanel key={`sup-${refreshToken}`} adminUser={user} />}
       </div>
     </div>
   );

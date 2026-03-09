@@ -235,6 +235,72 @@ export function createWithdrawRequest({ amount, currency = 'USD', payment_detail
   return api.post('/withdraw-requests', { amount, currency, payment_details }).then(unwrap);
 }
 
+// --- Favorites ---
+
+export function getFavorites(params = {}) {
+  return api.get('/favorites', { params }).then(unwrap);
+}
+
+export function getFavoriteIds() {
+  return api.get('/favorites/ids').then(unwrap);
+}
+
+export function toggleFavorite(productId) {
+  return api.post(`/favorites/${productId}`).then(unwrap);
+}
+
+export function removeFavorite(productId) {
+  return api.delete(`/favorites/${productId}`).then(unwrap);
+}
+
+// --- Disputes ---
+
+export function openDispute(body) {
+  return api.post('/disputes', body).then(unwrap);
+}
+
+export function getDisputes(params = {}) {
+  return api.get('/disputes', { params }).then(unwrap);
+}
+
+export function getDispute(id) {
+  return api.get(`/disputes/${id}`).then(unwrap);
+}
+
+export function getAdminDisputes(params = {}) {
+  return api.get('/admin/disputes', { params }).then(unwrap);
+}
+
+export function resolveAdminDispute(id, body) {
+  return api.post(`/admin/disputes/${id}/resolve`, body).then(unwrap);
+}
+
+// --- Admin stats ---
+
+export function getAdminStats() {
+  return api.get('/admin/stats').then(unwrap);
+}
+
+// --- Seller auto-reply ---
+
+export function getSellerAutoReply() {
+  return api.get('/seller/auto-reply').then(unwrap);
+}
+
+export function updateSellerAutoReply(message) {
+  return api.put('/seller/auto-reply', { auto_reply_message: message }).then(unwrap);
+}
+
+// --- Seller stats ---
+
+export function getSellerStats() {
+  return api.get('/stats/seller').then(unwrap);
+}
+
+export function getBuyerStats() {
+  return api.get('/stats/buyer').then(unwrap);
+}
+
 // --- Conversations & Messages ---
 
 export function getConversations(params = {}) {
