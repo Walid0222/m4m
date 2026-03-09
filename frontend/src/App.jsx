@@ -15,6 +15,7 @@ import UserProfilePage from './pages/UserProfilePage';
 import FavoritesPage from './pages/FavoritesPage';
 import DisputesPage from './pages/DisputesPage';
 import HelpPage from './pages/HelpPage';
+import MarketplaceRulesPage from './pages/MarketplaceRulesPage';
 
 export default function App() {
   return (
@@ -100,10 +101,12 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            {/* Help center — public pages */}
-            <Route path="help/:slug" element={<HelpPage />} />
-            <Route path="help" element={<Navigate to="/help/faq" replace />} />
           </Route>
+          {/* Help center — public pages */}
+          <Route path="/help/:slug" element={<Layout><HelpPage /></Layout>} />
+          <Route path="/help" element={<Navigate to="/help/faq" replace />} />
+          {/* Marketplace rules standalone page */}
+          <Route path="/marketplace-rules" element={<Layout><MarketplaceRulesPage /></Layout>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

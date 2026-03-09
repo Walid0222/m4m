@@ -83,6 +83,7 @@ function VerificationSection({ user }) {
 
   const [idFront, setIdFront] = useState('');
   const [idBack, setIdBack] = useState('');
+  const [selfie, setSelfie] = useState('');
   const [bankStatement, setBankStatement] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -108,6 +109,7 @@ function VerificationSection({ user }) {
       const result = await submitSellerVerification({
         id_card_front: idFront.trim(),
         id_card_back: idBack.trim(),
+        selfie_with_id: selfie.trim(),
         bank_statement: bankStatement.trim() || undefined,
       });
       setVerificationRequest(result);
@@ -202,6 +204,7 @@ function VerificationSection({ user }) {
         <p className="font-semibold mb-2">How verification works:</p>
         <ol className="list-decimal list-inside space-y-1">
           <li>Submit your national ID card (front and back).</li>
+          <li>Upload a selfie of you holding the same ID card.</li>
           <li>Optionally attach a bank statement for faster approval.</li>
           <li>The M4M admin team reviews your documents within 1–3 business days.</li>
           <li>Once approved, a ✅ Verified badge appears on your profile and products.</li>
@@ -230,14 +233,36 @@ function VerificationSection({ user }) {
           {idBack && <img src={idBack} alt="ID back preview" className="mt-2 h-20 rounded-lg object-contain bg-gray-100 border" onError={(e) => { e.target.style.display = 'none'; }} />}
         </div>
         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Selfie holding your ID <span className="text-red-500">*</span></label>
+          <p className="text-xs text-gray-400 mb-2">Upload a clear selfie where your face and ID card are both visible.</p>
+          <input
+            type="url"
+            value={selfie}
+            onChange={(e) => setSelfie(e.target.value)}
+            placeholder="https://i.imgur.com/your-selfie-with-id.jpg"
+            required
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+          />
+          {selfie && (
+            <img
+              src={selfie}
+              alt="Selfie with ID preview"
+              className="mt-2 h-20 rounded-lg object-contain bg-gray-100 border"
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+          )}
+        </div>
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Bank statement <span className="text-gray-400 font-normal">(optional)</span></label>
           <input type="url" value={bankStatement} onChange={(e) => setBankStatement(e.target.value)} placeholder="https://i.imgur.com/bank-statement.jpg"
             className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
         </div>
         <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-xs text-gray-500">
-          🔒 Your documents are confidential and will only be reviewed by the M4M admin team. They will never be shared with third parties.
+          🔒 Your identity documents are securely stored and used only for verification purposes. M4M does not share your personal information with third parties.
         </div>
-        <button type="submit" disabled={submitting || !idFront.trim() || !idBack.trim()}
+        <button type="submit" disabled={submitting || !idFront.trim() || !idBack.trim() || !selfie.trim()}
           className="w-full py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors">
           {submitting ? 'Submitting…' : 'Submit verification request'}
         </button>
@@ -876,19 +901,58 @@ export default function SellerDashboardPage() {
 
             {/* Seller limit info banner */}
             {user && !user.limits_overridden && (
-                <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 flex gap-3">
+              <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 flex gap-3">
                 <svg className="w-5 h-5 shrink-0 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div>
-                  <p className="font-semibold">New seller limits apply to your account</p>
-                  <p className="mt-0.5 text-blue-700">
-                      You can list up to <strong>{user.product_limit ?? 5} products</strong>. Get verified to increase your
-                      limit and build buyer trust.{' '}
-                      <Link to="/help/rules" className="underline text-blue-900 font-semibold">
-                        Review marketplace rules
-                      </Link>
-                    </p>
+                  {(() => {
+                    const isVerifiedSeller =
+                      user.is_verified_seller === true ||
+                      user.is_verified_seller === 1 ||
+                      user.is_verified === true ||
+                      user.is_verified === 1;
+                    const completed = sellerStats?.total_orders ?? 0;
+
+                    if (!isVerifiedSeller && completed < 10) {
+                      return (
+                        <>
+                          <p className="font-semibold">You are a new seller</p>
+                          <p className="mt-0.5 text-blue-700">
+                            To protect buyers, your account has temporary listing limits. Complete more successful orders or
+                            request verification to unlock higher limits.
+                          </p>
+                        </>
+                      );
+                    }
+
+                    if (isVerifiedSeller) {
+                      return (
+                        <>
+                          <p className="font-semibold">You are a verified seller</p>
+                          <p className="mt-0.5 text-blue-700">
+                            Buyers trust verified sellers more and you benefit from higher selling limits and better visibility
+                            in the marketplace.
+                          </p>
+                        </>
+                      );
+                    }
+
+                    return (
+                      <>
+                        <p className="font-semibold">Your limits have increased</p>
+                        <p className="mt-0.5 text-blue-700">
+                          Your account has a strong sales history. Your selling limits have been expanded automatically as you
+                          complete more orders.
+                        </p>
+                      </>
+                    );
+                  })()}
+                  <p className="mt-2 text-xs text-blue-600">
+                    <Link to="/marketplace-rules" className="underline font-semibold">
+                      View Marketplace Rules
+                    </Link>
+                  </p>
                 </div>
               </div>
             )}
@@ -1493,15 +1557,30 @@ export default function SellerDashboardPage() {
 
             {/* Platform commission info */}
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-              <h2 className="font-semibold text-amber-900 mb-2">Platform Commission</h2>
-              <p className="text-sm text-amber-800">M4M takes a <strong>10% commission</strong> on each completed order. You receive 90% of the sale price, credited to your wallet after the buyer confirms delivery.</p>
-              <div className="mt-3 grid grid-cols-3 gap-3 text-center">
-                {[['Sale price', '100 MAD'], ['Commission (10%)', '10 MAD'], ['You receive', '90 MAD']].map(([label, val]) => (
-                  <div key={label} className="rounded-lg bg-white border border-amber-200 p-2">
-                    <p className="text-[11px] text-amber-700">{label}</p>
-                    <p className="font-bold text-amber-900 text-sm">{val}</p>
-                  </div>
-                ))}
+              <h2 className="font-semibold text-amber-900 mb-2">Progressive Commission</h2>
+              <p className="text-sm text-amber-800 mb-3">
+                M4M uses a progressive commission model to reward trusted sellers. As you complete more successful orders, your
+                commission decreases automatically.
+              </p>
+              <ul className="text-sm text-amber-900 space-y-1 mb-4">
+                <li>• New sellers: <strong>15%</strong></li>
+                <li>• After 10 completed orders: <strong>12%</strong></li>
+                <li>• After 20 completed orders: <strong>10%</strong></li>
+                <li>• After 100 completed orders: <strong>8%</strong></li>
+              </ul>
+              <div className="mt-1 grid grid-cols-3 gap-3 text-center text-xs">
+                <div className="rounded-lg bg-white border border-amber-200 p-2">
+                  <p className="text-[11px] text-amber-700">Example: new seller</p>
+                  <p className="font-bold text-amber-900 text-sm">100 MAD → 85 MAD</p>
+                </div>
+                <div className="rounded-lg bg-white border border-amber-200 p-2">
+                  <p className="text-[11px] text-amber-700">After 20 orders</p>
+                  <p className="font-bold text-amber-900 text-sm">100 MAD → 90 MAD</p>
+                </div>
+                <div className="rounded-lg bg-white border border-amber-200 p-2">
+                  <p className="text-[11px] text-amber-700">After 100 orders</p>
+                  <p className="font-bold text-amber-900 text-sm">100 MAD → 92 MAD</p>
+                </div>
               </div>
             </div>
           </>

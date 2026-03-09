@@ -21,9 +21,10 @@ class SellerVerificationController extends Controller
         }
 
         $validated = $request->validate([
-            'id_card_front' => ['required', 'string', 'max:500'],
-            'id_card_back' => ['required', 'string', 'max:500'],
-            'bank_statement' => ['nullable', 'string', 'max:500'],
+            'id_card_front'   => ['required', 'string', 'max:500'],
+            'id_card_back'    => ['required', 'string', 'max:500'],
+            'selfie_with_id'  => ['required', 'string', 'max:500'],
+            'bank_statement'  => ['nullable', 'string', 'max:500'],
         ]);
 
         if ($existing) {

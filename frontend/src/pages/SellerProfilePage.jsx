@@ -78,7 +78,12 @@ export default function SellerProfilePage() {
 
   const online = isSellerOnline(seller);
   const sellerRating = seller?.rating != null ? Number(seller.rating) : null;
-  const isVerified = seller?.is_verified === true || seller?.is_verified === 1;
+  const isVerified =
+    seller?.is_verified === true ||
+    seller?.is_verified === 1 ||
+    seller?.is_verified_seller === true ||
+    seller?.is_verified_seller === 1;
+  const sellerLevel = typeof seller?.seller_level === 'number' ? seller.seller_level : null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
@@ -115,6 +120,11 @@ export default function SellerProfilePage() {
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h1 className="text-2xl font-bold text-m4m-black">{seller?.name || 'Seller'}</h1>
                   {isVerified && <VerifiedBadge size="lg" />}
+                  {sellerLevel != null && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
+                      Seller Level: {sellerLevel}
+                    </span>
+                  )}
                 </div>
                 <SellerSalesBadge completedSales={seller?.completed_sales ?? seller?.total_sales ?? 0} size="lg" />
                 <div className="mt-3 flex flex-wrap items-center gap-2">

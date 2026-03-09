@@ -14,6 +14,7 @@ class SellerVerification extends Model
         'seller_id',
         'id_card_front',
         'id_card_back',
+        'selfie_with_id',
         'bank_statement',
         'status',
     ];

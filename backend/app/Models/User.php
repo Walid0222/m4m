@@ -48,6 +48,15 @@ class User extends Authenticatable
     ];
 
     /**
+     * The accessors to append to the model's array / JSON form.
+     *
+     * @var list<string>
+     */
+    protected $appends = [
+        'seller_level',
+    ];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -174,17 +183,13 @@ class User extends Authenticatable
         return $this->hasMany(Favorite::class);
     }
 
-    /** Resolved seller level name. */
-    public function getSellerLevelAttribute(): string
+    /**
+     * Numeric seller level based on completed orders.
+     * Formula: level = floor(total_completed_orders / 2)
+     */
+    public function getSellerLevelAttribute(): int
     {
-        $sales = $this->sellerStats?->total_sales ?? 0;
-        return match (true) {
-            $sales >= 1000 => 'Elite',
-            $sales >= 500  => 'Expert',
-            $sales >= 100  => 'Professional',
-            $sales >= 10   => 'Trusted',
-            $sales >= 1    => 'Beginner',
-            default        => 'New Seller',
-        };
+        $completedOrders = $this->sellerStats?->total_orders ?? 0;
+        return (int) floor($completedOrders / 2);
     }
 }

@@ -22,6 +22,7 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
     seller?.is_verified === 1 ||
     seller?.is_verified_seller === true ||
     seller?.is_verified_seller === 1;
+  const sellerLevel = typeof seller?.seller_level === 'number' ? seller.seller_level : null;
 
   return (
     <article className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group">
@@ -107,6 +108,11 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
         {/* Sales badge + Rating */}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <SellerSalesBadge completedSales={completedSales} />
+          {sellerLevel != null && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700">
+              Lv {sellerLevel}
+            </span>
+          )}
           <div className="flex items-center gap-0.5" aria-label={`Rating: ${displayRating}`}>
             <span className="text-amber-400 text-xs">★</span>
             <span className="text-xs font-medium text-gray-600">

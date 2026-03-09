@@ -60,7 +60,12 @@ function PurchaseConfirmModal({ product, quantity, onConfirm, onCancel, isLoadin
           <div className="text-xs text-blue-700 space-y-1">
             {isVerified && <p>✅ <strong>Verified seller</strong> — identity confirmed by M4M team.</p>}
             {salesBadge && <p>🏅 <strong>{salesBadge.label}</strong> — seller has a strong track record.</p>}
-            {!isVerified && !salesBadge && <p>ℹ️ Check seller reviews before purchasing. Sellers with badges have proven track records.</p>}
+            {seller.seller_level != null && (
+              <p>🎯 <strong>Seller Level:</strong> {seller.seller_level}</p>
+            )}
+            {!isVerified && !salesBadge && seller.seller_level == null && (
+              <p>ℹ️ Check seller reviews before purchasing. Sellers with badges and higher levels have proven track records.</p>
+            )}
           </div>
         </div>
         <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 mb-5 space-y-2">
@@ -287,8 +292,14 @@ export default function ProductPage() {
   const price = Number(product.price || 0);
   const stock = Number(product.stock ?? 0);
   const isOutOfStock = stock <= 0;
-  const salesBadge = getSellerSalesBadge(seller.completed_sales ?? seller.completedSales ?? 0);
-  const isSellerVerified = seller.is_verified === true || seller.is_verified === 1;
+  const completedSales = seller.completed_sales ?? seller.completedSales ?? 0;
+  const salesBadge = getSellerSalesBadge(completedSales);
+  const isSellerVerified =
+    seller.is_verified === true ||
+    seller.is_verified === 1 ||
+    seller.is_verified_seller === true ||
+    seller.is_verified_seller === 1;
+  const sellerLevel = typeof seller.seller_level === 'number' ? seller.seller_level : null;
   const rating = getRating(product);
   const reviews = product.reviews ?? [];
   const avgRatingFromReviews = reviews.length > 0 ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length : null;

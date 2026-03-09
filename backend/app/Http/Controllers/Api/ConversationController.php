@@ -49,11 +49,6 @@ class ConversationController extends Controller
         $userOneId = min($me, $other);
         $userTwoId = max($me, $other);
 
-        $isNew = ! Conversation::where([
-            'user_one_id' => $userOneId,
-            'user_two_id' => $userTwoId,
-        ])->exists();
-
         $conversation = Conversation::firstOrCreate(
             [
                 'user_one_id' => $userOneId,
@@ -64,8 +59,9 @@ class ConversationController extends Controller
             ['type' => 'regular']
         );
 
-        // If new conversation and the other party is a seller with an auto-reply message, post it
-        if ($isNew) {
+        // If this conversation row was just created and the other party is a seller with an auto-reply,
+        // send the auto-reply once for this conversation.
+        if ($conversation->wasRecentlyCreated) {
             $otherUser = \App\Models\User::find($other);
             if ($otherUser && $otherUser->is_seller && ! empty($otherUser->auto_reply_message)) {
                 $conversation->messages()->create([

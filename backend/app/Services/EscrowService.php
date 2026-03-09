@@ -58,10 +58,6 @@ class EscrowService
             $totalAmount = (float) $order->total_amount;
         }
 
-        $commissionPct   = (float) config('platform.commission_percent', 10);
-        $platformFee     = round($totalAmount * ($commissionPct / 100), 2);
-        $sellerAmount    = round($totalAmount - $platformFee, 2);
-
         $sellerId = $order->seller_id;
         if (! $sellerId) {
             // Fallback: get seller from first order item
@@ -69,11 +65,28 @@ class EscrowService
             $sellerId = $order->orderItems->first()?->product?->user_id;
         }
 
-        DB::transaction(function () use ($order, $sellerId, $sellerAmount, $platformFee, $totalAmount) {
+        DB::transaction(function () use ($order, $sellerId, $totalAmount) {
+            $platformFee  = 0.0;
+            $sellerAmount = $totalAmount;
             // Pay seller (skip payout if seller is currently banned)
             if ($sellerId) {
                 $seller = User::find($sellerId);
                 if ($seller) {
+                    // Progressive commission based on completed orders
+                    $stats           = SellerStat::firstOrCreate(['seller_id' => $seller->id]);
+                    $completedOrders = (int) $stats->total_orders;
+                    if ($completedOrders >= 100) {
+                        $commissionPct = 8.0;
+                    } elseif ($completedOrders >= 20) {
+                        $commissionPct = 10.0;
+                    } elseif ($completedOrders >= 10) {
+                        $commissionPct = 12.0;
+                    } else {
+                        $commissionPct = 15.0;
+                    }
+
+                    $platformFee  = round($totalAmount * ($commissionPct / 100), 2);
+                    $sellerAmount = round($totalAmount - $platformFee, 2);
                     $isBanned = $seller->is_banned && (
                         $seller->ban_type === 'permanent'
                         || ($seller->ban_type === 'temporary' && $seller->banned_until?->isFuture())
@@ -89,7 +102,7 @@ class EscrowService
                             'balance_after'  => (float) $sellerWallet->fresh()->balance,
                             'reference_type' => Order::class,
                             'reference_id'   => $order->id,
-                            'description'    => "Payout for order #{$order->order_number} (after {$this->commissionPct()}% commission)",
+                                'description'    => "Payout for order #{$order->order_number} (after {$commissionPct}% commission)",
                         ]);
                     } else {
                         // Banned seller — payout held, credited to platform instead

@@ -110,6 +110,22 @@ export default function OrdersPage() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
       <h1 className="text-2xl font-bold text-m4m-black mb-6">My Orders</h1>
 
+      {/* Marketplace rules info for buyers */}
+      <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4 flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+        <div className="flex items-center gap-2">
+          <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold">
+            !
+          </span>
+          <p className="text-blue-800">
+            M4M protects your payment in escrow until your order is completed. Always review the{' '}
+            <Link to="/marketplace-rules" className="underline font-semibold">
+              marketplace rules
+            </Link>{' '}
+            before confirming delivery.
+          </p>
+        </div>
+      </div>
+
       {!user ? (
         <div className="rounded-2xl border border-m4m-gray-200 bg-white p-8 text-center shadow-sm">
           <p className="text-m4m-gray-500 mb-4">
