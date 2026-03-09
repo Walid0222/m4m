@@ -194,7 +194,9 @@ function ReportsPanel() {
     } catch { setReports([]); } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
   useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 3000); return () => clearTimeout(t); }, [flash]);
 
   const handleAction = async (reportId, action) => {
@@ -546,11 +548,8 @@ function SupportChatPanel({ adminUser }) {
     setThreadMessages(store[userId]?.msgs ?? []);
   }, []);
 
-  // Initial load + poll every 5 seconds
   useEffect(() => {
     loadAllThreads();
-    const interval = setInterval(loadAllThreads, 5000);
-    return () => clearInterval(interval);
   }, [loadAllThreads]);
 
   // Auto-scroll

@@ -64,6 +64,22 @@ export function AuthProvider({ children }) {
     return () => window.removeEventListener('auth:unauthorized', handler);
   }, []);
 
+  // Handle 403 banned response — log out and store ban info for login page display
+  useEffect(() => {
+    const handler = (e) => {
+      api.setToken(null);
+      setUser(null);
+      setAvatarState(null);
+      const detail = e.detail ?? {};
+      // Store ban info so LoginPage can surface the message
+      try {
+        sessionStorage.setItem('m4m_ban_info', JSON.stringify(detail));
+      } catch { /* ignore */ }
+    };
+    window.addEventListener('auth:banned', handler);
+    return () => window.removeEventListener('auth:banned', handler);
+  }, []);
+
   const login = useCallback(async (email, password) => {
     const res = await api.login(email, password);
     const data = res?.data;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -10,11 +10,23 @@ export default function AuthPage() {
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [isSeller, setIsSeller] = useState(false);
   const [error, setError] = useState('');
+  const [banInfo, setBanInfo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const { login, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const fromPath = location.state?.from?.pathname ?? '/';
+
+  // Display ban message if redirected here after a ban 403
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('m4m_ban_info');
+      if (raw) {
+        setBanInfo(JSON.parse(raw));
+        sessionStorage.removeItem('m4m_ban_info');
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,6 +61,19 @@ export default function AuthPage() {
           {isLogin ? 'Welcome back to M4M' : 'Join M4M Marketplace'}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {banInfo && (
+            <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm space-y-1">
+              {banInfo.ban_type === 'permanent' ? (
+                <p className="font-semibold">🚫 Your account has been permanently banned by M4M administration.</p>
+              ) : (
+                <p className="font-semibold">⏸ Your account is temporarily suspended.</p>
+              )}
+              {banInfo.ban_reason && <p><span className="font-medium">Reason:</span> {banInfo.ban_reason}</p>}
+              {banInfo.ban_type === 'temporary' && banInfo.banned_until && (
+                <p><span className="font-medium">Suspension ends:</span> {new Date(banInfo.banned_until).toLocaleString()}</p>
+              )}
+            </div>
+          )}
           {error && (
             <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">
               {error}

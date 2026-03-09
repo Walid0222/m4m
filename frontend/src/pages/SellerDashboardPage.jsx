@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   BarChart,
   Bar,
@@ -21,6 +21,9 @@ import {
   updateSellerOrderStatus,
   deliverOrder,
   getWallet,
+  getSellerVerification,
+  submitSellerVerification,
+  getSellerWarnings,
 } from '../services/api';
 import OrderCard from '../components/OrderCard';
 import { getOrderStatusStyle } from '../lib/orderStatus';
@@ -70,37 +73,44 @@ function StatCard({ title, value, subtitle, icon }) {
 }
 
 function VerificationSection({ user }) {
-  const isVerified = user?.is_verified === true || user?.is_verified === 1;
+  const isVerified = user?.is_verified_seller === true || user?.is_verified_seller === 1
+    || user?.is_verified === true || user?.is_verified === 1;
+
   const [idFront, setIdFront] = useState('');
   const [idBack, setIdBack] = useState('');
   const [bankStatement, setBankStatement] = useState('');
-  const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  // Verification status fetched from API: null (loading) | false (none) | object
+  const [verificationRequest, setVerificationRequest] = useState(null);
+  const [loadingVerif, setLoadingVerif] = useState(true);
+
+  // Load existing verification request on mount
+  useEffect(() => {
+    if (!getToken()) { setLoadingVerif(false); return; }
+    getSellerVerification()
+      .then((data) => setVerificationRequest(data ?? false))
+      .catch(() => setVerificationRequest(false))
+      .finally(() => setLoadingVerif(false));
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!idFront.trim() || !idBack.trim()) return;
     setSubmitting(true);
-    // Store in localStorage so admin can review in Admin Dashboard → Verifications
+    setError('');
     try {
-      const key = 'm4m_verif_requests';
-      const existing = JSON.parse(localStorage.getItem(key) || '[]');
-      const request = {
-        id: `vr_${Date.now()}`,
-        seller_id: user?.id,
-        seller: { id: user?.id, name: user?.name, email: user?.email },
-        id_front_url: idFront.trim(),
-        id_back_url: idBack.trim(),
-        bank_statement_url: bankStatement.trim() || null,
-        status: 'pending',
-        created_at: new Date().toISOString(),
-      };
-      const updated = existing.filter((r) => r.seller_id !== user?.id);
-      localStorage.setItem(key, JSON.stringify([...updated, request]));
-    } catch {}
-    await new Promise((r) => setTimeout(r, 800));
-    setSubmitting(false);
-    setSubmitted(true);
+      const result = await submitSellerVerification({
+        id_card_front: idFront.trim(),
+        id_card_back: idBack.trim(),
+        bank_statement: bankStatement.trim() || undefined,
+      });
+      setVerificationRequest(result);
+    } catch (err) {
+      setError(err.message || 'Submission failed. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (isVerified) {
@@ -120,7 +130,20 @@ function VerificationSection({ user }) {
     );
   }
 
-  if (submitted) {
+  // Pending request — show persistent message until admin acts
+  const isPending = !loadingVerif && verificationRequest && verificationRequest.status === 'pending';
+  const isRejected = !loadingVerif && verificationRequest && verificationRequest.status === 'rejected';
+
+  if (loadingVerif) {
+    return (
+      <div>
+        <h1 className="text-xl font-bold text-m4m-black mb-6">Seller Verification</h1>
+        <div className="h-32 animate-pulse rounded-2xl bg-gray-100" />
+      </div>
+    );
+  }
+
+  if (isPending) {
     return (
       <div>
         <h1 className="text-xl font-bold text-m4m-black mb-6">Seller Verification</h1>
@@ -130,8 +153,14 @@ function VerificationSection({ user }) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <p className="text-xl font-bold text-blue-800 mb-1">Request submitted!</p>
-          <p className="text-blue-700 text-sm max-w-md mx-auto">Your verification request has been submitted. The M4M admin team will review your documents within 1–3 business days. You will be notified when your account is verified.</p>
+          <p className="text-xl font-bold text-blue-800 mb-1">Verification under review</p>
+          <p className="text-blue-700 text-sm max-w-md mx-auto">
+            Your verification request has been submitted and is under review by M4M administration.
+            You will be notified when your account is approved or if further information is needed.
+          </p>
+          <p className="text-blue-500 text-xs mt-3">
+            Submitted on {verificationRequest.created_at ? new Date(verificationRequest.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+          </p>
         </div>
       </div>
     );
@@ -141,6 +170,12 @@ function VerificationSection({ user }) {
     <div>
       <h1 className="text-xl font-bold text-m4m-black mb-2">Get Verified</h1>
       <p className="text-m4m-gray-500 text-sm mb-6">Become a Verified Seller to build trust with buyers and increase your sales.</p>
+
+      {isRejected && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 mb-6 text-sm text-red-800">
+          ❌ Your previous verification request was rejected. You may submit a new one below with updated documents.
+        </div>
+      )}
 
       {/* Benefits */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -168,51 +203,37 @@ function VerificationSection({ user }) {
         </ol>
       </div>
 
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 mb-4 text-sm text-red-800">
+          {error}
+        </div>
+      )}
+
       {/* Form */}
       <form onSubmit={handleSubmit} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5 max-w-lg">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">National ID card — front <span className="text-red-500">*</span></label>
-          <p className="text-xs text-gray-400 mb-2">Paste a publicly accessible image URL (e.g. from Google Drive, Imgur).</p>
-          <input
-            type="url"
-            value={idFront}
-            onChange={(e) => setIdFront(e.target.value)}
-            placeholder="https://i.imgur.com/your-id-front.jpg"
-            required
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-          />
+          <p className="text-xs text-gray-400 mb-2">Paste a publicly accessible image URL (e.g. from Imgur).</p>
+          <input type="url" value={idFront} onChange={(e) => setIdFront(e.target.value)} placeholder="https://i.imgur.com/your-id-front.jpg" required
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
           {idFront && <img src={idFront} alt="ID front preview" className="mt-2 h-20 rounded-lg object-contain bg-gray-100 border" onError={(e) => { e.target.style.display = 'none'; }} />}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">National ID card — back <span className="text-red-500">*</span></label>
-          <input
-            type="url"
-            value={idBack}
-            onChange={(e) => setIdBack(e.target.value)}
-            placeholder="https://i.imgur.com/your-id-back.jpg"
-            required
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-          />
+          <input type="url" value={idBack} onChange={(e) => setIdBack(e.target.value)} placeholder="https://i.imgur.com/your-id-back.jpg" required
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
           {idBack && <img src={idBack} alt="ID back preview" className="mt-2 h-20 rounded-lg object-contain bg-gray-100 border" onError={(e) => { e.target.style.display = 'none'; }} />}
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Bank statement <span className="text-gray-400 font-normal">(optional)</span></label>
-          <input
-            type="url"
-            value={bankStatement}
-            onChange={(e) => setBankStatement(e.target.value)}
-            placeholder="https://i.imgur.com/bank-statement.jpg"
-            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-          />
+          <input type="url" value={bankStatement} onChange={(e) => setBankStatement(e.target.value)} placeholder="https://i.imgur.com/bank-statement.jpg"
+            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
         </div>
         <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 text-xs text-gray-500">
           🔒 Your documents are confidential and will only be reviewed by the M4M admin team. They will never be shared with third parties.
         </div>
-        <button
-          type="submit"
-          disabled={submitting || !idFront.trim() || !idBack.trim()}
-          className="w-full py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors"
-        >
+        <button type="submit" disabled={submitting || !idFront.trim() || !idBack.trim()}
+          className="w-full py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors">
           {submitting ? 'Submitting…' : 'Submit verification request'}
         </button>
       </form>
@@ -222,12 +243,17 @@ function VerificationSection({ user }) {
 
 export default function SellerDashboardPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(true);
-  const [section, setSection] = useState('overview');
+  const [section, setSection] = useState(() => {
+    const s = searchParams.get('section');
+    return SECTIONS.some((x) => x.id === s) ? s : 'overview';
+  });
+  const [sellerWarnings, setSellerWarnings] = useState([]);
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [formError, setFormError] = useState('');
@@ -299,6 +325,21 @@ export default function SellerDashboardPage() {
   useEffect(() => {
     fetchWallet();
   }, [fetchWallet]);
+
+  // Fetch admin warnings for this seller
+  const fetchWarnings = useCallback(async () => {
+    if (!getToken() || !user?.is_seller) return;
+    try {
+      const data = await getSellerWarnings();
+      setSellerWarnings(Array.isArray(data) ? data : (data?.warnings ?? []));
+    } catch {
+      setSellerWarnings([]);
+    }
+  }, [user?.is_seller]);
+
+  useEffect(() => {
+    fetchWarnings();
+  }, [fetchWarnings]);
 
   useEffect(() => {
     if (!actionMessage) return;
@@ -654,7 +695,7 @@ export default function SellerDashboardPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               )}
-              {s.label}
+              <span className="flex-1">{s.label}</span>
             </button>
           ))}
         </nav>
@@ -685,6 +726,28 @@ export default function SellerDashboardPage() {
             {actionMessage.text}
           </div>
         )}
+        {/* Admin warnings banner */}
+        {sellerWarnings.length > 0 && (
+          <div className="mb-6 space-y-3">
+            {sellerWarnings.map((w) => (
+              <div key={w.id} className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-amber-800 text-sm">⚠ Warning from M4M Administration</p>
+                  {w.reason && <p className="text-sm text-amber-700 mt-0.5"><span className="font-medium">Reason:</span> {w.reason}</p>}
+                  {w.message && <p className="text-sm text-amber-700 mt-0.5">{w.message}</p>}
+                  <p className="text-xs text-amber-600 mt-1">Please review marketplace rules to avoid further action.</p>
+                </div>
+                {w.created_at && (
+                  <p className="text-xs text-amber-500 shrink-0">{new Date(w.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {section === 'overview' && (
           <>
             <h1 className="text-xl font-bold text-m4m-black mb-6">Overview</h1>

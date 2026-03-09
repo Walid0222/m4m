@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getWallet, getNotifications, markNotificationRead, getProducts, getToken } from '../services/api';
+import { getWallet, getNotifications, markNotificationRead, getProducts, getToken, getSellerWarnings } from '../services/api';
 
 export default function Navbar() {
   const { user, logout, avatar } = useAuth();
@@ -14,6 +14,7 @@ export default function Navbar() {
   const searchRef = useRef(null);
   const suggestAbortRef = useRef(null);
   const [walletBalance, setWalletBalance] = useState(null);
+  const [warningCount, setWarningCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -29,6 +30,19 @@ export default function Navbar() {
     if (!user || !getToken()) { setWalletBalance(null); return; }
     let cancelled = false;
     getWallet().then((d) => { if (!cancelled && d != null) setWalletBalance(d.balance); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Fetch unread admin warnings count for sellers
+  useEffect(() => {
+    if (!user?.is_seller || !getToken()) { setWarningCount(0); return; }
+    let cancelled = false;
+    getSellerWarnings().then((data) => {
+      if (!cancelled) {
+        const list = Array.isArray(data) ? data : (data?.warnings ?? []);
+        setWarningCount(list.filter((w) => !w.is_read).length);
+      }
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [user]);
 
@@ -226,6 +240,23 @@ export default function Navbar() {
                   </svg>
                   {balanceDisplay}
                 </Link>
+
+                {/* Seller admin-warning indicator */}
+                {user.is_seller && warningCount > 0 && (
+                  <Link
+                    to="/seller-dashboard"
+                    className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-colors text-amber-700 bg-amber-50 hover:bg-amber-100"
+                    title={`${warningCount} unread warning(s) from M4M Administration`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span className="hidden lg:inline">Warnings</span>
+                    <span className="min-w-[1.25rem] h-5 px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center">
+                      {warningCount > 99 ? '99+' : warningCount}
+                    </span>
+                  </Link>
+                )}
 
                 {/* Notification bell */}
                 <div className="relative" ref={notificationsRef}>

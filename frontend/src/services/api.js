@@ -32,7 +32,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Normalize errors and handle 401 (token expired/invalid)
+// Normalize errors and handle 401/403-banned responses
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -40,6 +40,24 @@ api.interceptors.response.use(
       setToken(null);
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
+
+    // If server responds 403 and indicates a ban, force logout with reason
+    if (error.response?.status === 403) {
+      const data = error.response.data ?? {};
+      const banType = data.ban_type;
+      if (banType === 'permanent' || banType === 'temporary') {
+        setToken(null);
+        window.dispatchEvent(new CustomEvent('auth:banned', {
+          detail: {
+            ban_type: banType,
+            ban_reason: data.ban_reason ?? null,
+            banned_until: data.banned_until ?? null,
+            message: data.message ?? 'Your account has been suspended by M4M administration.',
+          },
+        }));
+      }
+    }
+
     const message = error.response?.data?.message || error.message || 'Request failed';
     const err = new Error(message);
     err.status = error.response?.status;
@@ -175,6 +193,21 @@ export function getProductAccounts(productId, params = {}) {
 /** Seller moderation status (for dashboard warning banner). */
 export function getSellerModerationStatus() {
   return api.get('/seller/moderation-status').then(unwrap);
+}
+
+/** Admin warnings issued to the authenticated seller. */
+export function getSellerWarnings() {
+  return api.get('/seller/warnings').then(unwrap);
+}
+
+/** Seller verification request status. */
+export function getSellerVerification() {
+  return api.get('/seller/verification-request').then(unwrap);
+}
+
+/** Submit seller verification request. */
+export function submitSellerVerification(body) {
+  return api.post('/seller/verification-request', body).then(unwrap);
 }
 
 // --- Wallet ---

@@ -148,13 +148,21 @@ export default function OrdersPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-orange-800 font-medium text-sm">
                   {deliveredOrders.length === 1
-                    ? 'Your order has been delivered! Please confirm receipt below.'
-                    : `${deliveredOrders.length} orders have been delivered. Please confirm receipt.`}
+                    ? '✅ Your order has been delivered!'
+                    : `✅ ${deliveredOrders.length} orders have been delivered!`}
                 </p>
                 <p className="text-orange-600 text-xs mt-0.5">
-                  Tip: Only confirm once you have received and verified the delivery. Orders auto-confirm after 7 days.
+                  Tip: Only confirm once you have verified the credentials. Orders auto-confirm after 7 days.
                 </p>
               </div>
+              {firstDeliveredOrder && (
+                <Link
+                  to={`/orders/${firstDeliveredOrder.id}`}
+                  className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold bg-orange-600 text-white hover:bg-orange-700 transition-colors"
+                >
+                  View Order
+                </Link>
+              )}
             </div>
           )}
 

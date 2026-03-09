@@ -362,7 +362,22 @@ export default function WalletPage() {
 
       {/* Transaction history */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Transaction history</h2>
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Transaction history</h2>
+          <div className="relative group">
+            <button
+              type="button"
+              className="w-5 h-5 rounded-full bg-gray-200 text-gray-600 text-xs font-bold flex items-center justify-center hover:bg-purple-100 hover:text-purple-700 transition-colors"
+              aria-label="Platform commission information"
+            >
+              ℹ
+            </button>
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 bg-gray-900 text-white text-xs rounded-xl px-3 py-2.5 shadow-lg z-50 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity text-center leading-relaxed">
+              M4M marketplace takes a <strong>10% commission</strong> from each completed order. The remaining 90% is credited to your wallet as a seller payout.
+              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
+            </div>
+          </div>
+        </div>
         {transactionHistory.length === 0 ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm">
             <p className="text-gray-400 text-sm">No transactions yet.</p>

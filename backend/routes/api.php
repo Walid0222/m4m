@@ -42,7 +42,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/sellers/{seller}/stats',        [StatsController::class, 'publicSellerStats']);
 
     // ─── Authenticated ───────────────────────────────────────────────────────
-    Route::middleware(['auth:sanctum', 'update.last_activity'])->group(function () {
+    Route::middleware(['auth:sanctum', 'update.last_activity', 'check.ban'])->group(function () {
 
         // Auth / profile
         Route::post('/logout', [AuthController::class, 'logout']);
