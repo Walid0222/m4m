@@ -7,11 +7,13 @@ use App\Http\Controllers\Api\Admin\AdminStatsController;
 use App\Http\Controllers\Api\Admin\AdminSupportController;
 use App\Http\Controllers\Api\Admin\AdminVerificationController;
 use App\Http\Controllers\Api\Admin\AdminVerificationRequestController;
+use App\Http\Controllers\Api\Admin\AdminCouponController;
 use App\Http\Controllers\Api\Admin\DepositVerificationController;
 use App\Http\Controllers\Api\Admin\WithdrawVerificationController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\DepositRequestController;
 use App\Http\Controllers\Api\DisputeController;
 use App\Http\Controllers\Api\FavoriteController;
@@ -84,6 +86,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders',                              [OrderController::class, 'index']);
         Route::get('/orders/{order}',                      [OrderController::class, 'show']);
         Route::patch('/orders/{order}/confirm-delivery',   [OrderController::class, 'confirmDelivery']);
+
+        // Coupon preview (apply at checkout)
+        Route::post('/coupons/preview', [CouponController::class, 'preview']);
 
         // Disputes (buyer)
         Route::post('/disputes',          [DisputeController::class, 'store']);
@@ -202,5 +207,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/platform-earnings',  [AdminStatsController::class, 'platformEarnings']);
         Route::get('/admin-logs',         [AdminStatsController::class, 'adminLogs']);
         Route::get('/security-logs',      [AdminStatsController::class, 'securityLogs']);
+
+        // Coupons
+        Route::get('/coupons',    [AdminCouponController::class, 'index']);
+        Route::post('/coupons',   [AdminCouponController::class, 'store']);
+        Route::delete('/coupons/{coupon}', [AdminCouponController::class, 'destroy']);
     });
 });

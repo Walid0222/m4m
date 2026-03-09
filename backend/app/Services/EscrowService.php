@@ -53,10 +53,22 @@ class EscrowService
             return;
         }
 
+        // Amount actually held from buyer wallet (after any discounts)
         $totalAmount = (float) $order->escrow_amount;
         if ($totalAmount <= 0) {
             $totalAmount = (float) $order->total_amount;
         }
+
+        // Subtotal before discounts (sum of order item totals).
+        // If unavailable, fall back to the held amount.
+        $order->loadMissing('orderItems');
+        $subtotal = (float) $order->orderItems->sum('total_price');
+        if ($subtotal <= 0) {
+            $subtotal = $totalAmount;
+        }
+
+        // Coupon discount is inferred as the difference between subtotal and what buyer paid.
+        $discountAmount = max(0.0, round($subtotal - $totalAmount, 2));
 
         $sellerId = $order->seller_id;
         if (! $sellerId) {
@@ -65,16 +77,17 @@ class EscrowService
             $sellerId = $order->orderItems->first()?->product?->user_id;
         }
 
-        DB::transaction(function () use ($order, $sellerId, $totalAmount) {
+        DB::transaction(function () use ($order, $sellerId, $totalAmount, $subtotal, $discountAmount) {
             $platformFee  = 0.0;
             $sellerAmount = $totalAmount;
             // Pay seller (skip payout if seller is currently banned)
             if ($sellerId) {
                 $seller = User::find($sellerId);
                 if ($seller) {
-                    // Progressive commission based on completed orders
-                    $stats           = SellerStat::firstOrCreate(['seller_id' => $seller->id]);
-                    $completedOrders = (int) $stats->total_orders;
+                    // Progressive commission based on completed orders (from orders table)
+                    $completedOrders = Order::where('seller_id', $sellerId)
+                        ->where('status', Order::STATUS_COMPLETED)
+                        ->count();
                     if ($completedOrders >= 100) {
                         $commissionPct = 8.0;
                     } elseif ($completedOrders >= 20) {
@@ -85,8 +98,12 @@ class EscrowService
                         $commissionPct = 15.0;
                     }
 
-                    $platformFee  = round($totalAmount * ($commissionPct / 100), 2);
-                    $sellerAmount = round($totalAmount - $platformFee, 2);
+                    // Base platform commission on the pre-discount subtotal so seller earnings
+                    // are not reduced by coupons. Coupon discounts are absorbed from platform
+                    // commission up to its full amount.
+                    $baseCommission = round($subtotal * ($commissionPct / 100), 2);
+                    $platformFee    = max(0.0, round($baseCommission - $discountAmount, 2));
+                    $sellerAmount   = max(0.0, round($totalAmount - $platformFee, 2));
                     $isBanned = $seller->is_banned && (
                         $seller->ban_type === 'permanent'
                         || ($seller->ban_type === 'temporary' && $seller->banned_until?->isFuture())

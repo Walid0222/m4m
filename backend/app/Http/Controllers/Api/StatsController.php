@@ -35,7 +35,10 @@ class StatsController extends Controller
             $stats->refresh();
         }
 
-        $completedOrders = (int) $stats->total_orders;
+        // Completed orders are derived from the orders table to ensure accuracy.
+        $completedOrders = Order::where('seller_id', $user->id)
+            ->where('status', Order::STATUS_COMPLETED)
+            ->count();
         $sellerLevel     = (int) floor($completedOrders / 2);
 
         $successRate        = $this->successRate($user->id);
@@ -43,6 +46,23 @@ class StatsController extends Controller
 
         // Commission progression
         [$commissionRate, $nextThreshold] = $this->commissionInfo($completedOrders);
+
+        // Next commission rate (for UI) and orders required to reach it
+        $nextCommissionRate       = null;
+        $ordersToNextCommission   = 0;
+        if ($nextThreshold !== null) {
+            // Map next threshold to its commission tier
+            if ($nextThreshold >= 100) {
+                $nextCommissionRate = 8.0;
+            } elseif ($nextThreshold >= 20) {
+                $nextCommissionRate = 10.0;
+            } elseif ($nextThreshold >= 10) {
+                $nextCommissionRate = 12.0;
+            } else {
+                $nextCommissionRate = 15.0;
+            }
+            $ordersToNextCommission = max(0, $nextThreshold - $completedOrders);
+        }
 
         return $this->success([
             'seller_id'                 => $stats->seller_id,
@@ -60,6 +80,8 @@ class StatsController extends Controller
             'avg_response_minutes'      => $avgResponseMinutes,
             'commission_rate'           => $commissionRate,
             'next_commission_threshold' => $nextThreshold,
+            'next_commission_rate'      => $nextCommissionRate,
+            'orders_to_next_commission' => $ordersToNextCommission,
         ]);
     }
 

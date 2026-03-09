@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\AccountDelivery;
+use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductAccount;
@@ -123,7 +124,7 @@ class OrderController extends Controller
         $products   = Product::whereIn('id', $productIds)->where('status', 'active')->get()->keyBy('id');
 
         $orderLineItems = [];
-        $totalAmount    = 0;
+        $subtotal       = 0.0;
 
         foreach ($items as $item) {
             $product = $products->get($item['product_id']);
@@ -152,25 +153,52 @@ class OrderController extends Controller
             $lineTotal = round($unitPrice * $qty, 2);
 
             $orderLineItems[] = [
-                'product'    => $product,
-                'product_id' => $product->id,
-                'quantity'   => $qty,
-                'unit_price' => $unitPrice,
-                'total_price'=> $lineTotal,
+                'product'     => $product,
+                'product_id'  => $product->id,
+                'quantity'    => $qty,
+                'unit_price'  => $unitPrice,
+                'total_price' => $lineTotal,
             ];
-            $totalAmount += $lineTotal;
+            $subtotal += $lineTotal;
         }
+
+        // Optional coupon code applied at checkout
+        $coupon         = null;
+        $discountAmount = 0.0;
+        $rawCode        = $request->input('coupon_code');
+
+        if (is_string($rawCode) && trim($rawCode) !== '') {
+            $code   = strtoupper(trim($rawCode));
+            $coupon = Coupon::where('code', $code)->first();
+
+            if (! $coupon) {
+                return $this->error('Invalid or expired coupon.', 422);
+            }
+
+            if ($coupon->expires_at && $coupon->expires_at->isPast()) {
+                return $this->error('This coupon has expired.', 422);
+            }
+
+            if ($coupon->max_uses !== null && $coupon->max_uses > 0 && $coupon->uses >= $coupon->max_uses) {
+                return $this->error('This coupon has reached its usage limit.', 422);
+            }
+
+            $percent = max(0, min(100, (int) $coupon->discount_percent));
+            $discountAmount = round($subtotal * ($percent / 100), 2);
+        }
+
+        $finalTotal = max(0.0, round($subtotal - $discountAmount, 2));
 
         $user   = $request->user();
         $wallet = $user->wallet ?? $user->wallet()->create(['balance' => 0]);
 
-        if ((float) $wallet->balance < $totalAmount) {
+        if ((float) $wallet->balance < $finalTotal) {
             return $this->error('Insufficient wallet balance.', 422);
         }
 
         $autoConfirmHours = (int) config('platform.auto_confirm_hours', 24);
 
-        $order = DB::transaction(function () use ($user, $totalAmount, $orderLineItems, $autoConfirmHours) {
+        $order = DB::transaction(function () use ($user, $finalTotal, $subtotal, $orderLineItems, $autoConfirmHours, $coupon) {
             do {
                 $orderNumber = 'M4M-' . strtoupper(Str::random(6));
             } while (Order::where('order_number', $orderNumber)->exists());
@@ -184,8 +212,8 @@ class OrderController extends Controller
                 'seller_id'       => $sellerId,
                 'delivery_type'   => $deliveryType,
                 'status'          => Order::STATUS_PROCESSING,
-                'total_amount'    => $totalAmount,
-                'escrow_amount'   => $totalAmount,
+                'total_amount'    => $finalTotal,
+                'escrow_amount'   => $finalTotal,
                 'escrow_status'   => 'held',
                 'auto_confirm_at' => now()->addHours($autoConfirmHours + 48),
             ]);
@@ -245,13 +273,18 @@ class OrderController extends Controller
                 }
             }
 
+            // If a coupon was used, increment its usage counter
+            if ($coupon) {
+                $coupon->increment('uses');
+            }
+
             // Escrow hold — debit buyer wallet
             $wallet = $user->wallet;
-            $wallet->decrement('balance', $totalAmount);
+            $wallet->decrement('balance', $finalTotal);
             $wallet->transactions()->create([
                 'type'           => 'purchase_hold',
                 'status'         => 'hold',
-                'amount'         => -$totalAmount,
+                'amount'         => -$finalTotal,
                 'balance_after'  => (float) $wallet->fresh()->balance,
                 'reference_type' => Order::class,
                 'reference_id'   => $order->id,
@@ -300,7 +333,7 @@ class OrderController extends Controller
         SecurityLogService::log($user, 'purchase', $request, [
             'order_id'     => $order->id,
             'order_number' => $order->order_number,
-            'amount'       => $totalAmount,
+            'amount'       => $finalTotal,
         ]);
 
         return $this->success($this->orderPayload($order->fresh(['orderItems.product'])), 'Order placed successfully.', 201);
