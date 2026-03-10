@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductAccount;
-use App\Models\Order;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -134,7 +134,7 @@ class ProductController extends Controller
 
         $products = $request->user()
             ->products()
-            ->with('faqs')
+            ->with(['faqs', 'offerType:id,category_id,name,slug', 'offerType.category:id,name'])
             ->withCount('orders')
             ->orderByDesc('is_pinned')
             ->latest()
@@ -204,6 +204,7 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate([
+            'offer_type_id' => ['required', 'integer', 'exists:offer_types,id'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'price' => ['required', 'numeric', 'min:0'],
@@ -289,6 +290,7 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate([
+            'offer_type_id' => ['sometimes', 'integer', 'exists:offer_types,id'],
             'name' => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'price' => ['sometimes', 'numeric', 'min:0'],

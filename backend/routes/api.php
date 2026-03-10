@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\Admin\AdminDisputeController;
+use App\Http\Controllers\Api\Admin\AdminOfferTypeController;
 use App\Http\Controllers\Api\Admin\AdminReportController;
+use App\Http\Controllers\Api\Admin\AdminServiceRequestController;
 use App\Http\Controllers\Api\Admin\AdminSellerController;
 use App\Http\Controllers\Api\Admin\AdminStatsController;
 use App\Http\Controllers\Api\Admin\AdminSupportController;
@@ -20,9 +22,12 @@ use App\Http\Controllers\Api\DisputeController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\OfferTypeController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\ServiceRequestController;
 use App\Http\Controllers\Api\SellerAutoReplyController;
 use App\Http\Controllers\Api\SellerOrderController;
 use App\Http\Controllers\Api\SellerVacationController;
@@ -40,6 +45,11 @@ Route::prefix('v1')->group(function () {
     // ─── Public ─────────────────────────────────────────────────────────────
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login',    [AuthController::class, 'login']);
+
+    Route::get('/categories',                      [CategoryController::class, 'index']);
+    Route::get('/offer-types',                     [OfferTypeController::class, 'index']);
+    Route::get('/offer-types/search',              [OfferTypeController::class, 'search']);
+    Route::get('/offer-types/{offer_type}',        [OfferTypeController::class, 'show']);
 
     Route::get('/products',                 [ProductController::class, 'index']);
     Route::get('/products/search',          [ProductController::class, 'search']);
@@ -80,6 +90,10 @@ Route::prefix('v1')->group(function () {
             // Instant-delivery account stock
             Route::post('/seller/products/{my_product}/accounts', [ProductController::class, 'addAccounts']);
             Route::get('/seller/products/{my_product}/accounts',  [ProductController::class, 'listAccounts']);
+
+            // Service requests (seller requests new offer types)
+            Route::get('/service-requests',   [ServiceRequestController::class, 'index']);
+            Route::post('/service-requests',  [ServiceRequestController::class, 'store']);
         });
 
         // Orders (buyer) — banned users cannot place orders
@@ -217,6 +231,22 @@ Route::prefix('v1')->group(function () {
         Route::get('/coupons',    [AdminCouponController::class, 'index']);
         Route::post('/coupons',   [AdminCouponController::class, 'store']);
         Route::delete('/coupons/{coupon}', [AdminCouponController::class, 'destroy']);
+
+        // Service requests (sellers requesting new offer types)
+        Route::get('/service-requests',                              [AdminServiceRequestController::class, 'index']);
+        Route::put('/service-requests/{service_request}',           [AdminServiceRequestController::class, 'update']);
+        Route::patch('/service-requests/{service_request}',         [AdminServiceRequestController::class, 'update']);
+        Route::delete('/service-requests/{service_request}',        [AdminServiceRequestController::class, 'destroy']);
+        Route::post('/service-requests/{service_request}/approve',  [AdminServiceRequestController::class, 'approve']);
+        Route::post('/service-requests/{service_request}/reject',    [AdminServiceRequestController::class, 'reject']);
+
+        // Service catalog (offer types) management — by id
+        Route::get('/offer-types',                [AdminOfferTypeController::class, 'index']);
+        Route::post('/offer-types',               [AdminOfferTypeController::class, 'store']);
+        Route::get('/offer-types/{id}',          [AdminOfferTypeController::class, 'show']);
+        Route::put('/offer-types/{id}',           [AdminOfferTypeController::class, 'update']);
+        Route::patch('/offer-types/{id}',         [AdminOfferTypeController::class, 'update']);
+        Route::delete('/offer-types/{id}',        [AdminOfferTypeController::class, 'destroy']);
 
         // Announcements
         Route::get('/announcements',           [AdminAnnouncementController::class, 'index']);

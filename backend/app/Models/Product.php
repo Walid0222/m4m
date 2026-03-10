@@ -13,6 +13,7 @@ class Product extends Model
 
     protected $fillable = [
         'user_id',
+        'offer_type_id',
         'name',
         'slug',
         'description',
@@ -64,6 +65,12 @@ class Product extends Model
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /** Offer type (service type) this product belongs to. */
+    public function offerType(): BelongsTo
+    {
+        return $this->belongsTo(OfferType::class);
     }
 
     /** Order items (purchases) of this product. */

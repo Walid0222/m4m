@@ -98,6 +98,12 @@ class User extends Authenticatable
         return $this->hasMany(Product::class);
     }
 
+    /** Service requests (seller requesting new offer types). */
+    public function serviceRequests(): HasMany
+    {
+        return $this->hasMany(ServiceRequest::class, 'seller_id');
+    }
+
     /** Deposit requests. */
     public function depositRequests(): HasMany
     {
