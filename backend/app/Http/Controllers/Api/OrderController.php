@@ -70,7 +70,12 @@ class OrderController extends Controller
             'dispute:id,order_id,status,reason',
         ]);
 
-        return $this->success($this->orderPayload($order));
+        $payload = $this->orderPayload($order);
+        if ($isBuyer) {
+            $payload['has_review'] = $order->reviews()->where('user_id', $user->id)->exists();
+        }
+
+        return $this->success($payload);
     }
 
     // ─── Buyer: confirm delivery ──────────────────────────────────────────────

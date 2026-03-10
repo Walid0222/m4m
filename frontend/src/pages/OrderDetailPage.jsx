@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getToken, getOrder, confirmOrderDelivery, openDispute, updateSellerOrderNote } from '../services/api';
+import { getToken, getOrder, confirmOrderDelivery, openDispute, updateSellerOrderNote, createReview } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import OrderProgressTracker from '../components/OrderProgressTracker';
 
@@ -22,6 +22,11 @@ export default function OrderDetailPage() {
   const [sellerNoteDraft, setSellerNoteDraft] = useState('');
   const [sellerNoteSaving, setSellerNoteSaving] = useState(false);
   const [sellerNoteError, setSellerNoteError] = useState('');
+  const [reviewFormOpen, setReviewFormOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState('');
 
   useEffect(() => {
     if (!id || !getToken()) {
@@ -139,6 +144,31 @@ export default function OrderDetailPage() {
       setSellerNoteError(err.message || 'Failed to save note.');
     } finally {
       setSellerNoteSaving(false);
+    }
+  };
+
+  const productId = items[0]?.product_id ?? items[0]?.product?.id;
+  const canLeaveReview = isCompleted && isBuyer && !order.has_review && productId;
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!order || !productId || submittingReview || !getToken()) return;
+    setReviewError('');
+    setSubmittingReview(true);
+    try {
+      await createReview(productId, {
+        order_id: order.id,
+        rating: reviewRating,
+        comment: reviewComment.trim() || null,
+      });
+      setOrder((prev) => prev ? { ...prev, has_review: true } : prev);
+      setReviewFormOpen(false);
+      setReviewComment('');
+      setReviewRating(5);
+    } catch (err) {
+      setReviewError(err.message || 'Failed to submit review.');
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -262,6 +292,64 @@ export default function OrderDetailPage() {
             >
               Cancel
             </button>
+          </div>
+        </form>
+      )}
+
+      {/* Leave review (completed order, buyer, no review yet) */}
+      {canLeaveReview && !reviewFormOpen && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => { setReviewFormOpen(true); setReviewError(''); }}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
+          >
+            <span>★</span>
+            Leave review
+          </button>
+        </div>
+      )}
+      {canLeaveReview && reviewFormOpen && (
+        <form onSubmit={handleSubmitReview} className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="font-semibold text-gray-900 mb-4">Leave a review</h3>
+          {reviewError && <p className="mb-3 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{reviewError}</p>}
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button key={star} type="button" onClick={() => setReviewRating(star)} aria-label={`${star} star`} className="p-0.5">
+                    <span className={`text-2xl ${star <= reviewRating ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Comment (optional)</label>
+              <textarea
+                rows={3}
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                placeholder="Share your experience..."
+                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm focus:ring-2 focus:ring-m4m-purple outline-none resize-none"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setReviewFormOpen(false); setReviewError(''); }}
+                className="px-4 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingReview}
+                className="px-5 py-2.5 rounded-xl font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 text-sm"
+              >
+                {submittingReview ? 'Submitting…' : 'Submit review'}
+              </button>
+            </div>
           </div>
         </form>
       )}

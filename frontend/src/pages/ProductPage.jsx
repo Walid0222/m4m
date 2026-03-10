@@ -19,6 +19,7 @@ import { isSellerOnline } from '../lib/sellerOnline';
 import { getSellerSalesBadge } from '../lib/sellerBadge';
 import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
 import ReportModal from '../components/ReportModal';
+import ProductCard from '../components/ProductCard';
 
 const VIEWED_PRODUCTS_KEY = 'viewed_products';
 const VIEW_COOLDOWN_MS = 30 * 60 * 1000;
@@ -959,40 +960,9 @@ export default function ProductPage() {
       {similarProducts.length > 0 && (
         <section className="mt-12 pt-10 border-t border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-5">More from this seller</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {similarProducts.map((p) => (
-              <Link
-                key={p.id}
-                to={`/product/${p.id}`}
-                className="rounded-2xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow group"
-              >
-                <div className="aspect-square bg-gray-100 overflow-hidden">
-                  {p.images?.[0] ? (
-                    <img
-                      src={p.images[0]}
-                      alt={p.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-                <div className="p-3">
-                  <p className="text-sm font-medium text-gray-900 line-clamp-2 leading-snug">{p.name}</p>
-                  <p className="mt-1.5 font-bold text-gray-900 text-sm">
-                    {Number(p.price || 0).toFixed(2)} MAD
-                  </p>
-                </div>
-              </Link>
+              <ProductCard key={p.id} product={p} />
             ))}
           </div>
         </section>
@@ -1002,40 +972,9 @@ export default function ProductPage() {
       {recommendedProducts.length > 0 && (
         <section className="mt-10">
           <h2 className="text-xl font-semibold text-gray-900 mb-5">Recommended for you</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {recommendedProducts.map((p) => (
-              <Link
-                key={p.id}
-                to={`/product/${p.id}`}
-                className="rounded-2xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow group"
-              >
-                <div className="aspect-square bg-gray-100 overflow-hidden">
-                  {p.images?.[0] ? (
-                    <img
-                      src={p.images[0]}
-                      alt={p.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300">
-                      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.5}
-                          d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-                <div className="p-3">
-                  <p className="text-sm font-medium text-gray-900 line-clamp-2 leading-snug">{p.name}</p>
-                  <p className="mt-1.5 font-bold text-gray-900 text-sm">
-                    {Number(p.price || 0).toFixed(2)} MAD
-                  </p>
-                </div>
-              </Link>
+              <ProductCard key={p.id} product={p} />
             ))}
           </div>
         </section>

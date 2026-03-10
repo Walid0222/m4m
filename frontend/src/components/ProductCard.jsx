@@ -20,7 +20,9 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
 
   const stockNum = Number(stock ?? 0);
   const isLowStock = stockNum > 0 && stockNum <= 5;
+  const isInstant = product.delivery_type === 'instant';
 
+  const offerSales = Number(product.completed_orders_count ?? product.sales ?? 0);
   const completedSales = seller?.completed_sales ?? seller?.completedSales ?? 0;
   const isVerified =
     seller?.is_verified === true ||
@@ -101,12 +103,19 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
           </Link>
         </h3>
 
-        {/* Dynamic badge: Low Stock (not analytics) */}
-        {isLowStock && (
+        {/* Dynamic badges: Instant delivery / Low stock */}
+        {(isInstant || isLowStock) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-green-100 text-green-800">
-              🟢 Low Stock
-            </span>
+            {isInstant && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
+                ⚡ Instant Delivery
+              </span>
+            )}
+            {isLowStock && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800">
+                🟢 Low Stock
+              </span>
+            )}
           </div>
         )}
 
@@ -134,14 +143,25 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
               Lv {sellerLevel}
             </span>
           )}
-          <div className="flex items-center gap-0.5 text-xs font-medium text-gray-600">
+          <div className="flex items-center gap-2 text-xs font-medium text-gray-600">
             {reviewsCount > 0 ? (
               <>
-                <span className="text-amber-400">★</span>
-                <span>{displayRating != null ? displayRating.toFixed(1) : 'New'} ({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})</span>
+                <span className="text-amber-400">⭐</span>
+                <span>
+                  {displayRating != null ? displayRating.toFixed(1) : 'New'} ({reviewsCount}{' '}
+                  {reviewsCount === 1 ? 'review' : 'reviews'})
+                </span>
               </>
             ) : (
               <span className="text-gray-500">No reviews yet</span>
+            )}
+            {offerSales > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
+                <span>🛒</span>
+                <span>
+                  {offerSales} {offerSales === 1 ? 'sale' : 'sales'}
+                </span>
+              </span>
             )}
           </div>
         </div>
