@@ -134,7 +134,7 @@ class ProductController extends Controller
 
         $products = $request->user()
             ->products()
-            ->with(['faqs', 'offerType:id,category_id,name,slug', 'offerType.category:id,name'])
+            ->with(['faqs', 'offerType:id,category_id,service_id,name,slug', 'offerType.category:id,name', 'offerType.service:id,name,slug'])
             ->withCount('orders')
             ->orderByDesc('is_pinned')
             ->latest()

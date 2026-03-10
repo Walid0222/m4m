@@ -16,6 +16,27 @@ import {
   getAdminDisputes,
   resolveAdminDispute,
   getAdminStats,
+  getAdminCoupons,
+  createAdminCoupon,
+  deleteAdminCoupon,
+  getAdminAnnouncements,
+  createAdminAnnouncement,
+  updateAdminAnnouncement,
+  deleteAdminAnnouncement,
+  getAdminServiceRequests,
+  approveServiceRequest,
+  rejectServiceRequest,
+  updateAdminServiceRequest,
+  deleteAdminServiceRequest,
+  getCategories,
+  getAdminServices,
+  createAdminService,
+  updateAdminService,
+  deleteAdminService,
+  getAdminOfferTypes,
+  createAdminOfferType,
+  updateAdminOfferType,
+  deleteAdminOfferType,
   paginatedItems,
 } from '../services/api';
 
@@ -26,6 +47,10 @@ const TABS = [
   { id: 'reports', label: 'Reports' },
   { id: 'disputes', label: '⚖ Disputes' },
   { id: 'verification', label: 'Verifications' },
+  { id: 'service-requests', label: '🛎 Service requests' },
+  { id: 'services', label: '📋 Service Management' },
+  { id: 'coupons', label: '🎟 Coupons' },
+  { id: 'announcements', label: '📢 Announcements' },
   { id: 'support', label: '💬 Support Chat' },
 ];
 
@@ -430,6 +455,529 @@ function VerificationPanel() {
           })}
         </div>
       )}
+    </>
+  );
+}
+
+/* ── Service requests (sellers requesting new offer types) ───────────────── */
+function ServiceRequestsPanel() {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [flash, setFlash] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [rejectModal, setRejectModal] = useState(null); // { id, service_name }
+  const [rejectNote, setRejectNote] = useState('');
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
+  const [editingRequest, setEditingRequest] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [editForm, setEditForm] = useState({ service_name: '', category_id: '', description: '' });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = statusFilter ? { status: statusFilter } : {};
+    getAdminServiceRequests(params)
+      .then((r) => setRequests(paginatedItems(r) ?? []))
+      .catch(() => setRequests([]))
+      .finally(() => setLoading(false));
+  }, [statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 4000); return () => clearTimeout(t); }, [flash]);
+  useEffect(() => {
+    if (editingRequest) {
+      getCategories().then((d) => setCategories(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setCategories([]));
+      setEditForm({
+        service_name: editingRequest.service_name || '',
+        category_id: String(editingRequest.category_id || ''),
+        description: editingRequest.description || '',
+      });
+    }
+  }, [editingRequest]);
+
+  const handleApprove = async (id) => {
+    try {
+      await approveServiceRequest(id);
+      setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: 'approved' } : r));
+      setFlash({ type: 'success', text: 'Request approved. New offer type created.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Approve failed.' });
+    }
+  };
+
+  const openRejectModal = (req) => {
+    setRejectModal({ id: req.id, service_name: req.service_name });
+    setRejectNote('');
+  };
+
+  const handleRejectSubmit = async () => {
+    if (!rejectModal || !rejectNote.trim()) return;
+    setRejectSubmitting(true);
+    try {
+      await rejectServiceRequest(rejectModal.id, { admin_note: rejectNote.trim() });
+      setRequests((prev) => prev.map((r) => r.id === rejectModal.id ? { ...r, status: 'rejected', admin_note: rejectNote.trim() } : r));
+      setRejectModal(null);
+      setRejectNote('');
+      setFlash({ type: 'success', text: 'Request rejected.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Reject failed.' });
+    } finally {
+      setRejectSubmitting(false);
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editingRequest) return;
+    if (!editForm.service_name.trim() || !editForm.category_id) return;
+    setEditSubmitting(true);
+    try {
+      const updated = await updateAdminServiceRequest(editingRequest.id, {
+        service_name: editForm.service_name.trim(),
+        category_id: parseInt(editForm.category_id, 10),
+        description: editForm.description.trim() || undefined,
+      });
+      setRequests((prev) => prev.map((r) => r.id === editingRequest.id ? { ...r, ...updated } : r));
+      setEditingRequest(null);
+      setFlash({ type: 'success', text: 'Request updated.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Update failed.' });
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (req) => {
+    if (!window.confirm(`Delete request "${req.service_name}"?`)) return;
+    try {
+      await deleteAdminServiceRequest(req.id);
+      setRequests((prev) => prev.filter((r) => r.id !== req.id));
+      setFlash({ type: 'success', text: 'Request deleted.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Delete failed.' });
+    }
+  };
+
+  if (loading && requests.length === 0) return <p className="text-gray-400 text-sm">Loading…</p>;
+
+  return (
+    <>
+      <Flash msg={flash} />
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <h2 className="text-base font-semibold text-gray-900">Service requests</h2>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-700"
+        >
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      {requests.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center">
+          <p className="text-gray-400 text-sm">No service requests.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {requests.map((req) => {
+            const isPending = req.status === 'pending';
+            const isEditing = editingRequest?.id === req.id;
+            return (
+              <div
+                key={req.id}
+                className={`rounded-xl border p-4 md:p-5 ${isPending ? 'border-blue-100 bg-white' : req.status === 'approved' ? 'border-green-100 bg-green-50' : 'border-gray-100 bg-gray-50'}`}
+              >
+                {isEditing ? (
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={editForm.service_name}
+                      onChange={(e) => setEditForm((f) => ({ ...f, service_name: e.target.value }))}
+                      placeholder="Service name"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                    />
+                    <select
+                      value={editForm.category_id}
+                      onChange={(e) => setEditForm((f) => ({ ...f, category_id: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white"
+                    >
+                      <option value="">Select category</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <textarea
+                      value={editForm.description}
+                      onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                      placeholder="Description"
+                      rows={2}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none"
+                    />
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setEditingRequest(null)} className="px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Cancel</button>
+                      <button type="button" onClick={handleEditSave} disabled={editSubmitting || !editForm.service_name.trim() || !editForm.category_id} className="px-3 py-2 rounded-lg text-sm bg-m4m-purple text-white hover:bg-purple-600 disabled:opacity-60">Save</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <p className="font-semibold text-gray-900">{req.service_name}</p>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase ${isPending ? 'bg-amber-100 text-amber-700' : req.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                            {req.status}
+                          </span>
+                        </div>
+                        {req.category && <p className="text-xs text-gray-500">Category: {req.category.name}</p>}
+                        {req.seller && <p className="text-xs text-gray-400">Requested by: {req.seller.name} {req.seller.email && `(${req.seller.email})`}</p>}
+                        <p className="text-xs text-gray-400 mt-1">{req.created_at ? new Date(req.created_at).toLocaleString() : ''}</p>
+                        {req.description && <p className="text-sm text-gray-600 mt-2">{req.description}</p>}
+                      </div>
+                      {isPending && (
+                        <div className="flex flex-wrap gap-2 flex-shrink-0">
+                          <button type="button" onClick={() => handleApprove(req.id)} className="px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors">Approve</button>
+                          <button type="button" onClick={() => openRejectModal(req)} className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors">Reject</button>
+                          <button type="button" onClick={() => setEditingRequest(req)} className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors">Edit</button>
+                          <button type="button" onClick={() => handleDelete(req)} className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors">Delete</button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Reject modal */}
+      {rejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !rejectSubmitting && setRejectModal(null)}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Reject Service Request</h3>
+            <p className="text-sm text-gray-500 mb-4">{rejectModal.service_name}</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Rejection note (required) *</label>
+            <textarea
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+              placeholder="e.g. This service already exists as Amazon Prime Video Account. Please use the existing offer type."
+              rows={4}
+              maxLength={2000}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button type="button" onClick={() => setRejectModal(null)} disabled={rejectSubmitting} className="px-4 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={handleRejectSubmit} disabled={rejectSubmitting || !rejectNote.trim()} className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-60">{rejectSubmitting ? 'Rejecting…' : 'Reject'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ── Service Management (services + offer types CRUD) ──────────────────── */
+function ServiceManagementPanel() {
+  const [services, setServices] = useState([]);
+  const [offerTypes, setOfferTypes] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [flash, setFlash] = useState(null);
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ name: '', category_id: '', description: '', status: 'active' });
+  const [submitting, setSubmitting] = useState(false);
+  const [servicesEditingId, setServicesEditingId] = useState(null);
+  const [serviceForm, setServiceForm] = useState({ name: '', icon: '' });
+  const [serviceCreateOpen, setServiceCreateOpen] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      getAdminServices(),
+      getAdminOfferTypes({ per_page: 200, ...(categoryFilter ? { category_id: categoryFilter } : {}) }),
+      getCategories(),
+    ])
+      .then(([svcRes, otRes, catRes]) => {
+        setServices(Array.isArray(svcRes) ? svcRes : (svcRes?.data ?? []));
+        setOfferTypes(paginatedItems(otRes) ?? []);
+        setCategories(Array.isArray(catRes) ? catRes : (catRes?.data ?? []));
+      })
+      .catch(() => { setServices([]); setOfferTypes([]); setCategories([]); })
+      .finally(() => setLoading(false));
+  }, [categoryFilter]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 4000); return () => clearTimeout(t); }, [flash]);
+
+  const openCreate = () => {
+    setForm({ name: '', category_id: '', description: '', status: 'active' });
+    setCreateOpen(true);
+  };
+
+  const openEdit = (ot) => {
+    setEditingId(ot.id);
+    setForm({
+      name: ot.name || '',
+      category_id: String(ot.category_id || ''),
+      description: ot.description || '',
+      status: ot.status || 'active',
+    });
+  };
+
+  const handleCreate = async () => {
+    if (!form.name.trim() || !form.category_id) return;
+    setSubmitting(true);
+    try {
+      await createAdminOfferType({
+        name: form.name.trim(),
+        category_id: parseInt(form.category_id, 10),
+        description: form.description.trim() || undefined,
+        status: form.status,
+      });
+      setCreateOpen(false);
+      load();
+      setFlash({ type: 'success', text: 'Offer type created.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Create failed.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!editingId || !form.name.trim() || !form.category_id) return;
+    setSubmitting(true);
+    try {
+      await updateAdminOfferType(editingId, {
+        name: form.name.trim(),
+        category_id: parseInt(form.category_id, 10),
+        description: form.description.trim() || undefined,
+        status: form.status,
+      });
+      setEditingId(null);
+      load();
+      setFlash({ type: 'success', text: 'Service updated.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Update failed.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleToggleStatus = async (ot) => {
+    const next = ot.status === 'active' ? 'disabled' : 'active';
+    try {
+      await updateAdminOfferType(ot.id, { status: next });
+      setOfferTypes((prev) => prev.map((o) => o.id === ot.id ? { ...o, status: next } : o));
+      setFlash({ type: 'success', text: next === 'active' ? 'Service enabled.' : 'Service disabled.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Update failed.' });
+    }
+  };
+
+  const handleDelete = async (ot) => {
+    if (!window.confirm(`Delete "${ot.name}"? Products using it may be affected.`)) return;
+    try {
+      await deleteAdminOfferType(ot.id);
+      setOfferTypes((prev) => prev.filter((o) => o.id !== ot.id));
+      setFlash({ type: 'success', text: 'Service deleted.' });
+    } catch (e) {
+      setFlash({ type: 'error', text: e?.message || 'Delete failed.' });
+    }
+  };
+
+  const handleServiceCreate = async () => {
+    if (!serviceForm.name.trim()) return;
+    setSubmitting(true);
+    try {
+      await createAdminService({ name: serviceForm.name.trim(), icon: serviceForm.icon.trim() || undefined });
+      setServiceCreateOpen(false);
+      setServiceForm({ name: '', icon: '' });
+      load();
+      setFlash({ type: 'success', text: 'Service added.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Create failed.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleServiceUpdate = async () => {
+    if (!servicesEditingId || !serviceForm.name.trim()) return;
+    setSubmitting(true);
+    try {
+      await updateAdminService(servicesEditingId, { name: serviceForm.name.trim(), icon: serviceForm.icon.trim() || undefined });
+      setServicesEditingId(null);
+      load();
+      setFlash({ type: 'success', text: 'Service updated.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Update failed.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleServiceDelete = async (svc) => {
+    if (!window.confirm(`Delete service "${svc.name}"?`)) return;
+    try {
+      await deleteAdminService(svc.id);
+      setServices((prev) => prev.filter((s) => s.id !== svc.id));
+      setFlash({ type: 'success', text: 'Service deleted.' });
+    } catch {
+      setFlash({ type: 'error', text: 'Delete failed.' });
+    }
+  };
+
+  return (
+    <>
+      <Flash msg={flash} />
+
+      {/* Services (Spotify, Netflix, etc.) */}
+      <section className="mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Services</h2>
+          <button type="button" onClick={() => { setServiceCreateOpen(true); setServiceForm({ name: '', icon: '' }); }} className="px-4 py-2 rounded-xl text-sm font-semibold bg-m4m-purple text-white hover:bg-purple-600">Add service</button>
+        </div>
+        {serviceCreateOpen && (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 mb-4 flex flex-wrap items-end gap-3">
+            <input type="text" value={serviceForm.name} onChange={(e) => setServiceForm((f) => ({ ...f, name: e.target.value }))} placeholder="Service name" className="px-3 py-2 rounded-lg border border-gray-200 text-sm w-48" />
+            <input type="text" value={serviceForm.icon} onChange={(e) => setServiceForm((f) => ({ ...f, icon: e.target.value }))} placeholder="Icon (emoji)" className="px-3 py-2 rounded-lg border border-gray-200 text-sm w-24" />
+            <button type="button" onClick={handleServiceCreate} disabled={submitting || !serviceForm.name.trim()} className="px-3 py-2 rounded-lg text-sm bg-m4m-purple text-white disabled:opacity-60">Create</button>
+            <button type="button" onClick={() => setServiceCreateOpen(false)} className="px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Cancel</button>
+          </div>
+        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+          {services.map((svc) => (
+            <div key={svc.id} className="rounded-xl border border-gray-200 bg-white p-3 flex items-center justify-between gap-2">
+              {servicesEditingId === svc.id ? (
+                <div className="flex-1 min-w-0 flex flex-wrap gap-2">
+                  <input type="text" value={serviceForm.name} onChange={(e) => setServiceForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-0 px-2 py-1.5 rounded border border-gray-200 text-sm" />
+                  <input type="text" value={serviceForm.icon} onChange={(e) => setServiceForm((f) => ({ ...f, icon: e.target.value }))} placeholder="Icon" className="w-12 px-2 py-1.5 rounded border border-gray-200 text-sm" />
+                  <button type="button" onClick={handleServiceUpdate} disabled={submitting} className="text-sm text-m4m-purple font-medium">Save</button>
+                  <button type="button" onClick={() => setServicesEditingId(null)} className="text-sm text-gray-500">Cancel</button>
+                </div>
+              ) : (
+                <>
+                  <span className="text-xl flex-shrink-0">{svc.icon || '📦'}</span>
+                  <span className="font-medium text-gray-900 truncate text-sm">{svc.name}</span>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button type="button" onClick={() => { setServicesEditingId(svc.id); setServiceForm({ name: svc.name || '', icon: svc.icon || '' }); }} className="p-1 text-gray-500 hover:bg-gray-100 rounded text-xs">Edit</button>
+                    <button type="button" onClick={() => handleServiceDelete(svc)} className="p-1 text-red-600 hover:bg-red-50 rounded text-xs">Delete</button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Offer types */}
+      <section>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <h2 className="text-base font-semibold text-gray-900">Offer types</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white text-gray-700"
+          >
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <button type="button" onClick={openCreate} className="px-4 py-2 rounded-xl text-sm font-semibold bg-m4m-purple text-white hover:bg-purple-600">Add offer type</button>
+        </div>
+      </div>
+
+      {createOpen && (
+        <div className="rounded-xl border border-gray-200 bg-white p-6 mb-6">
+          <h3 className="font-semibold text-gray-900 mb-4">Create service</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+              <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Netflix Account" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+              <select value={form.category_id} onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                <option value="">Select</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                <option value="active">Active</option>
+                <option value="disabled">Disabled</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Cancel</button>
+            <button type="button" onClick={handleCreate} disabled={submitting || !form.name.trim() || !form.category_id} className="px-4 py-2 rounded-lg text-sm font-semibold bg-m4m-purple text-white hover:bg-purple-600 disabled:opacity-60">Create</button>
+          </div>
+        </div>
+      )}
+
+      {loading && offerTypes.length === 0 ? (
+        <p className="text-gray-400 text-sm">Loading…</p>
+      ) : offerTypes.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center">
+          <p className="text-gray-400 text-sm">No services.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {offerTypes.map((ot) => (
+            <div key={ot.id} className="rounded-xl border border-gray-200 bg-white p-4 flex flex-wrap items-center justify-between gap-3">
+              {editingId === ot.id ? (
+                <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                  <select value={form.category_id} onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="w-full md:col-span-2 px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none" />
+                  <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                    <option value="active">Active</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setEditingId(null)} className="px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Cancel</button>
+                    <button type="button" onClick={handleUpdate} disabled={submitting} className="px-3 py-2 rounded-lg text-sm bg-m4m-purple text-white hover:bg-purple-600 disabled:opacity-60">Save</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900">{ot.name}</p>
+                    <p className="text-xs text-gray-500">{ot.category?.name} · {ot.status}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => handleToggleStatus(ot)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${ot.status === 'active' ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-green-100 text-green-800 hover:bg-green-200'}`}>
+                      {ot.status === 'active' ? 'Disable' : 'Enable'}
+                    </button>
+                    <button type="button" onClick={() => openEdit(ot)} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50">Edit</button>
+                    <button type="button" onClick={() => handleDelete(ot)} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50">Delete</button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      </section>
     </>
   );
 }
@@ -960,6 +1508,359 @@ function DisputesPanel() {
   );
 }
 
+/* ── Coupons ────────────────────────────────────────────────────────────────── */
+function CouponsPanel() {
+  const [coupons, setCoupons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [flash, setFlash] = useState(null);
+  const [code, setCode] = useState('');
+  const [discount, setDiscount] = useState('');
+  const [maxUses, setMaxUses] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getAdminCoupons()
+      .then((res) => {
+        if (cancelled) return;
+        setCoupons(paginatedItems(res) ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setCoupons([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 3000);
+    return () => clearTimeout(t);
+  }, [flash]);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    const trimmedCode = code.trim();
+    const pct = parseInt(discount, 10);
+    if (!trimmedCode || Number.isNaN(pct) || pct <= 0 || pct > 100) {
+      setFlash({ type: 'error', text: 'Please enter a valid code and discount (1–100%).' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const body = {
+        code: trimmedCode,
+        discount_percent: pct,
+      };
+      const m = maxUses.trim();
+      if (m) body.max_uses = parseInt(m, 10) || null;
+      if (expiresAt) body.expires_at = new Date(expiresAt).toISOString();
+      const created = await createAdminCoupon(body);
+      setCoupons((prev) => [created, ...prev]);
+      setCode('');
+      setDiscount('');
+      setMaxUses('');
+      setExpiresAt('');
+      setFlash({ type: 'success', text: 'Coupon created.' });
+    } catch (err) {
+      setFlash({ type: 'error', text: err.message || 'Failed to create coupon.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this coupon?')) return;
+    try {
+      await deleteAdminCoupon(id);
+      setCoupons((prev) => prev.filter((c) => c.id !== id));
+      setFlash({ type: 'success', text: 'Coupon deleted.' });
+    } catch (err) {
+      setFlash({ type: 'error', text: err.message || 'Failed to delete coupon.' });
+    }
+  };
+
+  return (
+    <div>
+      <Flash msg={flash} />
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6 items-start">
+        {/* Create coupon form */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Create coupon</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Create discount codes to reward buyers. Example: <span className="font-mono">WELCOME10</span> for 10% off.
+          </p>
+          <form onSubmit={handleCreate} className="space-y-3 text-sm">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Code</label>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                maxLength={50}
+                placeholder="WELCOME10"
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none font-mono"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Discount %</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  placeholder="10"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Max uses</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={maxUses}
+                  onChange={(e) => setMaxUses(e.target.value)}
+                  placeholder="e.g. 100 (optional)"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Expires at</label>
+              <input
+                type="datetime-local"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full mt-1 px-4 py-2.5 rounded-lg text-sm font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors"
+            >
+              {submitting ? 'Creating…' : 'Create coupon'}
+            </button>
+          </form>
+        </div>
+
+        {/* Coupon list */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-gray-900">Coupons</h2>
+            {loading && <span className="text-xs text-gray-400">Loading…</span>}
+          </div>
+          {(!loading && coupons.length === 0) ? (
+            <p className="text-sm text-gray-400">No coupons created yet.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-100">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {['Code', 'Discount', 'Uses', 'Max uses', 'Expires at', ''].map((h) => (
+                      <th key={h} className="px-4 py-2.5 text-left font-semibold text-gray-600 text-xs">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {coupons.map((c) => (
+                    <tr key={c.id}>
+                      <td className="px-4 py-2.5 font-mono text-xs">{c.code}</td>
+                      <td className="px-4 py-2.5">{c.discount_percent}%</td>
+                      <td className="px-4 py-2.5">{c.uses ?? 0}</td>
+                      <td className="px-4 py-2.5">{c.max_uses ?? '—'}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-500">
+                        {c.expires_at ? new Date(c.expires_at).toLocaleString() : 'No expiry'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(c.id)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Announcements ──────────────────────────────────────────────────────────── */
+function AnnouncementsPanel() {
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [flash, setFlash] = useState(null);
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [editing, setEditing] = useState(null);
+
+  const load = useCallback(() => {
+    getAdminAnnouncements()
+      .then((res) => setAnnouncements(paginatedItems(res) ?? []))
+      .catch(() => setAnnouncements([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 3000);
+    return () => clearTimeout(t);
+  }, [flash]);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    const t = title.trim();
+    const b = body.trim();
+    if (!t || !b) {
+      setFlash({ type: 'error', text: 'Title and message are required.' });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const created = await createAdminAnnouncement({ title: t, body: b, is_active: isActive });
+      setAnnouncements((prev) => [created, ...prev]);
+      setTitle('');
+      setBody('');
+      setIsActive(true);
+      setFlash({ type: 'success', text: 'Announcement created.' });
+    } catch (err) {
+      setFlash({ type: 'error', text: err.message || 'Failed to create.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUpdate = async (id, updates) => {
+    try {
+      const updated = await updateAdminAnnouncement(id, updates);
+      setAnnouncements((prev) => prev.map((a) => (a.id === id ? updated : a)));
+      setEditing(null);
+      setFlash({ type: 'success', text: 'Announcement updated.' });
+    } catch (err) {
+      setFlash({ type: 'error', text: err.message || 'Failed to update.' });
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this announcement?')) return;
+    try {
+      await deleteAdminAnnouncement(id);
+      setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+      setFlash({ type: 'success', text: 'Announcement deleted.' });
+    } catch (err) {
+      setFlash({ type: 'error', text: err.message || 'Failed to delete.' });
+    }
+  };
+
+  return (
+    <div>
+      <Flash msg={flash} />
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6 items-start">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Create announcement</h2>
+          <p className="text-xs text-gray-500 mb-4">Announcements appear as a full-width banner above the navbar when active.</p>
+          <form onSubmit={handleCreate} className="space-y-3 text-sm">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Title</label>
+              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} placeholder="Marketplace Announcement" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Message</label>
+              <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="e.g. New seller commission tiers available." className="w-full px-3 py-2 rounded-lg border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
+            </div>
+            <div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="rounded border-gray-300 text-m4m-purple" />
+                Active (shown as banner above navbar)
+              </label>
+            </div>
+            <button type="submit" disabled={submitting} className="w-full mt-1 px-4 py-2.5 rounded-lg text-sm font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors">
+              {submitting ? 'Creating…' : 'Create announcement'}
+            </button>
+          </form>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-semibold text-gray-900">Announcements</h2>
+            {loading && <span className="text-xs text-gray-400">Loading…</span>}
+          </div>
+          {(!loading && announcements.length === 0) ? (
+            <p className="text-sm text-gray-400">No announcements yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {announcements.map((a) => (
+                <div key={a.id} className="rounded-xl border border-gray-200 p-4">
+                  <div className="flex justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-gray-900 truncate">{a.title}</p>
+                      <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{a.body}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                        <span className={a.is_active ? 'text-green-600' : 'text-gray-400'}>{a.is_active ? 'Active' : 'Inactive'}</span>
+                        {a.created_at && <span>{new Date(a.created_at).toLocaleDateString()}</span>}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleUpdate(a.id, { is_active: !a.is_active })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium ${a.is_active ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        {a.is_active ? 'Disable' : 'Activate'}
+                      </button>
+                      <button type="button" onClick={() => setEditing(editing?.id === a.id ? null : { ...a })} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">
+                        {editing?.id === a.id ? 'Cancel' : 'Edit'}
+                      </button>
+                      <button type="button" onClick={() => handleDelete(a.id)} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  {editing?.id === a.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                      <input type="text" value={editing.title} onChange={(e) => setEditing((x) => ({ ...x, title: e.target.value }))} placeholder="Title" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                      <textarea value={editing.body} onChange={(e) => setEditing((x) => ({ ...x, body: e.target.value }))} rows={2} placeholder="Message" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none" />
+                      <label className="flex items-center gap-2 text-xs">
+                        <input type="checkbox" checked={editing.is_active} onChange={(e) => setEditing((x) => ({ ...x, is_active: e.target.checked }))} className="rounded" />
+                        Active
+                      </label>
+                      <button type="button" onClick={() => handleUpdate(a.id, { title: editing.title, body: editing.body, is_active: editing.is_active })} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark">
+                        Save
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main admin page ──────────────────────────────────────────────────────── */
 export default function AdminDashboardPage() {
   const { user } = useAuth();
@@ -1048,6 +1949,10 @@ export default function AdminDashboardPage() {
         {activeTab === 'reports' && <ReportsPanel key={`rep-${refreshToken}`} />}
         {activeTab === 'disputes' && <DisputesPanel key={`dis-${refreshToken}`} />}
         {activeTab === 'verification' && <VerificationPanel key={`ver-${refreshToken}`} />}
+        {activeTab === 'service-requests' && <ServiceRequestsPanel key={`sr-${refreshToken}`} />}
+        {activeTab === 'services' && <ServiceManagementPanel key={`svc-${refreshToken}`} />}
+        {activeTab === 'coupons' && <CouponsPanel key={`coup-${refreshToken}`} />}
+        {activeTab === 'announcements' && <AnnouncementsPanel key={`ann-${refreshToken}`} />}
         {activeTab === 'support' && <SupportChatPanel key={`sup-${refreshToken}`} adminUser={user} />}
       </div>
     </div>

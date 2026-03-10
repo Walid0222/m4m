@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Admin\AdminDisputeController;
 use App\Http\Controllers\Api\Admin\AdminOfferTypeController;
 use App\Http\Controllers\Api\Admin\AdminReportController;
+use App\Http\Controllers\Api\Admin\AdminServiceController;
 use App\Http\Controllers\Api\Admin\AdminServiceRequestController;
 use App\Http\Controllers\Api\Admin\AdminSellerController;
 use App\Http\Controllers\Api\Admin\AdminStatsController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\OfferTypeController;
+use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReviewController;
@@ -47,6 +49,8 @@ Route::prefix('v1')->group(function () {
     Route::post('/login',    [AuthController::class, 'login']);
 
     Route::get('/categories',                      [CategoryController::class, 'index']);
+    Route::get('/services',                        [ServiceController::class, 'index']);
+    Route::get('/services/{service}',              [ServiceController::class, 'show']);
     Route::get('/offer-types',                     [OfferTypeController::class, 'index']);
     Route::get('/offer-types/search',              [OfferTypeController::class, 'search']);
     Route::get('/offer-types/{offer_type}',        [OfferTypeController::class, 'show']);
@@ -239,6 +243,13 @@ Route::prefix('v1')->group(function () {
         Route::delete('/service-requests/{service_request}',        [AdminServiceRequestController::class, 'destroy']);
         Route::post('/service-requests/{service_request}/approve',  [AdminServiceRequestController::class, 'approve']);
         Route::post('/service-requests/{service_request}/reject',    [AdminServiceRequestController::class, 'reject']);
+
+        // Services (top-level catalog)
+        Route::get('/services',           [AdminServiceController::class, 'index']);
+        Route::post('/services',         [AdminServiceController::class, 'store']);
+        Route::put('/services/{id}',     [AdminServiceController::class, 'update']);
+        Route::patch('/services/{id}',   [AdminServiceController::class, 'update']);
+        Route::delete('/services/{id}',   [AdminServiceController::class, 'destroy']);
 
         // Service catalog (offer types) management — by id
         Route::get('/offer-types',                [AdminOfferTypeController::class, 'index']);

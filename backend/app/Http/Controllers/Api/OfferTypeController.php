@@ -22,6 +22,9 @@ class OfferTypeController extends Controller
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
         }
+        if ($request->filled('service_id')) {
+            $query->where('service_id', $request->service_id);
+        }
 
         $offerTypes = $query->orderBy('name')->get();
 
@@ -66,7 +69,20 @@ class OfferTypeController extends Controller
             return $this->error('Service not available.', 404);
         }
 
-        $offer_type->load('category:id,name,slug');
+        $offer_type->load([
+            'category:id,name,slug',
+            'service:id,name,slug',
+        ]);
+
+        // Sibling offer types for navigation (same service)
+        $serviceOfferTypes = [];
+        if ($offer_type->service_id) {
+            $serviceOfferTypes = OfferType::query()
+                ->where('service_id', $offer_type->service_id)
+                ->where('status', OfferType::STATUS_ACTIVE)
+                ->orderBy('name')
+                ->get(['id', 'service_id', 'category_id', 'name', 'slug', 'icon', 'status']);
+        }
 
         $products = Product::query()
             ->where('offer_type_id', $offer_type->id)
@@ -87,8 +103,9 @@ class OfferTypeController extends Controller
         });
 
         return $this->success([
-            'offer_type' => $offer_type,
-            'products'   => $products,
+            'offer_type'           => $offer_type,
+            'products'             => $products,
+            'service_offer_types'  => $serviceOfferTypes,
         ]);
     }
 }

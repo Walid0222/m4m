@@ -3,6 +3,8 @@ import { AuthProvider, ProtectedRoute, SellerRoute, AdminRoute } from './context
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import ProductPage from './pages/ProductPage';
+import ServicePage from './pages/ServicePage';
+import OfferTypePage from './pages/OfferTypePage';
 import SellerProfilePage from './pages/SellerProfilePage';
 import WalletPage from './pages/WalletPage';
 import OrdersPage from './pages/OrdersPage';
@@ -25,6 +27,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
+            <Route path="service/:slug" element={<ServicePage />} />
+            <Route path="offer-type/:slug" element={<OfferTypePage />} />
             <Route path="product/:id" element={<ProductPage />} />
             <Route path="seller/:id" element={<SellerProfilePage />} />
             <Route path="login" element={<AuthPage />} />

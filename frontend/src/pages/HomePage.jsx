@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
+import ServiceCard from '../components/ServiceCard';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getProducts,
+  getProduct,
   getTrendingProducts,
-  getAnnouncements,
+  getServices,
   paginatedItems,
   getFavoriteIds,
   toggleFavorite,
@@ -88,10 +90,13 @@ const SEARCH_DEBOUNCE_MS = 400;
 const PRODUCTS_PER_PAGE = 12;
 
 function getProductRating(p) {
-  const r = p.rating;
-  if (typeof r === 'number' && r >= 0) return r;
-  if (r != null) return parseFloat(r) || 0;
-  return 4;
+  const reviews = p.reviews ?? [];
+  const count = p.reviews_count ?? reviews.length;
+  if (count === 0) return null;
+  const avg = p.reviews_avg_rating ?? (reviews.length > 0
+    ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length
+    : null);
+  return avg != null ? Number(avg) : null;
 }
 
 export default function HomePage() {
@@ -103,7 +108,8 @@ export default function HomePage() {
   const [fetchError, setFetchError] = useState(false);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [trending, setTrending] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
+  const [services, setServices] = useState([]);
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [search, setSearch] = useState(searchFromUrl);
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const [paginationMeta, setPaginationMeta] = useState({ currentPage: 1, lastPage: 1, total: 0 });
@@ -137,26 +143,6 @@ export default function HomePage() {
     };
   }, [user]);
 
-  // Load announcements (public)
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await getAnnouncements({ limit: 3 });
-        if (!cancelled && Array.isArray(data)) {
-          setAnnouncements(data);
-        }
-      } catch {
-        if (!cancelled) {
-          setAnnouncements([]);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   // Load trending products (public)
   useEffect(() => {
     let cancelled = false;
@@ -167,7 +153,6 @@ export default function HomePage() {
           setTrending(
             data.map((p) => ({
               ...p,
-              rating: p.rating ?? getProductRating(p),
               is_online: p.is_online ?? p.isOnline ?? true,
             }))
           );
@@ -178,6 +163,84 @@ export default function HomePage() {
         }
       }
     })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load services for homepage grid
+  useEffect(() => {
+    let cancelled = false;
+    getServices()
+      .then((data) => {
+        if (!cancelled && Array.isArray(data)) setServices(data);
+        else if (!cancelled && data?.data) setServices(data.data);
+      })
+      .catch(() => { if (!cancelled) setServices([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Load recently viewed products from localStorage and fetch details
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const STORAGE_KEY = 'recently_viewed_products';
+        const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+        if (!raw) {
+          if (!cancelled) setRecentlyViewed([]);
+          return;
+        }
+        let parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch {
+          parsed = null;
+        }
+        const ids = Array.isArray(parsed) ? parsed : [];
+        if (!ids.length) {
+          if (!cancelled) setRecentlyViewed([]);
+          return;
+        }
+
+        const normalizedIds = [];
+        const seen = new Set();
+        ids.forEach((v) => {
+          const n = Number(v);
+          if (!Number.isNaN(n) && !seen.has(n)) {
+            seen.add(n);
+            normalizedIds.push(n);
+          }
+        });
+
+        if (!normalizedIds.length) {
+          if (!cancelled) setRecentlyViewed([]);
+          return;
+        }
+
+        const results = await Promise.all(
+          normalizedIds.map((id) =>
+            getProduct(id, { record_view: 0 }).catch(() => null)
+          )
+        );
+
+        if (cancelled) return;
+
+        const products = results
+          .map((p, index) => (p ? { ...p, _recentIndex: index } : null))
+          .filter(Boolean)
+          .sort((a, b) => a._recentIndex - b._recentIndex)
+          .map((p) => ({
+            ...p,
+            is_online: p.is_online ?? p.isOnline ?? true,
+          }));
+
+        setRecentlyViewed(products);
+      } catch {
+        if (!cancelled) setRecentlyViewed([]);
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
@@ -261,7 +324,6 @@ export default function HomePage() {
           setProducts(
             (Array.isArray(list) ? list : []).map((p) => ({
               ...p,
-              rating: p.rating ?? getProductRating(p),
               is_online: p.is_online ?? p.isOnline ?? true,
             }))
           );
@@ -391,24 +453,54 @@ export default function HomePage() {
   const from = total === 0 ? 0 : (currentPage - 1) * PRODUCTS_PER_PAGE + 1;
   const to = Math.min(currentPage * PRODUCTS_PER_PAGE, total);
 
+  // Group services into two main marketplace columns: Services / Games
+  const groupedServices = useMemo(() => {
+    const groups = {
+      Services: [],
+      Games: [],
+    };
+
+    (services || []).forEach((svc) => {
+      const slug = (svc.slug || svc.name || '').toLowerCase();
+      const serviceSlugs = [
+        'chatgpt',
+        'discord',
+        'instagram',
+        'netflix',
+        'spotify',
+        'tiktok',
+        'youtube',
+        'canva',
+        'figma',
+        'adobe',
+        'disney-plus',
+        'primevideo',
+      ];
+      const gameSlugs = [
+        'fortnite',
+        'pubg',
+        'playstation',
+        'steam',
+        'xbox',
+        'roblox',
+        'minecraft',
+        'riotgames',
+        'ubisoft',
+        'nintendo',
+      ];
+
+      if (serviceSlugs.some((k) => slug.includes(k))) {
+        groups.Services.push(svc);
+      } else if (gameSlugs.some((k) => slug.includes(k))) {
+        groups.Games.push(svc);
+      }
+    });
+
+    return groups;
+  }, [services]);
+
   return (
     <div className="min-h-screen bg-m4m-gray-50">
-      {/* Global announcements */}
-      {announcements.length > 0 && (
-        <div className="bg-indigo-600 text-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 space-y-1">
-            {announcements.map((a) => (
-              <div key={a.id} className="flex items-start gap-2 text-sm">
-                <span className="mt-0.5 text-base">📣</span>
-                <div className="min-w-0">
-                  <p className="font-semibold truncate">{a.title}</p>
-                  <p className="text-xs opacity-90 line-clamp-2">{a.body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
       {/* Hero Banner */}
       <section className="relative bg-gradient-to-br from-gray-900 via-purple-950 to-gray-900 overflow-hidden">
         <div className="absolute inset-0 opacity-10">
@@ -487,6 +579,57 @@ export default function HomePage() {
       </div>
 
       <div id="marketplace" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        {/* Browse by service (grouped like modern marketplaces) */}
+        {services.length > 0 && (
+          <section className="mb-8 md:mb-10">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-lg font-semibold text-m4m-black">Browse by service</h2>
+              <p className="text-xs text-m4m-gray-500 hidden sm:block">
+                Jump straight into your favorite platforms
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+              {Object.entries(groupedServices).map(([groupName, items]) => {
+                if (!items || items.length === 0) return null;
+                return (
+                  <div key={groupName} className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-m4m-gray-800 tracking-wide uppercase">
+                        {groupName}
+                      </h3>
+                      <button
+                        type="button"
+                        className="text-[11px] font-medium text-m4m-purple hover:underline"
+                      >
+                        {groupName === 'Services' ? 'Show all services →' : 'Show all games →'}
+                      </button>
+                    </div>
+
+                    {/* Mobile: horizontal scroll */}
+                    <div className="md:hidden flex gap-3 overflow-x-auto pb-1">
+                      {items.map((svc) => (
+                        <Link key={svc.id} to={`/service/${svc.slug}`} className="min-w-[90px]">
+                          <ServiceCard service={svc} />
+                        </Link>
+                      ))}
+                    </div>
+
+                    {/* Tablet / Desktop: compact 7-column grid */}
+                    <div className="hidden md:grid grid-cols-7 gap-3">
+                      {items.map((svc) => (
+                        <Link key={svc.id} to={`/service/${svc.slug}`} className="flex justify-center">
+                          <ServiceCard service={svc} />
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Flash Deals / Trending products */}
         {trending.length > 0 && (
           <section className="mb-6 md:mb-8">
@@ -499,6 +642,30 @@ export default function HomePage() {
             <div className="rounded-2xl border border-m4m-gray-200 bg-white p-4 md:p-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
                 {trending.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    isFavorited={favoriteIds.includes(Number(product.id))}
+                    onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Recently Viewed products */}
+        {recentlyViewed.length > 0 && (
+          <section className="mb-6 md:mb-8">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="text-lg font-semibold text-m4m-black">Recently Viewed</h2>
+              <p className="text-xs text-m4m-gray-500">
+                Products you opened recently on M4M
+              </p>
+            </div>
+            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-4 md:p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
+                {recentlyViewed.map((product) => (
                   <ProductCard
                     key={product.id}
                     product={product}

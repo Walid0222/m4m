@@ -101,6 +101,19 @@ export default function SellerProfilePage() {
     typeof stats?.avg_response_minutes === 'number'
       ? `${stats.avg_response_minutes.toFixed(1)} min`
       : '—';
+  const lastSeenLabel = (() => {
+    const at = seller?.last_activity_at;
+    if (!at) return null;
+    const ts = new Date(at).getTime();
+    if (Number.isNaN(ts)) return null;
+    const diffMs = Date.now() - ts;
+    const diffMin = Math.max(0, Math.round(diffMs / 60000));
+    if (diffMin < 2) return 'Online';
+    if (diffMin < 60) return `Last seen ${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
+    const diffHours = Math.round(diffMin / 60);
+    return `Last seen ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+  })();
+
   const memberSinceLabel =
     seller?.member_since
       ? new Date(seller.member_since).toLocaleDateString(undefined, {
@@ -151,6 +164,14 @@ export default function SellerProfilePage() {
                   )}
                 </div>
                 <SellerSalesBadge completedSales={seller?.completed_sales ?? seller?.total_sales ?? 0} size="lg" />
+                {lastSeenLabel && (
+                  <p className="mt-1 text-xs text-m4m-gray-500">
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${online ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-600'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-green-500' : 'bg-gray-400'}`} />
+                      {lastSeenLabel}
+                    </span>
+                  </p>
+                )}
                 {memberSinceLabel && (
                   <p className="mt-1 text-xs text-m4m-gray-500">
                     Member since: <span className="font-medium text-m4m-black">{memberSinceLabel}</span>
@@ -168,7 +189,7 @@ export default function SellerProfilePage() {
                   {sellerRating != null && sellerRating > 0 && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
                       <span className="text-amber-500">★</span>
-                      {sellerRating.toFixed(1)}
+                      {sellerRating != null ? sellerRating.toFixed(1) : 'New'}
                     </span>
                   )}
                 </div>
@@ -210,41 +231,76 @@ export default function SellerProfilePage() {
       </div>
 
       {/* Products grid */}
-      <section>
-        <h2 className="text-lg font-semibold text-m4m-black mb-4">
-          Listed products
-          {products.length > 0 && <span className="ml-2 text-sm font-normal text-m4m-gray-500">({products.length})</span>}
-        </h2>
-        {loading ? (
+      {loading ? (
+        <section>
+          <h2 className="text-lg font-semibold text-m4m-black mb-4">Listed products</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 aspect-[3/4] animate-pulse" aria-hidden />
             ))}
           </div>
-        ) : products.length === 0 ? (
+        </section>
+      ) : products.length === 0 ? (
+        <section>
+          <h2 className="text-lg font-semibold text-m4m-black mb-4">Listed products</h2>
           <div className="rounded-xl border border-m4m-gray-200 bg-white p-12 text-center">
             <p className="text-m4m-gray-500">No products listed yet.</p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
-            {products.map((p) => (
-              <ProductCard
-                key={p.id}
-                product={{
-                  ...p,
-                  seller: {
-                    ...(p.seller ?? {}),
-                    ...seller,
-                    id: seller?.id ?? p.seller?.id,
-                    name: seller?.name ?? p.seller?.name,
-                  },
-                  rating: p.rating ?? sellerRating,
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+        </section>
+      ) : (
+        <>
+          {/* Featured product (pinned) */}
+          {products.some((p) => p.is_pinned) && (() => {
+            const pinned = products.find((p) => p.is_pinned);
+            return (
+              <section className="mb-8">
+                <h2 className="text-lg font-semibold text-m4m-black mb-4 flex items-center gap-2">
+                  <span>⭐</span> Featured Product
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+                  <ProductCard
+                    key={pinned.id}
+                    product={{
+                      ...pinned,
+                      seller: {
+                        ...(pinned.seller ?? {}),
+                        ...seller,
+                        id: seller?.id ?? pinned.seller?.id,
+                        name: seller?.name ?? pinned.seller?.name,
+                      },
+                    }}
+                  />
+                </div>
+              </section>
+            );
+          })()}
+          {/* Other products (or all when none pinned) */}
+          <section>
+            <h2 className="text-lg font-semibold text-m4m-black mb-4">
+              {products.some((p) => p.is_pinned) ? 'Other products' : 'Listed products'}
+              <span className="ml-2 text-sm font-normal text-m4m-gray-500">
+                ({products.some((p) => p.is_pinned) ? products.filter((p) => !p.is_pinned).length : products.length})
+              </span>
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+              {products.filter((p) => !p.is_pinned).map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={{
+                    ...p,
+                    seller: {
+                      ...(p.seller ?? {}),
+                      ...seller,
+                      id: seller?.id ?? p.seller?.id,
+                      name: seller?.name ?? p.seller?.name,
+                    },
+                  }}
+                />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

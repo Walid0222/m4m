@@ -1,7 +1,7 @@
-const ONLINE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const ONLINE_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
 
 /**
- * Returns true if the seller has activity in the last 5 minutes (green dot).
+ * Returns true if the seller has activity in the last 2 minutes (green dot).
  * Otherwise false (gray dot). Uses seller.last_activity_at from API.
  * @param {{ last_activity_at?: string | number | null } | null} seller
  * @returns {boolean}

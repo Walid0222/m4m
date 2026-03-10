@@ -104,6 +104,10 @@ export function getMe() {
   return api.get('/me').then(unwrap);
 }
 
+export function updateMe(body) {
+  return api.patch('/me', body).then(unwrap);
+}
+
 export function logout() {
   return api.post('/logout').then(() => setToken(null));
 }
@@ -118,8 +122,8 @@ export function getTrendingProducts(params = {}) {
   return api.get('/products/trending', { params }).then(unwrap);
 }
 
-export function getProduct(id) {
-  return api.get(`/products/${id}`).then(unwrap);
+export function getProduct(id, params = {}) {
+  return api.get(`/products/${id}`, { params }).then(unwrap);
 }
 
 export function getRecommendedProducts(id, params = {}) {
@@ -163,8 +167,16 @@ export function deleteProduct(id) {
   return api.delete(`/my-products/${id}`).then(() => {});
 }
 
-export function createOrder(items) {
-  return api.post('/orders', { items }).then(unwrap);
+/** Pin a product as featured (seller only). Unpins others first. */
+export function pinProduct(productId) {
+  return api.post(`/products/${productId}/pin`).then(unwrap);
+}
+
+export function createOrder(items, couponCode, buyerNote) {
+  const body = { items };
+  if (couponCode) body.coupon_code = couponCode;
+  if (buyerNote != null && buyerNote !== '') body.buyer_note = buyerNote;
+  return api.post('/orders', body).then(unwrap);
 }
 
 export function getOrders(params = {}) {
@@ -185,6 +197,16 @@ export function getSellerOrders(params = {}) {
 
 export function updateSellerOrderStatus(orderId, body) {
   return api.patch(`/seller/orders/${orderId}/status`, body).then(unwrap);
+}
+
+/** Toggle vacation mode for the authenticated seller. */
+export function toggleVacationMode() {
+  return api.post('/seller/vacation-mode').then(unwrap);
+}
+
+/** Seller updates their note on an order. */
+export function updateSellerOrderNote(orderId, sellerNote) {
+  return api.patch(`/seller/orders/${orderId}/note`, { seller_note: sellerNote ?? '' }).then(unwrap);
 }
 
 /** Seller sends manual delivery credentials — marks order as delivered. */
@@ -261,6 +283,12 @@ export function toggleFavorite(productId) {
   return api.post(`/favorites/${productId}`).then(unwrap);
 }
 
+// --- Coupons (buyer-facing) ---
+
+export function previewCoupon(code) {
+  return api.post('/coupons/preview', { code }).then(unwrap);
+}
+
 export function removeFavorite(productId) {
   return api.delete(`/favorites/${productId}`).then(unwrap);
 }
@@ -293,6 +321,20 @@ export function getAdminStats() {
   return api.get('/admin/stats').then(unwrap);
 }
 
+// --- Admin coupons ---
+
+export function getAdminCoupons() {
+  return api.get('/admin/coupons').then(unwrap);
+}
+
+export function createAdminCoupon(body) {
+  return api.post('/admin/coupons', body).then(unwrap);
+}
+
+export function deleteAdminCoupon(id) {
+  return api.delete(`/admin/coupons/${id}`).then(() => {});
+}
+
 // --- Seller auto-reply ---
 
 export function getSellerAutoReply() {
@@ -313,10 +355,126 @@ export function getBuyerStats() {
   return api.get('/stats/buyer').then(unwrap);
 }
 
+// --- Categories & Offer Types (service catalog) ---
+
+export function getCategories(params = {}) {
+  return api.get('/categories', { params }).then(unwrap);
+}
+
+export function getServices(params = {}) {
+  return api.get('/services', { params }).then(unwrap);
+}
+
+export function getServiceBySlug(slug, params = {}) {
+  return api.get(`/services/${encodeURIComponent(slug)}`, { params }).then(unwrap);
+}
+
+export function getOfferTypes(params = {}) {
+  return api.get('/offer-types', { params }).then(unwrap);
+}
+
+export function searchOfferTypes(params = {}) {
+  return api.get('/offer-types/search', { params }).then(unwrap);
+}
+
+export function getOfferTypeBySlug(slug, params = {}) {
+  return api.get(`/offer-types/${encodeURIComponent(slug)}`, { params }).then(unwrap);
+}
+
+// --- Service requests (seller requests new offer types) ---
+
+export function getMyServiceRequests(params = {}) {
+  return api.get('/service-requests', { params }).then(unwrap);
+}
+
+export function createServiceRequest(body) {
+  return api.post('/service-requests', body).then(unwrap);
+}
+
+// --- Admin: Service requests ---
+
+export function getAdminServiceRequests(params = {}) {
+  return api.get('/admin/service-requests', { params }).then(unwrap);
+}
+
+export function approveServiceRequest(id) {
+  return api.post(`/admin/service-requests/${id}/approve`).then(unwrap);
+}
+
+export function rejectServiceRequest(id, body) {
+  return api.post(`/admin/service-requests/${id}/reject`, body).then(unwrap);
+}
+
+export function updateAdminServiceRequest(id, body) {
+  return api.patch(`/admin/service-requests/${id}`, body).then(unwrap);
+}
+
+export function deleteAdminServiceRequest(id) {
+  return api.delete(`/admin/service-requests/${id}`).then(() => {});
+}
+
+// --- Admin: Services ---
+
+export function getAdminServices(params = {}) {
+  return api.get('/admin/services', { params }).then(unwrap);
+}
+
+export function createAdminService(body) {
+  return api.post('/admin/services', body).then(unwrap);
+}
+
+export function updateAdminService(id, body) {
+  return api.patch(`/admin/services/${id}`, body).then(unwrap);
+}
+
+export function deleteAdminService(id) {
+  return api.delete(`/admin/services/${id}`).then(() => {});
+}
+
+// --- Admin: Offer types (service catalog) ---
+
+export function getAdminOfferTypes(params = {}) {
+  return api.get('/admin/offer-types', { params }).then(unwrap);
+}
+
+export function createAdminOfferType(body) {
+  return api.post('/admin/offer-types', body).then(unwrap);
+}
+
+export function getAdminOfferType(id) {
+  return api.get(`/admin/offer-types/${id}`).then(unwrap);
+}
+
+export function updateAdminOfferType(id, body) {
+  return api.patch(`/admin/offer-types/${id}`, body).then(unwrap);
+}
+
+export function deleteAdminOfferType(id, params = {}) {
+  return api.delete(`/admin/offer-types/${id}`, { params }).then(() => {});
+}
+
 // --- Announcements ---
 
 export function getAnnouncements(params = {}) {
   return api.get('/announcements', { params }).then(unwrap);
+}
+
+// --- Admin announcements ---
+
+export function getAdminAnnouncements(params = {}) {
+  return api.get('/admin/announcements', { params }).then(unwrap);
+}
+
+export function createAdminAnnouncement(body) {
+  return api.post('/admin/announcements', body).then(unwrap);
+}
+
+export function updateAdminAnnouncement(id, body) {
+  return api.patch(`/admin/announcements/${id}`, body).then(unwrap);
+}
+
+export function deleteAdminAnnouncement(id) {
+  return api.delete(`/admin/announcements/${id}`).then(() => {});
 }
 
 // --- Conversations & Messages ---

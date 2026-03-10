@@ -20,11 +20,31 @@ import { getSellerSalesBadge } from '../lib/sellerBadge';
 import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
 import ReportModal from '../components/ReportModal';
 
-function getRating(product) {
-  const r = product?.rating;
-  if (typeof r === 'number' && r >= 0) return r;
-  if (r != null) return parseFloat(r) || 0;
-  return null;
+const VIEWED_PRODUCTS_KEY = 'viewed_products';
+const VIEW_COOLDOWN_MS = 30 * 60 * 1000;
+
+function getViewedProducts() {
+  try {
+    const raw = localStorage.getItem(VIEWED_PRODUCTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function markProductViewed(productId) {
+  try {
+    const viewed = getViewedProducts();
+    viewed[String(productId)] = Date.now();
+    localStorage.setItem(VIEWED_PRODUCTS_KEY, JSON.stringify(viewed));
+  } catch { /* ignore */ }
+}
+
+function wasProductViewedRecently(productId) {
+  const viewed = getViewedProducts();
+  const ts = viewed[String(productId)];
+  if (!ts) return false;
+  return (Date.now() - ts) < VIEW_COOLDOWN_MS;
 }
 
 const FEATURE_ICONS = {
@@ -35,9 +55,23 @@ const FEATURE_ICONS = {
   assurance: { label: '30-day assurance', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg> },
 };
 
-function PurchaseConfirmModal({ product, quantity, onConfirm, onCancel, isLoading }) {
-  const price = Number(product.price || 0);
-  const total = price * quantity;
+function PurchaseConfirmModal({
+  product,
+  quantity,
+  onConfirm,
+  onCancel,
+  isLoading,
+  couponCode,
+  onCouponCodeChange,
+  onApplyCoupon,
+  couponError,
+  discountAmount,
+  subtotal,
+  finalTotal,
+  isCheckingCoupon,
+  buyerNote,
+  onBuyerNoteChange,
+}) {
   const seller = product.seller || {};
   const salesBadge = getSellerSalesBadge(seller.completed_sales ?? seller.completedSales ?? 0);
   const isVerified = seller.is_verified === true || seller.is_verified === 1;
@@ -78,10 +112,60 @@ function PurchaseConfirmModal({ product, quantity, onConfirm, onCancel, isLoadin
             <span className="text-gray-500">Quantity</span>
             <span className="font-medium text-gray-900">{quantity}</span>
           </div>
-          <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
-            <span className="font-semibold text-gray-900">Total</span>
-            <span className="font-bold text-gray-900">{total.toFixed(2)} MAD</span>
+          <div className="flex justify-between text-xs text-gray-600 border-t border-gray-200 pt-2 mt-2">
+            <span>Subtotal</span>
+            <span className="font-medium text-gray-900">{Number(subtotal || 0).toFixed(2)} MAD</span>
           </div>
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-700">Coupon code</span>
+              <span className="text-[11px] text-gray-500">
+                Apply a valid coupon to reduce your total. Seller earnings are not reduced.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(e) => onCouponCodeChange(e.target.value)}
+                placeholder="WELCOME10"
+                className="w-28 px-2 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-m4m-purple outline-none"
+              />
+              <button
+                type="button"
+                onClick={onApplyCoupon}
+                disabled={isCheckingCoupon || !couponCode.trim()}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60"
+              >
+                {isCheckingCoupon ? 'Checking…' : 'Apply'}
+              </button>
+            </div>
+          </div>
+          {couponError && (
+            <p className="text-[11px] text-red-600 mt-1">{couponError}</p>
+          )}
+          {discountAmount > 0 && (
+            <div className="flex justify-between text-xs text-green-700 mt-1">
+              <span>Coupon discount</span>
+              <span>-{Number(discountAmount || 0).toFixed(2)} MAD</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
+            <span className="font-semibold text-gray-900">Final total</span>
+            <span className="font-bold text-gray-900">{Number(finalTotal || 0).toFixed(2)} MAD</span>
+          </div>
+          {onBuyerNoteChange && (
+            <div className="mt-3 pt-3 border-t border-gray-200">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Order note (optional)</label>
+              <textarea
+                value={buyerNote || ''}
+                onChange={(e) => onBuyerNoteChange(e.target.value)}
+                placeholder="e.g. Please deliver as soon as possible."
+                rows={2}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 focus:ring-2 focus:ring-m4m-purple outline-none resize-none"
+              />
+            </div>
+          )}
         </div>
         <div className="flex gap-3">
           <button type="button" onClick={onCancel} className="flex-1 py-3 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
@@ -119,6 +203,11 @@ export default function ProductPage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [favToggling, setFavToggling] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponInfo, setCouponInfo] = useState(null);
+  const [couponError, setCouponError] = useState('');
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [buyerNote, setBuyerNote] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +216,9 @@ export default function ProductPage() {
       setLoading(true);
       setSelectedImageIndex(0);
       try {
-        const data = await getProduct(id);
+        const recordView = !wasProductViewedRecently(id);
+        if (recordView) markProductViewed(id);
+        const data = await getProduct(id, { record_view: recordView ? 1 : 0 });
         if (!cancelled) setProduct(data);
       } catch {
         if (!cancelled) setProduct(null);
@@ -195,6 +286,34 @@ export default function ProductPage() {
     };
   }, [id]);
 
+  // Track recently viewed products in localStorage (last 10)
+  useEffect(() => {
+    const productId = product?.id;
+    if (!productId) return;
+    try {
+      const STORAGE_KEY = 'recently_viewed_products';
+      const raw = localStorage.getItem(STORAGE_KEY);
+      let existing = [];
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) existing = parsed;
+        } catch {
+          existing = [];
+        }
+      }
+      const idNum = Number(productId);
+      const deduped = existing
+        .map((v) => Number(v))
+        .filter((v) => !Number.isNaN(v) && v !== idNum);
+      deduped.unshift(idNum);
+      const limited = deduped.slice(0, 10);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(limited));
+    } catch {
+      // ignore storage errors (e.g. private mode)
+    }
+  }, [product?.id]);
+
   useEffect(() => {
     if (!user || !getToken() || !product?.id) { setUserOrders([]); return; }
     let cancelled = false;
@@ -244,8 +363,26 @@ export default function ProductPage() {
     if (!user || !getToken()) { navigate('/login'); return; }
     if (!product) return;
     if (Number(product.stock ?? 0) <= 0) { setError('Out of stock.'); return; }
+    if (product.seller?.vacation_mode) { setError('Seller is in vacation mode.'); return; }
     setError('');
     setShowConfirmModal(true);
+  };
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponChecking(true);
+    setCouponError('');
+    try {
+      const { previewCoupon } = await import('../services/api');
+      const info = await previewCoupon(couponCode.trim());
+      setCouponInfo(info);
+      setCouponError('');
+    } catch (err) {
+      setCouponInfo(null);
+      setCouponError(err.message || 'Invalid or expired coupon.');
+    } finally {
+      setCouponChecking(false);
+    }
   };
 
   const handleBuyConfirm = async () => {
@@ -255,9 +392,13 @@ export default function ProductPage() {
     try {
       const wallet = await getWallet();
       const balance = Number(wallet?.balance ?? 0);
-      const total = quantity * Number(product.effective_price ?? product.price ?? 0);
+      const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
+      const subtotal = baseUnitPrice * quantity;
+      const pct = couponInfo?.discount_percent ?? 0;
+      const discount = pct > 0 ? Math.max(0, Math.min(subtotal, (subtotal * pct) / 100)) : 0;
+      const total = Math.max(0, subtotal - discount);
       if (balance < total) { setError('Insufficient wallet balance.'); setBuying(false); return; }
-      await createOrder([{ product_id: product.id, quantity }]);
+      await createOrder([{ product_id: product.id, quantity }], couponInfo ? couponCode.trim() : null, buyerNote?.trim() || null);
       setProduct((prev) => prev ? { ...prev, stock: Math.max(0, Number(prev.stock ?? 0) - quantity) } : prev);
       navigate('/orders');
     } catch (err) {
@@ -322,10 +463,14 @@ export default function ProductPage() {
     seller.is_verified_seller === true ||
     seller.is_verified_seller === 1;
   const sellerLevel = typeof seller.seller_level === 'number' ? seller.seller_level : null;
-  const rating = getRating(product);
   const reviews = product.reviews ?? [];
-  const avgRatingFromReviews = reviews.length > 0 ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length : null;
-  const displayRating = rating != null ? rating : avgRatingFromReviews ?? null;
+  const reviewsCount = reviews.length || Number(product.reviews_count ?? 0);
+  const avgRatingFromReviews = reviewsCount > 0
+    ? (reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length
+      : Number(product.reviews_avg_rating ?? 0))
+    : null;
+  const displayRating = reviewsCount > 0 && avgRatingFromReviews != null ? Number(avgRatingFromReviews) : null;
   const sellerOnline = isSellerOnline(seller);
   const sellerMemberSince =
     seller.member_since || seller.created_at || seller.createdAt || null;
@@ -347,6 +492,19 @@ export default function ProductPage() {
   const sellerReminder = product.seller_reminder ?? product.reminder_message;
   const isInstantDelivery = deliveryType === 'instant' || (typeof deliveryTime === 'string' && deliveryTime.toLowerCase().includes('instant'));
 
+  const lastSeenLabel = (() => {
+    const at = seller.last_activity_at;
+    if (!at) return null;
+    const ts = new Date(at).getTime();
+    if (Number.isNaN(ts)) return null;
+    const diffMs = Date.now() - ts;
+    const diffMin = Math.max(0, Math.round(diffMs / 60000));
+    if (diffMin < 2) return 'Online';
+    if (diffMin < 60) return `Last seen ${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
+    const diffHours = Math.round(diffMin / 60);
+    return `Last seen ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+  })();
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
       {/* Confirm modal */}
@@ -357,6 +515,36 @@ export default function ProductPage() {
           onConfirm={handleBuyConfirm}
           onCancel={() => setShowConfirmModal(false)}
           isLoading={buying}
+          couponCode={couponCode}
+          onCouponCodeChange={(value) => {
+            setCouponCode(value);
+            setCouponError('');
+            // Clear applied coupon info when code changes
+            setCouponInfo(null);
+          }}
+          onApplyCoupon={handleApplyCoupon}
+          couponError={couponError}
+          discountAmount={(() => {
+            const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
+            const subtotal = baseUnitPrice * quantity;
+            const pct = couponInfo?.discount_percent ?? 0;
+            if (!pct || subtotal <= 0) return 0;
+            return Math.max(0, Math.min(subtotal, (subtotal * pct) / 100));
+          })()}
+          subtotal={(() => {
+            const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
+            return baseUnitPrice * quantity;
+          })()}
+          finalTotal={(() => {
+            const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
+            const subtotal = baseUnitPrice * quantity;
+            const pct = couponInfo?.discount_percent ?? 0;
+            const discount = pct ? Math.max(0, Math.min(subtotal, (subtotal * pct) / 100)) : 0;
+            return Math.max(0, subtotal - discount);
+          })()}
+          isCheckingCoupon={couponChecking}
+          buyerNote={buyerNote}
+          onBuyerNoteChange={setBuyerNote}
         />
       )}
 
@@ -412,6 +600,29 @@ export default function ProductPage() {
             <div className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-3">Description</h2>
               <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">{product.description}</p>
+            </div>
+          )}
+
+          {/* Delivery instructions */}
+          {product.delivery_instructions && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-3">How to use this product</h2>
+              <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">{product.delivery_instructions}</div>
+            </div>
+          )}
+
+          {/* Product FAQ */}
+          {product.faqs && product.faqs.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Product FAQ</h2>
+              <div className="space-y-4">
+                {product.faqs.map((faq) => (
+                  <div key={faq.id} className="border-b border-gray-100 last:border-0 pb-4 last:pb-0">
+                    <p className="text-sm font-medium text-gray-900">Q: {faq.question}</p>
+                    <p className="text-sm text-gray-600 mt-1">A: {faq.answer}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -515,8 +726,9 @@ export default function ProductPage() {
         {/* Right: product info + purchase */}
         <div className="space-y-5">
           {/* Title + actions */}
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">{product.name}</h1>
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">{product.name}</h1>
             <div className="flex items-center gap-2 shrink-0">
               {getToken() && (
                 <button
@@ -541,17 +753,38 @@ export default function ProductPage() {
                 Report
               </button>
             </div>
+            </div>
+            {/* Dynamic badge: Low Stock (not analytics) */}
+            {(() => {
+              const stockNum = Number(product.stock ?? 0);
+              const isLowStock = stockNum > 0 && stockNum <= 5;
+              if (!isLowStock) return null;
+              return (
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-800">
+                    🟢 Low Stock
+                  </span>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Rating */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <span key={s} className={`text-lg ${s <= Math.round(displayRating ?? 0) ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
-              ))}
-            </div>
-            <span className="text-sm font-medium text-gray-700">{displayRating != null ? displayRating.toFixed(1) : 'No rating'}</span>
-            {reviews.length > 0 && <span className="text-sm text-gray-400">({reviews.length} reviews)</span>}
+            {reviewsCount > 0 ? (
+              <>
+                <div className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <span key={s} className={`text-lg ${s <= Math.round(displayRating ?? 0) ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
+                  ))}
+                </div>
+                <span className="text-sm font-medium text-gray-700">
+                  ⭐ {displayRating != null ? displayRating.toFixed(1) : 'New'} ({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})
+                </span>
+              </>
+            ) : (
+              <span className="text-sm text-gray-500">No reviews yet</span>
+            )}
           </div>
 
           {/* Price */}
@@ -560,10 +793,10 @@ export default function ProductPage() {
               <div className="space-y-1">
                 <div className="flex items-baseline gap-2">
                   <p className="text-xl font-semibold text-gray-400 line-through">
-                    {price.toFixed(2)} MAD
+                    {Number(product.price || 0).toFixed(2)} MAD
                   </p>
                   <p className="text-3xl font-extrabold text-red-600">
-                    {effectivePrice.toFixed(2)}{' '}
+                    {Number(product.effective_price ?? product.price ?? 0).toFixed(2)}{' '}
                     <span className="text-xl font-semibold text-red-500">MAD</span>
                   </p>
                 </div>
@@ -573,7 +806,7 @@ export default function ProductPage() {
               </div>
             ) : (
               <p className="text-3xl font-bold text-gray-900">
-                {price.toFixed(2)} <span className="text-xl font-semibold text-gray-500">MAD</span>
+                {Number(product.price || 0).toFixed(2)} <span className="text-xl font-semibold text-gray-500">MAD</span>
               </p>
             )}
             <div className="flex items-center gap-2 mt-1">
@@ -605,6 +838,17 @@ export default function ProductPage() {
                   </span>
                 );
               })}
+            </div>
+          )}
+
+          {/* Vacation mode banner */}
+          {seller.vacation_mode && (
+            <div className="rounded-xl bg-amber-100 border border-amber-300 p-4 flex gap-3">
+              <span className="text-xl shrink-0">🏖️</span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-amber-900">Seller temporarily unavailable</p>
+                <p className="text-xs text-amber-800 mt-0.5">This seller is currently in vacation mode and cannot accept new orders.</p>
+              </div>
             </div>
           )}
 
@@ -656,7 +900,7 @@ export default function ProductPage() {
               </Link>
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${sellerOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${sellerOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
-                {sellerOnline ? 'Online' : 'Offline'}
+                {lastSeenLabel || (sellerOnline ? 'Online' : 'Last seen recently')}
               </span>
             </div>
             <button type="button" onClick={handleChatSeller} disabled={chatting || !seller?.id} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:border-m4m-purple hover:text-m4m-purple transition-colors text-sm disabled:opacity-60">
@@ -679,16 +923,16 @@ export default function ProductPage() {
             />
             <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
               <span>Total</span>
-              <span className="font-bold text-gray-900 text-base">{(price * quantity).toFixed(2)} MAD</span>
+              <span className="font-bold text-gray-900 text-base">{(Number(price || 0) * Number(quantity || 1)).toFixed(2)} MAD</span>
             </div>
             {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
             <button
               type="button"
               onClick={handleBuyClick}
-              disabled={buying || isOutOfStock}
+              disabled={buying || isOutOfStock || seller.vacation_mode}
               className="w-full py-3.5 rounded-xl font-bold text-base bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
-              {buying ? 'Processing…' : isOutOfStock ? 'Out of stock' : 'BUY NOW'}
+              {buying ? 'Processing…' : isOutOfStock ? 'Out of stock' : seller.vacation_mode ? 'Seller on vacation' : 'BUY NOW'}
             </button>
             {!user && (
               <p className="text-xs text-gray-400 text-center mt-2">You need to <Link to="/login" className="text-m4m-purple font-medium hover:underline">sign in</Link> to purchase</p>

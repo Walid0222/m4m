@@ -14,6 +14,9 @@ import {
   paginatedItems,
   getToken,
   getMyProducts,
+  getCategories,
+  getServices,
+  getOfferTypes,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -28,6 +31,10 @@ import {
   getSellerAutoReply,
   updateSellerAutoReply,
   addProductAccounts,
+  updateMe,
+  pinProduct,
+  getMyServiceRequests,
+  createServiceRequest,
 } from '../services/api';
 import OrderCard from '../components/OrderCard';
 import { getOrderStatusStyle } from '../lib/orderStatus';
@@ -35,6 +42,7 @@ import { getOrderStatusStyle } from '../lib/orderStatus';
 const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: 'chart' },
   { id: 'products', label: 'Products', icon: 'box' },
+  { id: 'service-requests', label: 'My Service Requests', icon: 'request' },
   { id: 'orders', label: 'Orders', icon: 'order' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
   { id: 'verification', label: 'Get Verified', icon: 'verify' },
@@ -272,7 +280,7 @@ function VerificationSection({ user }) {
 }
 
 export default function SellerDashboardPage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [searchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -294,6 +302,7 @@ export default function SellerDashboardPage() {
   });
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [pinningProductId, setPinningProductId] = useState(null);
   const [formError, setFormError] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
@@ -302,6 +311,8 @@ export default function SellerDashboardPage() {
   const [deliverContent, setDeliverContent] = useState('');
   const [deliverSubmitting, setDeliverSubmitting] = useState(false);
   const [form, setForm] = useState({
+    service_id: '',
+    offer_type_id: '',
     title: '',
     game: '',
     description: '',
@@ -317,7 +328,18 @@ export default function SellerDashboardPage() {
     flash_price: '',
     flash_start: '',
     flash_end: '',
+    delivery_instructions: '',
+    is_pinned: false,
+    faqs: [],
   });
+  const [categories, setCategories] = useState([]);
+  const [services, setServices] = useState([]);
+  const [offerTypes, setOfferTypes] = useState([]);
+  const [serviceRequestModalOpen, setServiceRequestModalOpen] = useState(false);
+  const [serviceRequests, setServiceRequests] = useState([]);
+  const [serviceRequestForm, setServiceRequestForm] = useState({ service_name: '', category_id: '', description: '' });
+  const [serviceRequestSubmitting, setServiceRequestSubmitting] = useState(false);
+  const [serviceRequestError, setServiceRequestError] = useState('');
 
   const fetchProducts = useCallback(async () => {
     if (!getToken() || !user?.is_seller) return;
@@ -336,6 +358,45 @@ export default function SellerDashboardPage() {
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  useEffect(() => {
+    getCategories().then((d) => setCategories(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setCategories([]));
+    getServices().then((d) => setServices(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setServices([]));
+    getOfferTypes().then((d) => setOfferTypes(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setOfferTypes([]));
+  }, []);
+
+  const fetchServiceRequests = useCallback(async () => {
+    if (!getToken() || !user?.is_seller) return;
+    try {
+      const data = await getMyServiceRequests({ per_page: 50 });
+      const list = paginatedItems(data);
+      setServiceRequests(Array.isArray(list) ? list : []);
+    } catch {
+      setServiceRequests([]);
+    }
+  }, [user?.is_seller]);
+
+  useEffect(() => {
+    if (user?.is_seller) fetchServiceRequests();
+  }, [user?.is_seller, fetchServiceRequests]);
+
+  const offerTypesByCategory = useMemo(() => {
+    const byCat = {};
+    (offerTypes || []).forEach((ot) => {
+      const cid = ot.category_id ?? ot.category?.id;
+      if (cid) { byCat[cid] = (byCat[cid] || []).concat(ot); }
+    });
+    return byCat;
+  }, [offerTypes]);
+  const offerTypesByService = useMemo(() => {
+    const bySvc = {};
+    (offerTypes || []).forEach((ot) => {
+      const sid = ot.service_id ?? ot.service?.id;
+      if (sid) { bySvc[sid] = (bySvc[sid] || []).concat(ot); }
+    });
+    return bySvc;
+  }, [offerTypes]);
+  const filteredOfferTypes = form.service_id ? (offerTypesByService[form.service_id] || []) : offerTypes;
 
   const fetchOrders = useCallback(async () => {
     if (!getToken() || !user?.is_seller) return;
@@ -531,6 +592,8 @@ export default function SellerDashboardPage() {
   const handleAddProductSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
+    const offerTypeId = form.offer_type_id ? parseInt(form.offer_type_id, 10) : null;
+    if (!offerTypeId) { setFormError('Please select a service and offer type.'); return; }
     const title = (form.title || '').trim();
     if (!title) { setFormError('Title is required.'); return; }
     const price = parseFloat(form.price);
@@ -556,7 +619,9 @@ export default function SellerDashboardPage() {
 
     setFormSubmitting(true);
     try {
+      const faqs = (form.faqs || []).filter((f) => (f.question || '').trim() && (f.answer || '').trim()).map((f) => ({ question: f.question.trim(), answer: f.answer.trim() }));
       await createProduct({
+        offer_type_id: offerTypeId,
         name: title,
         description,
         price,
@@ -566,14 +631,19 @@ export default function SellerDashboardPage() {
         delivery_type: form.delivery_type,
         delivery_time: (form.delivery_time || '').trim() || null,
         delivery_content: isInstant ? deliveryContent : null,
+        delivery_instructions: (form.delivery_instructions || '').trim() || null,
         features: form.features,
         seller_reminder: (form.seller_reminder || '').trim() || null,
+        is_pinned: !!form.is_pinned,
+        faqs: faqs.length ? faqs : undefined,
         is_flash_deal: !!form.is_flash_deal,
         flash_price: form.is_flash_deal ? parseFloat(form.flash_price) || null : null,
         flash_start: form.is_flash_deal && form.flash_start ? new Date(form.flash_start).toISOString() : null,
         flash_end: form.is_flash_deal && form.flash_end ? new Date(form.flash_end).toISOString() : null,
       });
       setForm({
+        service_id: '',
+        offer_type_id: '',
         title: '',
         game: '',
         description: '',
@@ -585,6 +655,9 @@ export default function SellerDashboardPage() {
         image_urls: '',
         features: [],
         seller_reminder: '',
+        delivery_instructions: '',
+        is_pinned: false,
+        faqs: [],
         is_flash_deal: false,
         flash_price: '',
         flash_start: '',
@@ -600,6 +673,37 @@ export default function SellerDashboardPage() {
     }
   };
 
+  const handleServiceRequestSubmit = async (e) => {
+    e.preventDefault();
+    setServiceRequestError('');
+    const service_name = (serviceRequestForm.service_name || '').trim();
+    if (!service_name) {
+      setServiceRequestError('Service name is required.');
+      return;
+    }
+    if (!serviceRequestForm.category_id) {
+      setServiceRequestError('Please select a category.');
+      return;
+    }
+    setServiceRequestSubmitting(true);
+    try {
+      await createServiceRequest({
+        service_name,
+        category_id: parseInt(serviceRequestForm.category_id, 10),
+        description: (serviceRequestForm.description || '').trim() || undefined,
+      });
+      setServiceRequestForm({ service_name: '', category_id: '', description: '' });
+      setServiceRequestModalOpen(false);
+      await fetchServiceRequests();
+      getOfferTypes().then((d) => setOfferTypes(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => {});
+      setActionMessage({ type: 'success', text: 'Service request submitted. We\'ll review it soon.' });
+    } catch (err) {
+      setServiceRequestError(err.message || 'Failed to submit request.');
+    } finally {
+      setServiceRequestSubmitting(false);
+    }
+  };
+
   const handleDeleteProduct = async (product) => {
     if (!window.confirm(`Delete "${product.name || product.title}"?`)) return;
     try {
@@ -611,9 +715,30 @@ export default function SellerDashboardPage() {
     }
   };
 
+  const handlePinProduct = async (product) => {
+    if (pinningProductId) return;
+    setPinningProductId(product.id);
+    setFormError('');
+    try {
+      await pinProduct(product.id);
+      await fetchProducts();
+      setActionMessage({ type: 'success', text: product.is_pinned ? 'Product unpinned.' : 'Product pinned as featured.' });
+    } catch (err) {
+      setFormError(err.message || 'Failed to pin product.');
+    } finally {
+      setPinningProductId(null);
+    }
+  };
+
   const handleEditProduct = (product) => {
+    const ot = product.offer_type;
+    const categoryId = ot?.category_id ?? ot?.category?.id ?? '';
+    const serviceId = ot?.service_id ?? ot?.service?.id ?? '';
     setEditingProduct({
       id: product.id,
+      category_id: categoryId ? String(categoryId) : '',
+      service_id: serviceId ? String(serviceId) : '',
+      offer_type_id: product.offer_type_id ?? ot?.id ?? '',
       title: product.name || '',
       description: product.description || '',
       price: product.price != null ? String(product.price) : '',
@@ -622,6 +747,9 @@ export default function SellerDashboardPage() {
       delivery_time: product.delivery_time || '',
       features: Array.isArray(product.features) ? product.features : [],
       seller_reminder: product.seller_reminder || '',
+      delivery_instructions: product.delivery_instructions || '',
+      is_pinned: !!product.is_pinned,
+      faqs: Array.isArray(product.faqs) && product.faqs.length > 0 ? product.faqs.map((f) => ({ question: f.question || '', answer: f.answer || '' })) : [],
       image_urls: Array.isArray(product.images) ? product.images.join('\n') : (product.images?.[0] || ''),
       instant_add_accounts: '',
       is_flash_deal: !!product.is_flash_deal,
@@ -636,6 +764,10 @@ export default function SellerDashboardPage() {
     e.preventDefault();
     if (!editingProduct) return;
     setFormError('');
+    if (!editingProduct.offer_type_id) {
+      setFormError('Please select service and offer type.');
+      return;
+    }
     const title = (editingProduct.title || '').trim();
     if (!title) {
       setFormError('Title is required.');
@@ -659,6 +791,7 @@ export default function SellerDashboardPage() {
 
     setFormSubmitting(true);
     try {
+      const faqs = (editingProduct.faqs || []).filter((f) => (f.question || '').trim() && (f.answer || '').trim()).map((f) => ({ question: f.question.trim(), answer: f.answer.trim() }));
       const payload = {
         name: title,
         description: editingProduct.description || null,
@@ -668,8 +801,14 @@ export default function SellerDashboardPage() {
         delivery_type: editingProduct.delivery_type || 'manual',
         delivery_time: editingProduct.delivery_time || null,
         seller_reminder: editingProduct.seller_reminder || null,
+        delivery_instructions: (editingProduct.delivery_instructions || '').trim() || null,
+        is_pinned: !!editingProduct.is_pinned,
+        faqs: faqs.length ? faqs : [],
         features: Array.isArray(editingProduct.features) ? editingProduct.features : [],
       };
+      if (editingProduct.offer_type_id) {
+        payload.offer_type_id = parseInt(editingProduct.offer_type_id, 10);
+      }
 
       if (editingProduct.is_flash_deal) {
         const fPrice = parseFloat(editingProduct.flash_price);
@@ -1017,7 +1156,7 @@ export default function SellerDashboardPage() {
               <StatCard
                 title="Total earnings"
                 value={sellerStats ? `${Number(sellerStats.total_revenue ?? 0).toFixed(2)} MAD` : '—'}
-                subtitle="After 10% platform fee"
+                subtitle="After platform commission"
                 icon="dollar"
               />
               <StatCard
@@ -1034,30 +1173,129 @@ export default function SellerDashboardPage() {
               />
             </div>
 
-            {/* Extra analytics row */}
+            {/* Extra analytics row + Seller progress */}
             {sellerStats && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                <div className="rounded-xl border border-gray-200 bg-white p-4">
-                  <p className="text-xs text-gray-500 mb-1">Rating</p>
-                  <p className="text-xl font-bold text-gray-900">{Number(sellerStats.rating_average ?? 0).toFixed(1)} ⭐</p>
-                  <p className="text-xs text-gray-400">{sellerStats.rating_count ?? 0} review(s)</p>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs text-gray-500 mb-1">Rating</p>
+                    <p className="text-xl font-bold text-gray-900">{Number(sellerStats.rating_average ?? 0).toFixed(1)} ⭐</p>
+                    <p className="text-xs text-gray-400">{sellerStats.rating_count ?? 0} review(s)</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs text-gray-500 mb-1">Seller Badge</p>
+                    <p className="text-lg font-bold text-m4m-purple">🏅 {sellerStats.badge ?? 'New'}</p>
+                    <p className="text-xs text-gray-400">{sellerStats.total_sales ?? 0} sales</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs text-gray-500 mb-1">Disputes</p>
+                    <p className={`text-xl font-bold ${(sellerStats.dispute_count ?? 0) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{sellerStats.dispute_count ?? 0}</p>
+                    <p className="text-xs text-gray-400">Total disputes</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs text-gray-500 mb-1">Verified</p>
+                    <p className="text-lg font-bold">{user?.is_verified_seller ? '✅ Yes' : '❌ No'}</p>
+                    <p className="text-xs text-gray-400">{user?.is_verified_seller ? 'Verified seller' : 'Not verified'}</p>
+                  </div>
                 </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-4">
-                  <p className="text-xs text-gray-500 mb-1">Seller Badge</p>
-                  <p className="text-lg font-bold text-m4m-purple">🏅 {sellerStats.badge ?? 'New'}</p>
-                  <p className="text-xs text-gray-400">{sellerStats.total_sales ?? 0} sales</p>
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-4">
-                  <p className="text-xs text-gray-500 mb-1">Disputes</p>
-                  <p className={`text-xl font-bold ${(sellerStats.dispute_count ?? 0) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{sellerStats.dispute_count ?? 0}</p>
-                  <p className="text-xs text-gray-400">Total disputes</p>
-                </div>
-                <div className="rounded-xl border border-gray-200 bg-white p-4">
-                  <p className="text-xs text-gray-500 mb-1">Verified</p>
-                  <p className="text-lg font-bold">{user?.is_verified_seller ? '✅ Yes' : '❌ No'}</p>
-                  <p className="text-xs text-gray-400">{user?.is_verified_seller ? 'Verified seller' : 'Not verified'}</p>
-                </div>
-              </div>
+
+                {/* Seller Progress section */}
+                {(() => {
+                  const completed = Number(sellerStats.completed_orders ?? sellerStats.total_orders ?? 0);
+                  const sellerLevel = Number.isFinite(sellerStats.seller_level)
+                    ? sellerStats.seller_level
+                    : Math.floor(completed / 2);
+                  const currentCommission = Number(sellerStats.commission_rate ?? 15);
+                  const nextThreshold = sellerStats.next_commission_threshold ?? null;
+                  const nextCommission = sellerStats.next_commission_rate ?? null;
+                  const ordersNeeded = nextThreshold ? Math.max(0, nextThreshold - completed) : 0;
+
+                  // Determine current tier start for progress bar
+                  let tierStart = 0;
+                  if (completed >= 100) tierStart = 100;
+                  else if (completed >= 20) tierStart = 20;
+                  else if (completed >= 10) tierStart = 10;
+
+                  let progress = 1;
+                  if (nextThreshold && nextThreshold > tierStart) {
+                    progress = Math.min(
+                      1,
+                      Math.max(0, (completed - tierStart) / (nextThreshold - tierStart)),
+                    );
+                  }
+
+                  return (
+                    <div className="rounded-2xl border border-m4m-gray-200 bg-white p-5 mb-8">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div>
+                          <h2 className="text-base font-semibold text-m4m-black">Seller Progress</h2>
+                          <p className="text-xs text-m4m-gray-500">
+                            Your commission decreases automatically as you complete more successful orders.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4 text-sm">
+                        <div>
+                          <p className="text-xs text-m4m-gray-500">Seller Level</p>
+                          <p className="mt-0.5 text-lg font-semibold text-m4m-black">{sellerLevel}</p>
+                          <p className="text-[11px] text-m4m-gray-400">Level = completed orders ÷ 2</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-m4m-gray-500">Completed orders</p>
+                          <p className="mt-0.5 text-lg font-semibold text-m4m-black">{completed}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-m4m-gray-500">Current commission</p>
+                          <p className="mt-0.5 text-lg font-semibold text-m4m-black">
+                            {currentCommission.toFixed(0)}%
+                          </p>
+                          <p className="text-[11px] text-m4m-gray-400">Platform fee on each completed order</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-m4m-gray-500">Next commission tier</p>
+                          {nextThreshold ? (
+                            <>
+                              <p className="mt-0.5 text-lg font-semibold text-m4m-black">
+                                {nextCommission != null ? `${nextCommission.toFixed(0)}%` : '—'}
+                              </p>
+                              <p className="text-[11px] text-m4m-gray-400">
+                                {ordersNeeded > 0
+                                  ? `${ordersNeeded} more order${ordersNeeded === 1 ? '' : 's'} to reach the next tier`
+                                  : 'You are at the threshold for the next tier.'}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="mt-0.5 text-lg font-semibold text-m4m-black">Lowest commission</p>
+                              <p className="text-[11px] text-m4m-gray-400">
+                                You already benefit from the best commission rate.
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-2">
+                        <div className="flex justify-between text-[11px] text-m4m-gray-500 mb-1">
+                          <span>
+                            Current tier: {currentCommission.toFixed(0)}%
+                          </span>
+                          <span>
+                            {nextThreshold
+                              ? `Next tier at ${nextThreshold} completed orders`
+                              : 'Max tier reached'}
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-m4m-gray-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-m4m-purple to-m4m-purple-light transition-all"
+                            style={{ width: `${progress * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
             )}
 
             <div className="rounded-xl border border-m4m-gray-200 bg-white p-6 shadow-sm mb-8">
@@ -1123,6 +1361,27 @@ export default function SellerDashboardPage() {
                   <p className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</p>
                 )}
                 <form onSubmit={handleAddProductSubmit} className="space-y-4 max-w-xl">
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Service *</label>
+                    <select value={form.service_id} onChange={(e) => { updateForm('service_id', e.target.value); updateForm('offer_type_id', ''); }} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white">
+                      <option value="">Select service</option>
+                      {(services || []).map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Offer type *</label>
+                    <select value={form.offer_type_id} onChange={(e) => updateForm('offer_type_id', e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white" disabled={!form.service_id}>
+                      <option value="">Select offer type</option>
+                      {(filteredOfferTypes || []).map((ot) => (
+                        <option key={ot.id} value={ot.id}>{ot.name}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => setServiceRequestModalOpen(true)} className="mt-1.5 text-sm text-m4m-purple hover:underline">
+                      Can&apos;t find your service? Request new service
+                    </button>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Title *</label>
                     <input type="text" value={form.title} onChange={(e) => updateForm('title', e.target.value)} placeholder="Product title" maxLength={255} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
@@ -1210,6 +1469,36 @@ export default function SellerDashboardPage() {
                     <textarea value={form.seller_reminder} onChange={(e) => updateForm('seller_reminder', e.target.value)} placeholder="e.g. Please provide your game username after purchase." rows={2} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
                   </div>
 
+                  {/* Delivery instructions */}
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">How to use this product <span className="font-normal text-m4m-gray-400">(instructions shown to buyers)</span></label>
+                    <textarea value={form.delivery_instructions} onChange={(e) => updateForm('delivery_instructions', e.target.value)} placeholder="1. Login with provided account\n2. Change password\n3. Enjoy the service" rows={4} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
+                  </div>
+
+                  {/* Featured product (one per seller) */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-m4m-gray-700">
+                      <input type="checkbox" checked={form.is_pinned} onChange={(e) => updateForm('is_pinned', e.target.checked)} className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple" />
+                      Feature this product (one per seller — appears first on your profile)
+                    </label>
+                  </div>
+
+                  {/* Product FAQ */}
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Product FAQ</label>
+                    <p className="text-xs text-m4m-gray-500 mb-2">Add common questions and answers for buyers.</p>
+                    {(form.faqs || []).map((faq, idx) => (
+                      <div key={idx} className="flex gap-2 mb-2 items-start">
+                        <div className="flex-1 space-y-1">
+                          <input type="text" value={faq.question} onChange={(e) => updateForm('faqs', form.faqs.map((f, i) => i === idx ? { ...f, question: e.target.value } : f))} placeholder="Question" className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-sm" />
+                          <input type="text" value={faq.answer} onChange={(e) => updateForm('faqs', form.faqs.map((f, i) => i === idx ? { ...f, answer: e.target.value } : f))} placeholder="Answer" className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-sm" />
+                        </div>
+                        <button type="button" onClick={() => updateForm('faqs', form.faqs.filter((_, i) => i !== idx))} className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-sm">×</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => updateForm('faqs', [...(form.faqs || []), { question: '', answer: '' }])} className="text-sm font-medium text-m4m-purple hover:underline">+ Add FAQ</button>
+                  </div>
+
                   {/* Flash deal */}
                   <div className="border-t border-m4m-gray-100 pt-4 mt-2">
                     <label className="flex items-center gap-2 text-sm font-medium text-m4m-gray-700 mb-2">
@@ -1269,6 +1558,84 @@ export default function SellerDashboardPage() {
               </div>
             )}
 
+            {/* Service request modal */}
+            {serviceRequestModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !serviceRequestSubmitting && setServiceRequestModalOpen(false)}>
+                <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                  <div className="p-6">
+                    <h3 className="text-lg font-semibold text-m4m-black mb-4">Request new service type</h3>
+                    {serviceRequestError && (
+                      <p className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{serviceRequestError}</p>
+                    )}
+                    <form onSubmit={handleServiceRequestSubmit} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Service name *</label>
+                        <input
+                          type="text"
+                          value={serviceRequestForm.service_name}
+                          onChange={(e) => setServiceRequestForm((f) => ({ ...f, service_name: e.target.value }))}
+                          placeholder="e.g. HBO Max Account"
+                          maxLength={255}
+                          className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Category *</label>
+                        <select
+                          value={serviceRequestForm.category_id}
+                          onChange={(e) => setServiceRequestForm((f) => ({ ...f, category_id: e.target.value }))}
+                          className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white"
+                        >
+                          <option value="">Select category</option>
+                          {(categories || []).map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Description (optional)</label>
+                        <textarea
+                          value={serviceRequestForm.description}
+                          onChange={(e) => setServiceRequestForm((f) => ({ ...f, description: e.target.value }))}
+                          placeholder="Brief description of the service"
+                          rows={3}
+                          maxLength={2000}
+                          className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none"
+                        />
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={() => setServiceRequestModalOpen(false)} disabled={serviceRequestSubmitting} className="px-4 py-2.5 rounded-lg font-medium border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50 disabled:opacity-60">Cancel</button>
+                        <button type="submit" disabled={serviceRequestSubmitting} className="px-4 py-2.5 rounded-lg font-semibold bg-m4m-purple text-white hover:bg-purple-600 disabled:opacity-60">
+                          {serviceRequestSubmitting ? 'Submitting…' : 'Submit request'}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Your service requests */}
+            {serviceRequests.length > 0 && (
+              <div className="rounded-xl border border-m4m-gray-200 bg-white p-4 md:p-6 shadow-sm mb-6">
+                <h3 className="text-base font-semibold text-m4m-black mb-3">Your service requests</h3>
+                <p className="text-xs text-m4m-gray-500 mb-3">See <button type="button" onClick={() => setSection('service-requests')} className="text-m4m-purple hover:underline">My Service Requests</button> for full details and admin notes.</p>
+                <ul className="space-y-2">
+                  {serviceRequests.map((sr) => (
+                    <li key={sr.id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-m4m-gray-100 last:border-0">
+                      <div>
+                        <span className="font-medium text-m4m-black">{sr.service_name}</span>
+                        {sr.category && <span className="text-m4m-gray-500 text-sm ml-2">({sr.category.name})</span>}
+                      </div>
+                      <span className={`text-sm font-medium px-2.5 py-1 rounded-full ${sr.status === 'approved' ? 'bg-green-100 text-green-800' : sr.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                        {sr.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {editingProduct && (
               <div className="rounded-xl border border-m4m-gray-200 bg-white p-6 shadow-sm mb-6">
                 <h2 className="text-lg font-semibold text-m4m-black mb-4">Edit product</h2>
@@ -1276,6 +1643,33 @@ export default function SellerDashboardPage() {
                   <p className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</p>
                 )}
                 <form onSubmit={handleEditSubmit} className="space-y-4 max-w-xl">
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Service *</label>
+                    <select
+                      value={editingProduct.service_id || ''}
+                      onChange={(e) => setEditingProduct((f) => ({ ...f, service_id: e.target.value, offer_type_id: '' }))}
+                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white"
+                    >
+                      <option value="">Select service</option>
+                      {(services || []).map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Offer type *</label>
+                    <select
+                      value={editingProduct.offer_type_id || ''}
+                      onChange={(e) => setEditingProduct((f) => ({ ...f, offer_type_id: e.target.value }))}
+                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white"
+                      disabled={!editingProduct.service_id}
+                    >
+                      <option value="">Select offer type</option>
+                      {((editingProduct.service_id ? (offerTypesByService[editingProduct.service_id] || []) : offerTypes) || []).map((ot) => (
+                        <option key={ot.id} value={ot.id}>{ot.name}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Title *</label>
                     <input
@@ -1523,6 +1917,52 @@ export default function SellerDashboardPage() {
                       className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none"
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">How to use this product</label>
+                    <textarea
+                      value={editingProduct.delivery_instructions || ''}
+                      onChange={(e) => setEditingProduct((f) => ({ ...f, delivery_instructions: e.target.value }))}
+                      placeholder="1. Login with provided account\n2. Change password\n3. Enjoy the service"
+                      rows={4}
+                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-m4m-gray-700">
+                      <input
+                        type="checkbox"
+                        checked={!!editingProduct.is_pinned}
+                        onChange={(e) => setEditingProduct((f) => ({ ...f, is_pinned: e.target.checked }))}
+                        className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple"
+                      />
+                      Feature this product (one per seller)
+                    </label>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Product FAQ</label>
+                    {(editingProduct.faqs || []).map((faq, idx) => (
+                      <div key={idx} className="flex gap-2 mb-2 items-start">
+                        <div className="flex-1 space-y-1">
+                          <input
+                            type="text"
+                            value={faq.question}
+                            onChange={(e) => setEditingProduct((f) => ({ ...f, faqs: (f.faqs || []).map((q, i) => i === idx ? { ...q, question: e.target.value } : q) }))}
+                            placeholder="Question"
+                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={faq.answer}
+                            onChange={(e) => setEditingProduct((f) => ({ ...f, faqs: (f.faqs || []).map((q, i) => i === idx ? { ...q, answer: e.target.value } : q) }))}
+                            placeholder="Answer"
+                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-sm"
+                          />
+                        </div>
+                        <button type="button" onClick={() => setEditingProduct((f) => ({ ...f, faqs: (f.faqs || []).filter((_, i) => i !== idx) }))} className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-sm">×</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setEditingProduct((f) => ({ ...f, faqs: [...(f.faqs || []), { question: '', answer: '' }] }))} className="text-sm font-medium text-m4m-purple hover:underline">+ Add FAQ</button>
+                  </div>
                   <div className="flex gap-3 pt-2">
                     <button
                       type="button"
@@ -1569,25 +2009,90 @@ export default function SellerDashboardPage() {
                         <span className="text-m4m-gray-500 text-sm">No image</span>
                       </div>
                     )}
-                    <h3 className="font-semibold text-m4m-black truncate">{p.name}</h3>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-semibold text-m4m-black truncate flex-1">{p.name}</h3>
+                      {p.is_pinned ? (
+                        <span className="shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">⭐ Featured Product</span>
+                      ) : null}
+                    </div>
                     <p className="mt-1 text-lg font-bold text-m4m-black">{Number(p.price).toFixed(2)} MAD</p>
                     <p className="text-sm text-m4m-gray-600">Stock: {Number(p.stock ?? 0)}</p>
-                    <div className="mt-3 pt-3 border-t border-m4m-gray-100 flex gap-2">
+                    <div className="text-xs text-m4m-gray-500 mt-1 space-y-0.5">
+                      <p>Views: {Number(p.views ?? 0)}</p>
+                      <p>Orders: {Number(p.orders_count ?? 0)}</p>
+                      <p>Conversion: {(() => {
+                        const v = Number(p.views ?? 0);
+                        const o = Number(p.orders_count ?? 0);
+                        if (v <= 0) return '0%';
+                        return ((o / v) * 100).toFixed(1) + '%';
+                      })()}</p>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-m4m-gray-100 flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => handleEditProduct(p)}
-                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-m4m-purple text-white hover:bg-m4m-purple-light"
+                        className="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm font-medium bg-m4m-purple text-white hover:bg-m4m-purple-light"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
+                        onClick={() => handlePinProduct(p)}
+                        disabled={pinningProductId === p.id}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          p.is_pinned
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200'
+                            : pinningProductId === p.id
+                              ? 'border border-m4m-gray-200 text-m4m-gray-500 cursor-wait'
+                              : 'border border-m4m-gray-200 text-m4m-gray-700 hover:bg-amber-50 hover:border-amber-200 hover:text-amber-800'
+                        }`}
+                      >
+                        {p.is_pinned ? 'Unpin' : pinningProductId === p.id ? 'Pinning…' : 'Pin'}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleDeleteProduct(p)}
-                        className="flex-1 px-3 py-2 rounded-lg text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50"
+                        className="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50"
                       >
                         Delete
                       </button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {section === 'service-requests' && (
+          <>
+            <h1 className="text-xl font-bold text-m4m-black mb-6">My Service Requests</h1>
+            <p className="text-m4m-gray-600 mb-6">When you can&apos;t find a service in the list, request a new one here. You&apos;ll see the status and any admin note if rejected.</p>
+            {serviceRequests.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-m4m-gray-200 bg-white p-8 text-center">
+                <p className="text-m4m-gray-500">You haven&apos;t submitted any service requests yet.</p>
+                <p className="text-sm text-m4m-gray-400 mt-2">Use &quot;Can&apos;t find your service? Request new service&quot; on the Products page when adding a product.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {serviceRequests.map((sr) => (
+                  <div key={sr.id} className={`rounded-xl border p-4 md:p-5 ${sr.status === 'approved' ? 'border-green-200 bg-green-50' : sr.status === 'rejected' ? 'border-red-200 bg-red-50' : 'border-m4m-gray-200 bg-white'}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-m4m-black">{sr.service_name}</h3>
+                        {sr.category && <p className="text-sm text-m4m-gray-500">Category: {sr.category.name}</p>}
+                        <p className="text-xs text-m4m-gray-400 mt-1">{sr.created_at ? new Date(sr.created_at).toLocaleString() : ''}</p>
+                      </div>
+                      <span className={`text-sm font-medium px-2.5 py-1 rounded-full shrink-0 ${sr.status === 'approved' ? 'bg-green-100 text-green-800' : sr.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                        {sr.status}
+                      </span>
+                    </div>
+                    {sr.status === 'rejected' && sr.admin_note && (
+                      <div className="mt-4 pt-4 border-t border-red-200">
+                        <p className="text-sm font-medium text-red-800 mb-1">Admin note:</p>
+                        <p className="text-sm text-red-700">{sr.admin_note}</p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1699,6 +2204,39 @@ export default function SellerDashboardPage() {
         {section === 'settings' && (
           <>
             <h1 className="text-xl font-bold text-m4m-black mb-6">Settings</h1>
+
+            {/* Vacation mode */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 mb-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="font-semibold text-gray-900 mb-1">Vacation Mode</h2>
+                  <p className="text-sm text-gray-500">When enabled, buyers cannot purchase your products. Your product pages will show &quot;Seller temporarily unavailable.&quot;</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const next = !(user?.vacation_mode ?? false);
+                    try {
+                      await updateMe({ vacation_mode: next });
+                      await refreshUser?.();
+                      setActionMessage?.({ type: 'success', text: 'Vacation mode updated.' });
+                    } catch (e) {
+                      setActionMessage?.({ type: 'error', text: e.message || 'Failed to update.' });
+                    }
+                  }}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full border transition-colors ${
+                    (user?.vacation_mode ?? false) ? 'bg-m4m-purple border-m4m-purple' : 'bg-gray-200 border-gray-300'
+                  }`}
+                  aria-pressed={user?.vacation_mode ?? false}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      (user?.vacation_mode ?? false) ? 'translate-x-5' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
 
             {/* Auto-reply message */}
             <div className="rounded-xl border border-gray-200 bg-white p-6 mb-6">

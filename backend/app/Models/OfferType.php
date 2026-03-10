@@ -14,7 +14,7 @@ class OfferType extends Model
     public const STATUS_ACTIVE = 'active';
     public const STATUS_DISABLED = 'disabled';
 
-    protected $fillable = ['category_id', 'name', 'slug', 'description', 'icon', 'status'];
+    protected $fillable = ['category_id', 'service_id', 'name', 'slug', 'description', 'icon', 'status'];
 
     protected $casts = [
         'created_at' => 'datetime',
@@ -29,6 +29,11 @@ class OfferType extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function service(): BelongsTo
+    {
+        return $this->belongsTo(Service::class);
     }
 
     public function products(): HasMany

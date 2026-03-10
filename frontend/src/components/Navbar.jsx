@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getWallet, getNotifications, markNotificationRead, getProducts, getToken, getSellerWarnings } from '../services/api';
+import { getWallet, getNotifications, markNotificationRead, searchOfferTypes, getToken, getSellerWarnings, toggleVacationMode } from '../services/api';
 
 export default function Navbar() {
-  const { user, logout, avatar } = useAuth();
+  const { user, logout, avatar, refreshUser } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -19,6 +19,7 @@ export default function Navbar() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [vacationToggleLoading, setVacationToggleLoading] = useState(false);
   const profileRef = useRef(null);
   const notificationsRef = useRef(null);
 
@@ -68,14 +69,14 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', outside);
   }, []);
 
-  // Autocomplete: fetch suggestions when query changes
+  // Autocomplete: fetch offer types (service catalog) when query changes
   const fetchSuggestions = useCallback(async (q) => {
     if (!q || q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
     setSuggestionLoading(true);
     try {
-      const result = await getProducts({ search: q, per_page: 6 });
-      const items = Array.isArray(result?.data) ? result.data : (Array.isArray(result) ? result : []);
-      setSuggestions(items.slice(0, 6));
+      const result = await searchOfferTypes({ q, limit: 10 });
+      const items = Array.isArray(result) ? result : [];
+      setSuggestions(items);
       setShowSuggestions(items.length > 0);
     } catch {
       setSuggestions([]);
@@ -108,10 +109,10 @@ export default function Navbar() {
     setMobileMenuOpen(false);
   };
 
-  const handleSuggestionClick = (product) => {
+  const handleSuggestionClick = (offerType) => {
     setShowSuggestions(false);
     setSearchQuery('');
-    navigate(`/product/${product.id}`);
+    navigate(`/offer-type/${offerType.slug}`);
     setMobileMenuOpen(false);
   };
 
@@ -167,8 +168,45 @@ export default function Navbar() {
     </Link>
   );
 
+  const showVacationBanner = user?.is_seller && (user?.vacation_mode === true || user?.vacation_mode === 1);
+
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+      {/* Vacation mode banner for sellers */}
+      {showVacationBanner && (
+        <div className="bg-amber-100 border-b border-amber-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-2.5">
+            <div className="flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <span className="text-amber-600 shrink-0" aria-hidden>⚠</span>
+                <div>
+                  <p className="text-sm font-semibold text-amber-900">Vacation Mode Enabled</p>
+                  <p className="text-xs text-amber-800 mt-0.5">Your products are temporarily unavailable to buyers. Disable vacation mode to resume sales.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (vacationToggleLoading) return;
+                  setVacationToggleLoading(true);
+                  try {
+                    const updated = await toggleVacationMode();
+                    if (updated) await refreshUser?.();
+                  } catch {
+                    /* show error via toast if desired */
+                  } finally {
+                    setVacationToggleLoading(false);
+                  }
+                }}
+                disabled={vacationToggleLoading}
+                className="shrink-0 px-4 py-2 rounded-lg text-sm font-semibold bg-amber-200 text-amber-900 hover:bg-amber-300 transition-colors border border-amber-300 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {vacationToggleLoading ? 'Updating…' : 'Disable vacation mode'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center h-14 md:h-16 gap-3 md:gap-4">
 
@@ -199,22 +237,19 @@ export default function Navbar() {
               {/* Suggestions dropdown */}
               {showSuggestions && suggestions.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                  {suggestions.map((p) => (
+                  {suggestions.map((ot) => (
                     <button
-                      key={p.id}
+                      key={ot.id}
                       type="button"
-                      onMouseDown={() => handleSuggestionClick(p)}
+                      onMouseDown={() => handleSuggestionClick(ot)}
                       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
                     >
-                      <div className="w-9 h-9 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden">
-                        {p.images?.[0]
-                          ? <img src={p.images[0]} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center text-gray-300"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>
-                        }
+                      <div className="w-9 h-9 rounded-lg bg-purple-100 flex-shrink-0 flex items-center justify-center text-purple-600 text-sm">
+                        {ot.icon || '📦'}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
-                        <p className="text-xs text-gray-400">{Number(p.price || 0).toFixed(2)} MAD · {p.seller?.name || 'Seller'}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{ot.name}</p>
+                        <p className="text-xs text-gray-400">{ot.category?.name || 'Service'}</p>
                       </div>
                     </button>
                   ))}

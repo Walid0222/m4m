@@ -10,11 +10,16 @@ import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
  * - onToggleFavorite: () => void
  */
 export default function ProductCard({ product, isFavorited = false, onToggleFavorite }) {
-  const { id, name, price, seller, rating, stock } = product;
+  const { id, name, price, seller, stock, is_pinned } = product;
   const isOutOfStock = Number(stock ?? 0) <= 0;
   const sellerName = seller?.name ?? 'Seller';
   const online = isSellerOnline(seller);
-  const displayRating = typeof rating === 'number' ? rating : parseFloat(rating) || 0;
+  const reviewsCount = product.reviews_count ?? product.reviews?.length ?? 0;
+  const avgRating = product.reviews_avg_rating ?? product.rating;
+  const displayRating = reviewsCount > 0 && avgRating != null ? Number(avgRating) : null;
+
+  const stockNum = Number(stock ?? 0);
+  const isLowStock = stockNum > 0 && stockNum <= 5;
 
   const completedSales = seller?.completed_sales ?? seller?.completedSales ?? 0;
   const isVerified =
@@ -28,11 +33,18 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
     <article className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group">
       {/* Product image + favorite/verified badges */}
       <Link to={`/product/${id}`} className="block flex-shrink-0 relative">
-        {isOutOfStock && (
-          <span className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-lg bg-red-500/90 text-white text-[10px] font-semibold uppercase tracking-wide">
-            Out of stock
-          </span>
-        )}
+        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+          {is_pinned && (
+            <span className="px-2 py-0.5 rounded-lg bg-amber-400/95 text-amber-900 text-[10px] font-semibold uppercase tracking-wide w-fit">
+              ⭐ Featured
+            </span>
+          )}
+          {isOutOfStock && (
+            <span className="px-2 py-0.5 rounded-lg bg-red-500/90 text-white text-[10px] font-semibold uppercase tracking-wide w-fit">
+              Out of stock
+            </span>
+          )}
+        </div>
         {isVerified && (
           <span className="absolute top-2 right-2 z-10">
             <VerifiedBadge />
@@ -89,6 +101,15 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
           </Link>
         </h3>
 
+        {/* Dynamic badge: Low Stock (not analytics) */}
+        {isLowStock && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-green-100 text-green-800">
+              🟢 Low Stock
+            </span>
+          </div>
+        )}
+
         {/* Seller info row */}
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
           {seller?.id ? (
@@ -113,18 +134,22 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
               Lv {sellerLevel}
             </span>
           )}
-          <div className="flex items-center gap-0.5" aria-label={`Rating: ${displayRating}`}>
-            <span className="text-amber-400 text-xs">★</span>
-            <span className="text-xs font-medium text-gray-600">
-              {displayRating > 0 ? displayRating.toFixed(1) : '—'}
-            </span>
+          <div className="flex items-center gap-0.5 text-xs font-medium text-gray-600">
+            {reviewsCount > 0 ? (
+              <>
+                <span className="text-amber-400">★</span>
+                <span>{displayRating != null ? displayRating.toFixed(1) : 'New'} ({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})</span>
+              </>
+            ) : (
+              <span className="text-gray-500">No reviews yet</span>
+            )}
           </div>
         </div>
 
         {/* Price + BUY */}
         <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-gray-100">
           <p className="font-bold text-gray-900">
-            {Number(price).toFixed(2)} <span className="text-xs font-semibold text-gray-400">MAD</span>
+            {Number(product.price || 0).toFixed(2)} <span className="text-xs font-semibold text-gray-400">MAD</span>
           </p>
           <Link
             to={`/product/${id}`}

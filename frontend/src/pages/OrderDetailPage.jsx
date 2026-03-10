@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getToken, getOrder, confirmOrderDelivery, openDispute } from '../services/api';
+import { getToken, getOrder, confirmOrderDelivery, openDispute, updateSellerOrderNote } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import OrderProgressTracker from '../components/OrderProgressTracker';
 
 export default function OrderDetailPage() {
   const { id } = useParams();
@@ -17,6 +18,10 @@ export default function OrderDetailPage() {
   const [disputeDesc, setDisputeDesc] = useState('');
   const [disputeSubmitting, setDisputeSubmitting] = useState(false);
   const [disputeError, setDisputeError] = useState('');
+  const [sellerNoteEditing, setSellerNoteEditing] = useState(false);
+  const [sellerNoteDraft, setSellerNoteDraft] = useState('');
+  const [sellerNoteSaving, setSellerNoteSaving] = useState(false);
+  const [sellerNoteError, setSellerNoteError] = useState('');
 
   useEffect(() => {
     if (!id || !getToken()) {
@@ -119,6 +124,24 @@ export default function OrderDetailPage() {
   const isBuyer = !user?.is_seller || order.user_id === user?.id;
   const canDispute = isBuyer && ['delivered', 'processing', 'paid', 'pending'].includes(status) && !isDisputed;
 
+  const isSellerOfOrder = user?.is_seller && Number(order.seller_id) === Number(user?.id);
+
+  const handleSaveSellerNote = async () => {
+    if (!order || sellerNoteSaving) return;
+    setSellerNoteSaving(true);
+    setSellerNoteError('');
+    try {
+      const updated = await updateSellerOrderNote(order.id, sellerNoteDraft ?? '');
+      setOrder(updated);
+      setSellerNoteEditing(false);
+      setSellerNoteDraft('');
+    } catch (err) {
+      setSellerNoteError(err.message || 'Failed to save note.');
+    } finally {
+      setSellerNoteSaving(false);
+    }
+  };
+
   // Delivery content: order-level (instant delivery stores here) or per item
   const orderDeliveryContent = order.delivery_content ?? null;
   const itemCredentials = items.map((i) => i.delivery_credentials).filter(Boolean).join('\n');
@@ -147,6 +170,8 @@ export default function OrderDetailPage() {
           {status}
         </span>
       </div>
+
+      <OrderProgressTracker status={status} />
 
       {/* Confirm delivery button */}
       {isDelivered && (
@@ -329,6 +354,74 @@ export default function OrderDetailPage() {
         <div className="px-4 py-3 bg-m4m-gray-100 font-bold text-m4m-black flex justify-between">
           <span>Total</span>
           <span>{Number(order.total_amount ?? 0).toFixed(2)} MAD</span>
+        </div>
+      </div>
+
+      {/* Order Notes */}
+      <div className="mt-6 rounded-xl border border-m4m-gray-200 overflow-hidden">
+        <div className="px-4 py-3 bg-m4m-gray-100 border-b border-m4m-gray-200">
+          <h3 className="font-semibold text-m4m-black">Order Notes</h3>
+        </div>
+        <div className="px-4 py-4 space-y-4">
+          <div>
+            <p className="text-xs font-medium text-m4m-gray-500 mb-1">Buyer Note</p>
+            <p className="text-sm text-m4m-black">
+              {order.buyer_note ? order.buyer_note : <span className="text-m4m-gray-400 italic">None</span>}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-m4m-gray-500 mb-1">Seller Note</p>
+            {isSellerOfOrder ? (
+              <div>
+                {sellerNoteEditing ? (
+                  <div>
+                    <textarea
+                      value={sellerNoteDraft}
+                      onChange={(e) => setSellerNoteDraft(e.target.value)}
+                      placeholder="e.g. Activation instructions included."
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 focus:ring-2 focus:ring-m4m-purple outline-none resize-none mb-2"
+                    />
+                    {sellerNoteError && <p className="text-sm text-red-600 mb-2">{sellerNoteError}</p>}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveSellerNote}
+                        disabled={sellerNoteSaving}
+                        className="px-4 py-2 rounded-lg bg-m4m-purple text-white text-sm font-medium hover:bg-m4m-purple-dark disabled:opacity-60"
+                      >
+                        {sellerNoteSaving ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setSellerNoteEditing(false); setSellerNoteDraft(''); setSellerNoteError(''); }}
+                        className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-sm text-m4m-black">
+                      {order.seller_note ? order.seller_note : <span className="text-m4m-gray-400 italic">None</span>}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setSellerNoteEditing(true); setSellerNoteDraft(order.seller_note ?? ''); }}
+                      className="mt-2 text-xs font-medium text-m4m-purple hover:underline"
+                    >
+                      Add / Edit note
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-m4m-black">
+                {order.seller_note ? order.seller_note : <span className="text-m4m-gray-400 italic">None</span>}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 

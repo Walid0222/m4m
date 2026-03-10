@@ -14,7 +14,8 @@ export default function SettingsPage() {
   const [message, setMessage] = useState(null);
 
   useEffect(() => {
-    if (user) {
+    const isBuyer = user && !user.is_admin && !user.is_seller;
+    if (isBuyer) {
       setEnabled(user.show_recent_sales_notifications ?? true);
     }
   }, [user]);
@@ -62,48 +63,51 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-900">Notifications</h2>
-        {message && (
-          <div
-            className={`text-sm px-3 py-2 rounded-xl ${
-              message.type === 'success'
-                ? 'bg-green-50 text-green-800 border border-green-200'
-                : 'bg-red-50 text-red-700 border border-red-200'
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium text-gray-900">
-              Recent Purchase Notifications
-            </p>
-            <p className="text-xs text-gray-500 mt-1 max-w-md">
-              Disable this if you don&apos;t want to see recent purchase popups on the
-              marketplace.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleToggle(!enabled)}
-            disabled={saving}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full border transition-colors ${
-              enabled
-                ? 'bg-m4m-purple border-m4m-purple'
-                : 'bg-gray-200 border-gray-300'
-            }`}
-            aria-pressed={enabled}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                enabled ? 'translate-x-5' : 'translate-x-1'
+      {/* Buyer-only notifications block */}
+      {user && !user.is_admin && !user.is_seller && (
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-gray-900">Notifications</h2>
+          {message && (
+            <div
+              className={`text-sm px-3 py-2 rounded-xl ${
+                message.type === 'success'
+                  ? 'bg-green-50 text-green-800 border border-green-200'
+                  : 'bg-red-50 text-red-700 border border-red-200'
               }`}
-            />
-          </button>
+            >
+              {message.text}
+            </div>
+          )}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">
+                Recent Purchase Notifications
+              </p>
+              <p className="text-xs text-gray-500 mt-1 max-w-md">
+                Disable this if you don&apos;t want to see recent purchase popups on the
+                marketplace.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleToggle(!enabled)}
+              disabled={saving}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full border transition-colors ${
+                enabled
+                  ? 'bg-m4m-purple border-m4m-purple'
+                  : 'bg-gray-200 border-gray-300'
+              }`}
+              aria-pressed={enabled}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  enabled ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
