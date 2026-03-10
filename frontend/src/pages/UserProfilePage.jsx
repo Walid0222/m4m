@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getWallet, getOrders, paginatedItems, getToken, api } from '../services/api';
+import { getWallet, getOrders, paginatedItems, getToken, api, uploadProfileAvatar } from '../services/api';
 import { getBuyerPurchaseBadge } from '../lib/sellerBadge';
 
 // Try to PATCH /me if backend supports it; gracefully fail otherwise
@@ -36,13 +36,16 @@ function Tab({ label, active, onClick }) {
 }
 
 export default function UserProfilePage() {
-  const { user, avatar, setAvatar } = useAuth();
+  const { user, avatar, setAvatar, refreshUser } = useAuth();
   const [wallet, setWallet] = useState(null);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
   const avatarInputRef = useRef(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState(null);
 
   // Email form
   const [emailValue, setEmailValue] = useState('');
@@ -75,13 +78,30 @@ export default function UserProfilePage() {
     return () => { cancelled = true; };
   }, [user]);
 
-  const handleAvatarChange = (e) => {
+  const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert('Image must be under 2MB'); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => setAvatar(ev.target.result);
-    reader.readAsDataURL(file);
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError('Image must be under 2MB');
+      return;
+    }
+    setAvatarError(null);
+    const blobUrl = URL.createObjectURL(file);
+    setAvatarPreviewUrl(blobUrl);
+    setAvatarUploading(true);
+    try {
+      await uploadProfileAvatar(file);
+      await refreshUser?.();
+      URL.revokeObjectURL(blobUrl);
+      setAvatarPreviewUrl(null);
+    } catch (err) {
+      setAvatarError(err.message || 'Upload failed');
+      URL.revokeObjectURL(blobUrl);
+      setAvatarPreviewUrl(null);
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
   };
 
   const handleEmailSubmit = async (e) => {
@@ -140,15 +160,22 @@ export default function UserProfilePage() {
             {/* Avatar */}
             <div className="relative flex-shrink-0">
               <div className="w-18 h-18 w-[72px] h-[72px] rounded-full overflow-hidden bg-m4m-purple text-white flex items-center justify-center text-2xl font-bold border-4 border-white shadow">
-                {avatar
-                  ? <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
-                  : <span>{user.name?.charAt(0)?.toUpperCase() || '?'}</span>
-                }
+                {(avatarPreviewUrl || avatar) ? (
+                  <img
+                    src={avatarPreviewUrl || avatar}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{user.name?.charAt(0)?.toUpperCase() || '?'}</span>
+                )}
               </div>
+              {avatarError && <p className="absolute -bottom-5 left-0 right-0 text-xs text-red-600 text-center">{avatarError}</p>}
               <button
                 type="button"
+                disabled={avatarUploading}
                 onClick={() => avatarInputRef.current?.click()}
-                className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full bg-m4m-purple text-white flex items-center justify-center shadow hover:bg-m4m-purple-dark transition-colors"
+                className="absolute -bottom-0.5 -right-0.5 w-7 h-7 rounded-full bg-m4m-purple text-white flex items-center justify-center shadow hover:bg-m4m-purple-dark transition-colors disabled:opacity-60"
                 title="Change profile picture"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

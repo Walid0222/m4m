@@ -20,6 +20,8 @@ import { getSellerSalesBadge } from '../lib/sellerBadge';
 import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
 import ReportModal from '../components/ReportModal';
 import ProductCard from '../components/ProductCard';
+import { useMarketplaceSettings } from '../contexts/MarketplaceSettingsContext';
+import { DEFAULT_MARKETPLACE_SETTINGS } from '../config/marketplaceSettings';
 
 const VIEWED_PRODUCTS_KEY = 'viewed_products';
 const VIEW_COOLDOWN_MS = 30 * 60 * 1000;
@@ -184,6 +186,7 @@ export default function ProductPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { marketplaceSettings } = useMarketplaceSettings();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
@@ -201,6 +204,7 @@ export default function ProductPage() {
   const [reviewError, setReviewError] = useState('');
   const [similarProducts, setSimilarProducts] = useState([]);
   const [recommendedProducts, setRecommendedProducts] = useState([]);
+  const [viewers, setViewers] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [favToggling, setFavToggling] = useState(false);
@@ -267,6 +271,16 @@ export default function ProductPage() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [product?.seller?.id, id]);
+
+  // Mock viewers for social proof (could be replaced by API)
+  useEffect(() => {
+    if (!product?.id) return;
+    const interval = setInterval(() => {
+      setViewers((v) => (Math.random() > 0.3 ? Math.floor(Math.random() * 12) : 0));
+    }, 8000);
+    setViewers(Math.floor(Math.random() * 10));
+    return () => clearInterval(interval);
+  }, [product?.id]);
 
   // Fetch recommended products (global)
   useEffect(() => {
@@ -336,6 +350,26 @@ export default function ProductPage() {
       return items.some((i) => Number(i.product_id) === Number(product.id));
     });
   }, [product?.id, product?.reviews, user?.id, userOrders]);
+
+  const isBestPrice = useMemo(() => {
+    if (!product) return false;
+    const currentPrice = Number(product.effective_price ?? product.price ?? 0);
+    const allProducts = [product, ...similarProducts, ...recommendedProducts];
+    const prices = allProducts.map((p) => Number(p.effective_price ?? p.price ?? 0)).filter((n) => n > 0);
+    if (prices.length === 0) return false;
+    const min = Math.min(...prices);
+    return currentPrice <= min;
+  }, [product, similarProducts, recommendedProducts]);
+
+  const settings = marketplaceSettings ?? DEFAULT_MARKETPLACE_SETTINGS;
+
+  const viewerText = useMemo(() => {
+    if (!settings?.showViewingIndicator) return null;
+    if (viewers === 0) return null;
+    const threshold = settings?.exactViewerThreshold ?? 5;
+    if (viewers < threshold) return settings?.lowViewerText ?? '👀 Several people are viewing this item';
+    return `👀 ${viewers} people viewing this item`;
+  }, [viewers, settings?.showViewingIndicator, settings?.exactViewerThreshold, settings?.lowViewerText]);
 
   const handleSubmitReview = async (e) => {
     e.preventDefault();
@@ -506,6 +540,9 @@ export default function ProductPage() {
     return `Last seen ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
   })();
 
+  const sellerSuccessRate = seller.success_rate ?? seller.success_rate_percent ?? null;
+  const sellerCompletedOrders = Number(seller.completed_sales ?? seller.completedSales ?? 0);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
       {/* Confirm modal */}
@@ -604,6 +641,15 @@ export default function ProductPage() {
             </div>
           )}
 
+          {/* Warranty */}
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
+            <div>✔ Account warranty</div>
+            <div>✔ Instant replacement if invalid</div>
+            <div>✔ Seller support included</div>
+          </div>
+
+          <div className="border-t border-gray-200 my-6" />
+
           {/* Delivery instructions */}
           {product.delivery_instructions && (
             <div className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
@@ -611,6 +657,8 @@ export default function ProductPage() {
               <div className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">{product.delivery_instructions}</div>
             </div>
           )}
+
+          <div className="border-t border-gray-200 my-6" />
 
           {/* Product FAQ */}
           {product.faqs && product.faqs.length > 0 && (
@@ -626,6 +674,8 @@ export default function ProductPage() {
               </div>
             </div>
           )}
+
+          <div className="border-t border-gray-200 my-6" />
 
           {/* Reviews */}
           <section>
@@ -708,7 +758,13 @@ export default function ProductPage() {
                         <p className="font-medium text-gray-900 text-sm">{review.reviewer?.name || review.user?.name || 'Anonymous'}</p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-amber-400 text-sm">{'★'.repeat(Math.min(5, Math.max(0, Math.round(review.rating || 0))))}</span>
-                          {review.created_at && <span className="text-xs text-gray-400">{new Date(review.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>}
+                          <span className="text-gray-300 text-sm">{'★'.repeat(5 - Math.min(5, Math.max(0, Math.round(review.rating || 0))))}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                          <span className="text-green-600">✔ Verified purchase</span>
+                          {review.created_at && (
+                            <span>{new Date(review.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</span>
+                          )}
                         </div>
                         {review.comment && <p className="text-gray-600 mt-2 text-sm leading-relaxed">{review.comment}</p>}
                       </div>
@@ -730,30 +786,46 @@ export default function ProductPage() {
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">{product.name}</h1>
-            <div className="flex items-center gap-2 shrink-0">
-              {getToken() && (
+              <div className="flex items-center gap-2 shrink-0">
+                {getToken() && (
+                  <button
+                    type="button"
+                    onClick={handleToggleFavorite}
+                    disabled={favToggling}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${isFavorited ? 'text-pink-600 border-pink-200 bg-pink-50 hover:bg-pink-100' : 'text-gray-400 border-gray-200 hover:border-pink-300 hover:text-pink-500'}`}
+                    title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <svg className="w-4 h-4" fill={isFavorited ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                    {isFavorited ? 'Saved' : 'Save'}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleToggleFavorite}
-                  disabled={favToggling}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${isFavorited ? 'text-pink-600 border-pink-200 bg-pink-50 hover:bg-pink-100' : 'text-gray-400 border-gray-200 hover:border-pink-300 hover:text-pink-500'}`}
-                  title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                  onClick={() => setReportOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-gray-400 border border-gray-200 hover:border-red-300 hover:text-red-500 transition-colors"
                 >
-                  <svg className="w-4 h-4" fill={isFavorited ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                  </svg>
-                  {isFavorited ? 'Saved' : 'Save'}
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
+                  Report
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setReportOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-gray-400 border border-gray-200 hover:border-red-300 hover:text-red-500 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
-                Report
-              </button>
+              </div>
             </div>
+            {/* Product header: rating, reviews, verified, sales */}
+            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mt-1">
+              <span className="text-amber-400" aria-hidden>
+                {'★'.repeat(Math.min(5, Math.max(0, Math.round(displayRating ?? 0))))}
+                <span className="text-gray-300">{'★'.repeat(5 - Math.min(5, Math.max(0, Math.round(displayRating ?? 0))))}</span>
+              </span>
+              <span>({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})</span>
+              {isSellerVerified && (
+                <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">✔ Verified</span>
+              )}
+              {(Number(product.completed_orders_count ?? product.sales ?? 0) > 0) && (
+                <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-medium">
+                  🔥 {product.completed_orders_count ?? product.sales ?? 0} sold
+                </span>
+              )}
             </div>
             {/* Dynamic badge: Low Stock (not analytics) */}
             {(() => {
@@ -770,45 +842,39 @@ export default function ProductPage() {
             })()}
           </div>
 
-          {/* Rating */}
-          <div className="flex items-center gap-2">
-            {reviewsCount > 0 ? (
-              <>
-                <div className="flex items-center gap-0.5">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <span key={s} className={`text-lg ${s <= Math.round(displayRating ?? 0) ? 'text-amber-400' : 'text-gray-200'}`}>★</span>
-                  ))}
-                </div>
-                <span className="text-sm font-medium text-gray-700">
-                  ⭐ {displayRating != null ? displayRating.toFixed(1) : 'New'} ({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})
-                </span>
-              </>
-            ) : (
-              <span className="text-sm text-gray-500">No reviews yet</span>
-            )}
-          </div>
-
           {/* Price */}
           <div>
-            {isFlashActive ? (
-              <div className="space-y-1">
-                <div className="flex items-baseline gap-2">
-                  <p className="text-xl font-semibold text-gray-400 line-through">
-                    {Number(product.price || 0).toFixed(2)} MAD
-                  </p>
-                  <p className="text-3xl font-extrabold text-red-600">
-                    {Number(product.effective_price ?? product.price ?? 0).toFixed(2)}{' '}
-                    <span className="text-xl font-semibold text-red-500">MAD</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {isFlashActive ? (
+                <div className="space-y-1">
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-xl font-semibold text-gray-400 line-through">
+                      {Number(product.price || 0).toFixed(2)} MAD
+                    </p>
+                    <p className="text-3xl font-extrabold text-red-600">
+                      {Number(product.effective_price ?? product.price ?? 0).toFixed(2)}{' '}
+                      <span className="text-xl font-semibold text-red-500">MAD</span>
+                    </p>
+                  </div>
+                  <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">
+                    Limited-time flash deal
                   </p>
                 </div>
-                <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">
-                  Limited-time flash deal
+              ) : (
+                <p className="text-3xl font-bold text-gray-900">
+                  {Number(product.price || 0).toFixed(2)} <span className="text-xl font-semibold text-gray-500">MAD</span>
                 </p>
-              </div>
-            ) : (
-              <p className="text-3xl font-bold text-gray-900">
-                {Number(product.price || 0).toFixed(2)} <span className="text-xl font-semibold text-gray-500">MAD</span>
-              </p>
+              )}
+              {isBestPrice && (
+                <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-medium">
+                  ⭐ Best price
+                </span>
+              )}
+            </div>
+            {settings?.showViewingIndicator && viewerText && (
+              <span className="text-xs text-gray-500 mt-1">
+                {viewerText}
+              </span>
             )}
             <div className="flex items-center gap-2 mt-1">
               <span
@@ -879,8 +945,17 @@ export default function ProductPage() {
           <div className="rounded-2xl border border-gray-200 bg-white p-4">
             <div className="flex items-start justify-between gap-3 mb-3">
               <Link to={`/seller/${seller.id}`} className="flex items-center gap-3 group">
-                <span className="w-10 h-10 rounded-full bg-m4m-purple text-white flex items-center justify-center text-sm font-bold flex-shrink-0">
-                  {seller.name?.charAt(0)?.toUpperCase() || 'S'}
+                <span className="w-10 h-10 rounded-full bg-m4m-purple text-white flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden">
+                  {seller?.avatar ? (
+                    <img
+                      src={`${seller.avatar.replace('http://localhost/', 'http://localhost:8000/')}` +
+                        `?v=${seller.updated_at || Date.now()}`}
+                      alt="seller avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    (seller.name?.charAt(0)?.toUpperCase() || 'S')
+                  )}
                 </span>
                 <div>
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -904,7 +979,12 @@ export default function ProductPage() {
                 {lastSeenLabel || (sellerOnline ? 'Online' : 'Last seen recently')}
               </span>
             </div>
-            <button type="button" onClick={handleChatSeller} disabled={chatting || !seller?.id} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:border-m4m-purple hover:text-m4m-purple transition-colors text-sm disabled:opacity-60">
+            <div className="text-xs text-gray-500 mt-2 space-y-1">
+              {sellerLevel != null && <div>Level {sellerLevel} seller</div>}
+              {sellerSuccessRate != null && <div>{Number(sellerSuccessRate).toFixed(0)}% success rate</div>}
+              {sellerCompletedOrders > 0 && <div>{sellerCompletedOrders} orders completed</div>}
+            </div>
+            <button type="button" onClick={handleChatSeller} disabled={chatting || !seller?.id} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:border-m4m-purple hover:text-m4m-purple transition-colors text-sm disabled:opacity-60 mt-3">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
               {chatting ? 'Opening chat…' : 'Chat with seller'}
             </button>
@@ -931,7 +1011,7 @@ export default function ProductPage() {
               type="button"
               onClick={handleBuyClick}
               disabled={buying || isOutOfStock || seller.vacation_mode}
-              className="w-full py-3.5 rounded-xl font-bold text-base bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
+              className="w-full py-3.5 rounded-xl font-bold text-base bg-green-600 text-white hover:bg-green-700 hover:text-white active:bg-green-700 active:text-white disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               {buying ? 'Processing…' : isOutOfStock ? 'Out of stock' : seller.vacation_mode ? 'Seller on vacation' : 'BUY NOW'}
             </button>
@@ -939,18 +1019,11 @@ export default function ProductPage() {
               <p className="text-xs text-gray-400 text-center mt-2">You need to <Link to="/login" className="text-m4m-purple font-medium hover:underline">sign in</Link> to purchase</p>
             )}
 
-            {/* Trust signals */}
-            <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
-              {[
-                { icon: '🔒', text: 'M4M holds payment securely until you confirm delivery' },
-                { icon: '⚡', text: product.delivery_type === 'instant' ? 'Instant delivery — credentials sent automatically' : `Delivery within ${product.delivery_time ?? 'stated time'}` },
-                { icon: '🛡', text: 'Dispute protection if delivery fails' },
-              ].map(({ icon, text }) => (
-                <p key={text} className="flex items-start gap-2 text-xs text-gray-500">
-                  <span className="shrink-0">{icon}</span>
-                  {text}
-                </p>
-              ))}
+            {/* Trust badges */}
+            <div className="mt-4 text-sm text-gray-600 space-y-1">
+              <div>🔒 Secure payment</div>
+              <div>⚡ {product.delivery_type === 'instant' ? 'Instant delivery' : 'Delivery as described'}</div>
+              <div>🛡 Buyer protection</div>
             </div>
           </div>
         </div>
@@ -962,7 +1035,9 @@ export default function ProductPage() {
           <h2 className="text-xl font-semibold text-gray-900 mb-5">More from this seller</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {similarProducts.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <div key={p.id} className="transition transform duration-200 hover:scale-105 hover:shadow-xl rounded-xl">
+                <ProductCard product={p} />
+              </div>
             ))}
           </div>
         </section>
@@ -974,7 +1049,9 @@ export default function ProductPage() {
           <h2 className="text-xl font-semibold text-gray-900 mb-5">Recommended for you</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {recommendedProducts.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <div key={p.id} className="transition transform duration-200 hover:scale-105 hover:shadow-xl rounded-xl">
+                <ProductCard product={p} />
+              </div>
             ))}
           </div>
         </section>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useMarketplaceSettings } from '../contexts/MarketplaceSettingsContext';
 import {
   getToken,
   getAdminDepositRequests,
@@ -52,6 +53,7 @@ const TABS = [
   { id: 'coupons', label: '🎟 Coupons' },
   { id: 'announcements', label: '📢 Announcements' },
   { id: 'support', label: '💬 Support Chat' },
+  { id: 'marketplace-settings', label: '⚙️ Marketplace' },
 ];
 
 const REPORT_FILTER_OPTIONS = [
@@ -1861,6 +1863,89 @@ function AnnouncementsPanel() {
   );
 }
 
+/* ── Marketplace settings (People Viewing indicator) ──────────────────────── */
+function MarketplaceSettingsPanel() {
+  const { marketplaceSettings, setMarketplaceSettings } = useMarketplaceSettings();
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold text-gray-900">Marketplace settings</h2>
+      <div className="rounded-xl border border-gray-200 bg-gray-50/50 p-5 space-y-5 max-w-xl">
+        <h3 className="text-base font-medium text-gray-800">People Viewing indicator</h3>
+        <p className="text-sm text-gray-600">
+          Control the &quot;People viewing this item&quot; message on product pages.
+        </p>
+
+        <div className="flex items-center justify-between gap-4">
+          <label htmlFor="viewing-indicator-toggle" className="text-sm font-medium text-gray-700">
+            Enable People Viewing Indicator
+          </label>
+          <button
+            id="viewing-indicator-toggle"
+            type="button"
+            role="switch"
+            aria-checked={marketplaceSettings.showViewingIndicator}
+            onClick={() => setMarketplaceSettings({ showViewingIndicator: !marketplaceSettings.showViewingIndicator })}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:ring-offset-2 ${marketplaceSettings.showViewingIndicator ? 'bg-m4m-purple' : 'bg-gray-200'}`}
+          >
+            <span
+              className={`pointer-events-none absolute top-0.5 left-1 inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition ${marketplaceSettings.showViewingIndicator ? 'translate-x-5' : 'translate-x-0'}`}
+            />
+          </button>
+        </div>
+        <p className="text-xs text-gray-500">
+          {marketplaceSettings.showViewingIndicator ? 'ON — indicator is shown on product pages.' : 'OFF — indicator is hidden.'}
+        </p>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={marketplaceSettings.hideIfZero}
+            onChange={(e) => setMarketplaceSettings({ hideIfZero: e.target.checked })}
+            className="rounded border-gray-300 text-m4m-purple focus:ring-m4m-purple"
+          />
+          <span className="text-sm font-medium text-gray-700">Hide indicator if viewers = 0</span>
+        </label>
+
+        <div>
+          <label htmlFor="exact-viewer-threshold" className="block text-sm font-medium text-gray-700 mb-1">
+            Exact viewer count threshold
+          </label>
+          <input
+            id="exact-viewer-threshold"
+            type="number"
+            min={1}
+            max={20}
+            value={marketplaceSettings.exactViewerThreshold ?? 5}
+            onChange={(e) => setMarketplaceSettings({ exactViewerThreshold: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 5)) })}
+            className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Below this count: show &quot;Several people...&quot;. From this count up: show &quot;X people viewing...&quot; (default: 5).
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="low-viewer-message" className="block text-sm font-medium text-gray-700 mb-1">
+            Low viewer message
+          </label>
+          <input
+            id="low-viewer-message"
+            type="text"
+            value={marketplaceSettings.lowViewerText ?? ''}
+            onChange={(e) => setMarketplaceSettings({ lowViewerText: e.target.value })}
+            placeholder="👀 Several people are viewing this item"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Shown when viewer count is below the threshold.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main admin page ──────────────────────────────────────────────────────── */
 export default function AdminDashboardPage() {
   const { user } = useAuth();
@@ -1954,6 +2039,7 @@ export default function AdminDashboardPage() {
         {activeTab === 'coupons' && <CouponsPanel key={`coup-${refreshToken}`} />}
         {activeTab === 'announcements' && <AnnouncementsPanel key={`ann-${refreshToken}`} />}
         {activeTab === 'support' && <SupportChatPanel key={`sup-${refreshToken}`} adminUser={user} />}
+        {activeTab === 'marketplace-settings' && <MarketplaceSettingsPanel />}
       </div>
     </div>
   );

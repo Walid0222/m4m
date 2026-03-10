@@ -74,6 +74,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/me',      [AuthController::class, 'me']);
         Route::patch('/me',    [AuthController::class, 'updateMe']);
+        Route::post('/me/avatar', [AuthController::class, 'uploadAvatar']);
 
         // Wallet & funds
         Route::get('/wallet',                                        [WalletController::class, 'show']);

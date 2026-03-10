@@ -50,12 +50,13 @@ export default function SellerProfilePage() {
           setSeller({
             id: profileRes.id,
             name: profileRes.name,
+            avatar: profileRes.avatar ?? null,
+            updated_at: profileRes.updated_at ?? null,
             last_activity_at: profileRes.last_activity_at,
             member_since: profileRes.member_since ?? profileRes.created_at ?? null,
             rating: profileRes.rating,
             total_sales: statsRes?.total_sales ?? profileRes.total_sales ?? 0,
             total_reviews: profileRes.total_reviews ?? 0,
-            // backend exposes is_verified_seller
             is_verified: profileRes.is_verified_seller ?? profileRes.is_verified,
             is_verified_seller: profileRes.is_verified_seller ?? profileRes.is_verified,
             completed_sales:
@@ -150,8 +151,17 @@ export default function SellerProfilePage() {
           <div className="flex flex-col sm:flex-row sm:items-start gap-6">
             {/* Avatar + Name */}
             <div className="flex items-start gap-4 flex-1 min-w-0">
-              <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-m4m-purple text-white flex items-center justify-center text-2xl md:text-3xl font-bold shrink-0">
-                {seller?.name?.charAt(0)?.toUpperCase() || 'S'}
+              <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-m4m-purple text-white flex items-center justify-center text-2xl md:text-3xl font-bold shrink-0 overflow-hidden">
+                {seller?.avatar ? (
+                  <img
+                    src={`${seller.avatar.replace('http://localhost/', 'http://localhost:8000/')}` +
+                      `?v=${seller.updated_at || Date.now()}`}
+                    alt="seller avatar"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  (seller?.name?.charAt(0)?.toUpperCase() || 'S')
+                )}
               </div>
               <div className="min-w-0 flex-1 pt-1">
                 <div className="flex flex-wrap items-center gap-2 mb-1">

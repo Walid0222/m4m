@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { isSellerOnline } from '../lib/sellerOnline';
 import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
@@ -11,8 +12,16 @@ import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
  */
 export default function ProductCard({ product, isFavorited = false, onToggleFavorite }) {
   const { id, name, price, seller, stock, is_pinned } = product;
+  const [sellerAvatarError, setSellerAvatarError] = useState(false);
   const isOutOfStock = Number(stock ?? 0) <= 0;
   const sellerName = seller?.name ?? 'Seller';
+  const sellerDisplayName = seller?.username ?? seller?.name ?? 'Seller';
+  const rawSellerAvatar = seller?.avatar
+    ? seller.avatar.replace('http://localhost/', 'http://localhost:8000/')
+    : null;
+  const sellerAvatarSrc = rawSellerAvatar
+    ? `${rawSellerAvatar}?v=${seller?.updated_at || Date.now()}`
+    : '/default-avatar.png';
   const online = isSellerOnline(seller);
   const reviewsCount = product.reviews_count ?? product.reviews?.length ?? 0;
   const avgRating = product.reviews_avg_rating ?? product.rating;
@@ -119,20 +128,36 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
           </div>
         )}
 
-        {/* Seller info row */}
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-          {seller?.id ? (
-            <Link to={`/seller/${seller.id}`} className="text-xs text-gray-500 hover:text-m4m-purple transition-colors font-medium truncate max-w-[100px]">
-              {sellerName}
-            </Link>
-          ) : (
-            <span className="text-xs text-gray-500 font-medium">{sellerName}</span>
-          )}
-          <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${online ? 'text-green-600' : 'text-gray-400'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
-            {online ? 'Online' : 'Offline'}
-          </span>
-          {isVerified && <VerifiedBadge />}
+        {/* Seller info row: avatar + name */}
+        <div className="mt-2 flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
+            {!sellerAvatarError && sellerAvatarSrc ? (
+              <img
+                src={sellerAvatarSrc}
+                alt="seller avatar"
+                className="w-6 h-6 rounded-full object-cover"
+                onError={() => setSellerAvatarError(true)}
+              />
+            ) : (
+              <span className="text-xs font-semibold text-gray-500">
+                {(sellerName || 'S').charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 flex-1">
+            {seller?.id ? (
+              <Link to={`/seller/${seller.id}`} className="text-xs text-gray-600 hover:text-m4m-purple transition-colors font-medium truncate max-w-[100px]">
+                {sellerDisplayName}
+              </Link>
+            ) : (
+              <span className="text-xs text-gray-600 font-medium truncate">{sellerDisplayName}</span>
+            )}
+            <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${online ? 'text-green-600' : 'text-gray-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
+              {online ? 'Online' : 'Offline'}
+            </span>
+            {isVerified && <VerifiedBadge />}
+          </div>
         </div>
 
         {/* Sales badge + Rating */}
@@ -176,7 +201,7 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
             className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors ${
               isOutOfStock
                 ? 'bg-gray-100 text-gray-400 cursor-default'
-                : 'bg-m4m-purple text-white hover:bg-m4m-purple-dark'
+                : 'bg-m4m-purple text-white hover:bg-m4m-purple-dark hover:text-white active:bg-m4m-purple-dark active:text-white'
             }`}
           >
             {isOutOfStock ? 'Sold out' : 'Buy now'}

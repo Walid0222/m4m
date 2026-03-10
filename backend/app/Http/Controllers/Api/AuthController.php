@@ -7,6 +7,7 @@ use App\Services\SecurityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -131,15 +132,41 @@ class AuthController extends Controller
         return $this->success($this->userFields($user->fresh()), 'Profile updated.');
     }
 
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        $request->validate([
+            'avatar' => ['required', 'image', 'max:2048'], // 2MB
+        ]);
+
+        $user = $request->user();
+        $file = $request->file('avatar');
+
+        if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+            Storage::disk('public')->delete($user->avatar);
+        }
+
+        $path = $file->store('avatars', 'public');
+        $user->update(['avatar' => $path]);
+
+        return $this->success($this->userFields($user->fresh()), 'Avatar updated.');
+    }
+
     private function userFields(User $user): array
     {
-        return $user->only([
+        $fields = $user->only([
             'id', 'name', 'email', 'is_seller', 'is_admin',
             'is_verified_seller', 'is_banned', 'ban_type', 'banned_until',
             'ban_reason', 'warning_count', 'last_activity_at',
             'auto_reply_message', 'product_limit', 'limits_overridden',
             'show_recent_sales_notifications',
             'vacation_mode',
+            'updated_at',
         ]);
+        if (array_key_exists('avatar', $user->getAttributes()) && $user->avatar) {
+            $fields['avatar'] = Storage::disk('public')->url($user->avatar);
+        } else {
+            $fields['avatar'] = $user->avatar;
+        }
+        return $fields;
     }
 }

@@ -25,10 +25,13 @@ const api = axios.create({
   },
 });
 
-// Attach auth token to every request when present
+// Attach auth token to every request when present; allow FormData to set Content-Type (multipart boundary)
 api.interceptors.request.use((config) => {
   const token = getToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
   return config;
 });
 
@@ -104,8 +107,29 @@ export function getMe() {
   return api.get('/me').then(unwrap);
 }
 
+/** Fetch site/marketplace settings (optional; backend may not expose this). */
+export function getSettings() {
+  return api.get('/settings').then(unwrap).catch(() => null);
+}
+
 export function updateMe(body) {
   return api.patch('/me', body).then(unwrap);
+}
+
+/** Upload profile avatar (FormData). Returns updated user with avatar URL. */
+export function uploadProfileAvatar(file) {
+  const formData = new FormData();
+  formData.append('avatar', file);
+  return api.post('/me/avatar', formData, {
+    headers: {
+      'Content-Type': false, // remove default so browser sets multipart/form-data with boundary
+    },
+  }).then((res) => {
+    const data = res.data?.data !== undefined ? res.data.data : res.data;
+    return data?.user ?? data;
+  }).catch((err) => {
+    throw err.response?.data?.message || err.message || err;
+  });
 }
 
 export function logout() {
