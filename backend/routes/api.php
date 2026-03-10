@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Admin\AdminAnnouncementController;
 use App\Http\Controllers\Api\Admin\AdminCouponController;
 use App\Http\Controllers\Api\Admin\DepositVerificationController;
 use App\Http\Controllers\Api\Admin\WithdrawVerificationController;
+use App\Http\Controllers\Api\Admin\WalletSettingsController as AdminWalletSettingsController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\ConversationController;
@@ -39,14 +40,24 @@ use App\Http\Controllers\Api\SellerWarningsController;
 use App\Http\Controllers\Api\StatsController;
 use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\WalletController;
+use App\Http\Controllers\Api\WalletSettingsController;
 use App\Http\Controllers\Api\WithdrawRequestController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+
+RateLimiter::for('auth', function (Request $request) {
+    return Limit::perMinute(5)->by(
+        $request->ip() . '|' . (string) $request->input('email')
+    );
+});
 
 Route::prefix('v1')->group(function () {
 
     // ─── Public ─────────────────────────────────────────────────────────────
-    Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login',    [AuthController::class, 'login']);
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:auth');
+    Route::post('/login',    [AuthController::class, 'login'])->middleware('throttle:auth');
 
     Route::get('/categories',                      [CategoryController::class, 'index']);
     Route::get('/services',                        [ServiceController::class, 'index']);
@@ -78,6 +89,7 @@ Route::prefix('v1')->group(function () {
 
         // Wallet & funds
         Route::get('/wallet',                                        [WalletController::class, 'show']);
+        Route::get('/wallet/settings',                               [WalletSettingsController::class, 'show']);
         Route::post('/deposit-requests',                             [DepositRequestController::class, 'store']);
         Route::get('/deposit-requests',                              [DepositRequestController::class, 'index']);
         Route::post('/withdraw-requests',                            [WithdrawRequestController::class, 'store']);
@@ -180,6 +192,10 @@ Route::prefix('v1')->group(function () {
         Route::patch('/deposit-requests/{depositRequest}/verify',          [DepositVerificationController::class, 'verify']);
         Route::get('/withdraw-requests',                                   [WithdrawVerificationController::class, 'index']);
         Route::patch('/withdraw-requests/{withdrawRequest}/verify',        [WithdrawVerificationController::class, 'verify']);
+
+        // Wallet settings
+        Route::get('/wallet-settings',                                     [AdminWalletSettingsController::class, 'show']);
+        Route::patch('/wallet-settings',                                   [AdminWalletSettingsController::class, 'update']);
 
         // Reports moderation
         // GET   /admin/reports             — list (supports ?status= ?type= filters)

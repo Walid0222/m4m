@@ -7,6 +7,7 @@ import {
   getWithdrawRequests,
   createDepositRequest,
   createWithdrawRequest,
+  getWalletSettings,
   paginatedItems,
   getToken,
 } from '../services/api';
@@ -141,6 +142,9 @@ export default function WalletPage() {
   const [withdrawError, setWithdrawError] = useState('');
   const [withdrawConfirmPending, setWithdrawConfirmPending] = useState(false);
 
+  const [walletSettings, setWalletSettings] = useState(null);
+  const [walletSettingsError, setWalletSettingsError] = useState('');
+
   const [depositsVisible, setDepositsVisible] = useState(REQUESTS_PAGE_SIZE);
   const [withdrawalsVisible, setWithdrawalsVisible] = useState(REQUESTS_PAGE_SIZE);
 
@@ -166,6 +170,19 @@ export default function WalletPage() {
     list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return list;
   }, [balance?.transactions, deposits, withdrawals]);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    getWalletSettings()
+      .then((settings) => {
+        setWalletSettings(settings);
+        setWalletSettingsError('');
+      })
+      .catch(() => {
+        setWalletSettings(null);
+        setWalletSettingsError('Could not load withdrawal rules. You can still request withdrawals, but some limits may apply.');
+      });
+  }, []);
 
   const handleDepositSubmitRequest = (e) => {
     e.preventDefault();
@@ -206,6 +223,17 @@ export default function WalletPage() {
     if (amount > bal) {
       setWithdrawError('Insufficient balance.');
       return;
+    }
+    if (walletSettings) {
+      const { min_withdraw_amount, max_withdraw_amount } = walletSettings;
+      if (min_withdraw_amount && amount < Number(min_withdraw_amount)) {
+        setWithdrawError(`Minimum withdrawal amount is ${Number(min_withdraw_amount).toFixed(2)} ${CURRENCY}.`);
+        return;
+      }
+      if (max_withdraw_amount && amount > Number(max_withdraw_amount)) {
+        setWithdrawError(`Maximum withdrawal amount is ${Number(max_withdraw_amount).toFixed(2)} ${CURRENCY}.`);
+        return;
+      }
     }
     setWithdrawError('');
     setWithdrawConfirmPending(true);
@@ -331,6 +359,23 @@ export default function WalletPage() {
           <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-800">
             <strong>How withdrawals work:</strong> Submit a withdrawal request with your payment details. An admin will review and process your request within 1–3 business days. Funds will be transferred to the account you provide.
           </div>
+          {walletSettings && (
+            <div className="mb-4 rounded-xl bg-gray-50 border border-gray-200 p-4 text-xs text-gray-700">
+              <p className="font-semibold text-gray-900 mb-1">Withdrawal rules</p>
+              <ul className="list-disc list-inside space-y-0.5">
+                <li>Minimum withdrawal: {Number(walletSettings.min_withdraw_amount).toFixed(2)} {CURRENCY}</li>
+                <li>Maximum per request: {Number(walletSettings.max_withdraw_amount).toFixed(2)} {CURRENCY}</li>
+                <li>Daily withdrawal limit: {Number(walletSettings.daily_withdraw_limit).toFixed(2)} {CURRENCY}</li>
+                <li>Cooldown between requests: {Number(walletSettings.withdraw_cooldown_hours)} hour(s)</li>
+                <li>Maximum pending requests: {Number(walletSettings.max_pending_requests)}</li>
+              </ul>
+            </div>
+          )}
+          {walletSettingsError && (
+            <p className="mb-4 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              {walletSettingsError}
+            </p>
+          )}
           {withdrawals.length === 0 ? (
             <div className="rounded-xl border border-gray-200 bg-white p-6 text-center text-gray-500 text-sm">
               No withdrawal requests yet.

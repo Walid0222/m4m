@@ -31,6 +31,7 @@ class User extends Authenticatable
         'banned_until',
         'ban_reason',
         'warning_count',
+        'fraud_score',
         'is_verified_seller',
         'last_activity_at',
         'auto_reply_message',

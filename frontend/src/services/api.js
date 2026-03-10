@@ -107,6 +107,10 @@ export function getMe() {
   return api.get('/me').then(unwrap);
 }
 
+export function getWalletSettings() {
+  return api.get('/wallet/settings').then(unwrap);
+}
+
 /** Fetch site/marketplace settings (optional; backend may not expose this). */
 export function getSettings() {
   return api.get('/settings').then(unwrap).catch(() => null);

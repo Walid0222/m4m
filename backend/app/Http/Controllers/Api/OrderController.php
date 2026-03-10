@@ -216,7 +216,9 @@ class OrderController extends Controller
         $autoConfirmHours = (int) config('platform.auto_confirm_hours', 24);
 
         $buyerNote = $validated['buyer_note'] ?? null;
-        $order = DB::transaction(function () use ($user, $finalTotal, $subtotal, $orderLineItems, $autoConfirmHours, $coupon, $buyerNote) {
+
+        try {
+            $order = DB::transaction(function () use ($user, $finalTotal, $subtotal, $orderLineItems, $autoConfirmHours, $coupon, $buyerNote) {
             do {
                 $orderNumber = 'M4M-' . strtoupper(Str::random(6));
             } while (Order::where('order_number', $orderNumber)->exists());
@@ -307,8 +309,17 @@ class OrderController extends Controller
                 }
             }
 
-            // Escrow hold — debit buyer wallet
-            $wallet = $user->wallet;
+            // Escrow hold — debit buyer wallet (lock row and re-check balance)
+            $wallet = $user->wallet ?? $user->wallet()->create(['balance' => 0]);
+            $wallet = $user->wallet()->lockForUpdate()->first();
+            if (! $wallet) {
+                throw new \RuntimeException('INSUFFICIENT_WALLET_BALANCE');
+            }
+
+            if ((float) $wallet->balance < $finalTotal) {
+                throw new \RuntimeException('INSUFFICIENT_WALLET_BALANCE');
+            }
+
             $wallet->decrement('balance', $finalTotal);
             $wallet->transactions()->create([
                 'type'           => 'purchase_hold',
@@ -342,6 +353,12 @@ class OrderController extends Controller
 
             return $order;
         });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'INSUFFICIENT_WALLET_BALANCE') {
+                return $this->error('Insufficient wallet balance.', 422);
+            }
+            throw $e;
+        }
 
         $order->load(['orderItems.product:id,name,slug,user_id,delivery_type']);
 

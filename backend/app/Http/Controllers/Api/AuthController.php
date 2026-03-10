@@ -56,7 +56,20 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
+        // If we can identify the user and they have exceeded fraud_score threshold, block login.
+        if ($user && ($user->fraud_score ?? 0) > 20) {
+            return $this->error('Too many authentication attempts. Please try again later.', 429);
+        }
+
         if (! $user || ! Hash::check($request->password, $user->password)) {
+            if ($user) {
+                // Increment fraud score and log failed attempt for this user.
+                $user->increment('fraud_score');
+                SecurityLogService::log($user, 'login_failed', $request, [
+                    'reason' => 'invalid_credentials',
+                ]);
+            }
+
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
@@ -87,6 +100,10 @@ class AuthController extends Controller
         $user->tokens()->where('name', 'auth')->delete();
         $token = $user->createToken('auth')->plainTextToken;
 
+        // Reset fraud score on successful login and log the event.
+        if ($user->fraud_score !== null && $user->fraud_score > 0) {
+            $user->update(['fraud_score' => 0]);
+        }
         SecurityLogService::log($user, 'login', $request);
 
         return $this->success([

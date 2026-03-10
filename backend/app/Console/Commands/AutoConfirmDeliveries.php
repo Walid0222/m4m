@@ -27,12 +27,38 @@ class AutoConfirmDeliveries extends Command
         $count = 0;
         foreach ($orders as $order) {
             try {
-                $order->update([
-                    'status'       => Order::STATUS_COMPLETED,
-                    'completed_at' => now(),
-                ]);
+                // Wrap status change + escrow release in a transaction with row-level locking
+                \DB::transaction(function () use ($order) {
+                    /** @var Order|null $locked */
+                    $locked = Order::whereKey($order->id)->lockForUpdate()->first();
+                    if (! $locked) {
+                        return;
+                    }
 
-                $this->escrow->releaseFunds($order);
+                    // Re-check that order is still eligible for auto-confirm
+                    if (
+                        $locked->status !== Order::STATUS_DELIVERED
+                        || $locked->auto_confirm_at === null
+                        || $locked->auto_confirm_at->isFuture()
+                        || $locked->completed_at !== null
+                    ) {
+                        \Log::warning('Auto-confirm skipped: order no longer eligible', [
+                            'order_id'      => $locked->id,
+                            'status'        => $locked->status,
+                            'auto_confirm_at' => $locked->auto_confirm_at,
+                            'completed_at'  => $locked->completed_at,
+                        ]);
+
+                        return;
+                    }
+
+                    $locked->update([
+                        'status'       => Order::STATUS_COMPLETED,
+                        'completed_at' => now(),
+                    ]);
+
+                    $this->escrow->releaseFunds($locked);
+                });
 
                 // Notify buyer and seller
                 $order->load(['buyer', 'seller']);
