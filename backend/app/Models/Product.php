@@ -31,6 +31,9 @@ class Product extends Model
         'delivery_instructions',
         'features',
         'views',
+        'views_last_3_days',
+        'orders_last_3_days',
+        'activity_reset_at',
         'is_pinned',
     ];
 
@@ -44,8 +47,11 @@ class Product extends Model
             'flash_end'    => 'datetime',
             'images'       => 'array',
             'features'     => 'array',
-            'views'        => 'integer',
-            'is_pinned'    => 'boolean',
+            'views'             => 'integer',
+            'views_last_3_days' => 'integer',
+            'orders_last_3_days'=> 'integer',
+            'activity_reset_at' => 'datetime',
+            'is_pinned'         => 'boolean',
         ];
     }
 
@@ -128,5 +134,42 @@ class Product extends Model
         }
 
         return (float) $this->price;
+    }
+
+    /** Hide internal analytics for buyer-facing responses. */
+    public function hideAnalyticsForBuyers(): self
+    {
+        $this->makeHidden([
+            'views',
+            'views_last_3_days',
+            'orders_last_3_days',
+            'activity_reset_at',
+            'completed_orders_count',
+            'orders_count',
+        ]);
+
+        return $this;
+    }
+
+    /**
+     * Ensure activity window is valid; reset if expired.
+     * Returns the product (refreshed after possible reset).
+     */
+    public function ensureActivityWindow(): self
+    {
+        $resetAt = $this->activity_reset_at;
+        if ($resetAt && now()->gt($resetAt)) {
+            $this->update([
+                'views_last_3_days'  => 0,
+                'orders_last_3_days' => 0,
+                'activity_reset_at'  => now()->addDays(3),
+            ]);
+            return $this->fresh();
+        }
+        if (! $resetAt) {
+            $this->update(['activity_reset_at' => now()->addDays(3)]);
+            return $this->fresh();
+        }
+        return $this;
     }
 }

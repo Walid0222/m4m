@@ -292,6 +292,16 @@ class OrderController extends Controller
                 $coupon->increment('uses');
             }
 
+            // Increment orders_last_3_days for each product (for Trending/Hot badges)
+            $productIds = array_unique(array_column($orderLineItems, 'product_id'));
+            foreach ($productIds as $pid) {
+                $p = Product::find($pid);
+                if ($p) {
+                    $p = $p->ensureActivityWindow();
+                    $p->increment('orders_last_3_days');
+                }
+            }
+
             // Escrow hold — debit buyer wallet
             $wallet = $user->wallet;
             $wallet->decrement('balance', $finalTotal);

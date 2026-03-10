@@ -22,10 +22,19 @@ class FavoriteController extends Controller
                     'orders as completed_orders_count' => function ($q) {
                         $q->where('status', \App\Models\Order::STATUS_COMPLETED);
                     },
-                ]);
+                    'reviews',
+                ])
+                ->withAvg('reviews', 'rating');
             }])
             ->latest('created_at')
             ->paginate($request->integer('per_page', 24));
+
+        $favorites->getCollection()->transform(function ($fav) {
+            if ($fav->product) {
+                $fav->product->hideAnalyticsForBuyers();
+            }
+            return $fav;
+        });
 
         return $this->success($favorites);
     }

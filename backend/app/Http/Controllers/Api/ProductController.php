@@ -32,9 +32,13 @@ class ProductController extends Controller
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
                 },
+                'reviews',
             ])
+            ->withAvg('reviews', 'rating')
             ->latest()
             ->paginate($request->integer('per_page', 15));
+
+        $products->getCollection()->transform(fn ($p) => $this->hideAnalyticsFromProduct($p));
 
         return $this->success($products);
     }
@@ -55,11 +59,14 @@ class ProductController extends Controller
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
                 },
+                'reviews',
             ])
+            ->withAvg('reviews', 'rating')
             ->orderByDesc('completed_orders_count')
             ->orderByDesc('created_at')
             ->limit($limit)
-            ->get();
+            ->get()
+            ->map(fn ($p) => $this->hideAnalyticsFromProduct($p));
 
         return $this->success($products);
     }
@@ -71,7 +78,9 @@ class ProductController extends Controller
         }
 
         if ($request->boolean('record_view', true)) {
+            $product = $product->ensureActivityWindow();
             $product->increment('views');
+            $product->increment('views_last_3_days');
         }
         $product->load([
             'seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode',
@@ -79,7 +88,7 @@ class ProductController extends Controller
             'faqs',
         ]);
 
-        return $this->success($product);
+        return $this->success($this->hideAnalyticsFromProduct($product));
     }
 
     /**
@@ -100,7 +109,9 @@ class ProductController extends Controller
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
                 },
-            ]);
+                'reviews',
+            ])
+            ->withAvg('reviews', 'rating');
 
         // Prefer products from the same seller when possible
         if ($product->user_id) {
@@ -111,7 +122,8 @@ class ProductController extends Controller
             ->orderByDesc('completed_orders_count')
             ->orderByDesc('created_at')
             ->limit($limit)
-            ->get();
+            ->get()
+            ->map(fn ($p) => $this->hideAnalyticsFromProduct($p));
 
         return $this->success($products);
     }
@@ -153,10 +165,13 @@ class ProductController extends Controller
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
                 },
+                'reviews',
             ])
+            ->withAvg('reviews', 'rating')
             ->latest()
             ->limit(20)
-            ->get();
+            ->get()
+            ->map(fn ($p) => $this->hideAnalyticsFromProduct($p));
 
         return $this->success($products);
     }
@@ -355,8 +370,8 @@ class ProductController extends Controller
     /**
      * POST /products/{product}/pin
      *
-     * Pin a product as the seller's featured product.
-     * Unpins all other products from this seller first.
+     * Toggle pin: if product is not pinned, pin it (unpins others first).
+     * If already pinned, unpin it.
      */
     public function pin(Request $request, Product $product): JsonResponse
     {
@@ -368,10 +383,13 @@ class ProductController extends Controller
             return $this->error('Forbidden. You can only pin your own products.', 403);
         }
 
+        if ($product->is_pinned) {
+            $product->update(['is_pinned' => false]);
+            return $this->success($this->productWithStock($product->fresh()->load('faqs')), 'Product unpinned.');
+        }
+
         // Unpin all products from this seller
         $request->user()->products()->update(['is_pinned' => false]);
-
-        // Pin the selected product
         $product->update(['is_pinned' => true]);
 
         return $this->success($this->productWithStock($product->fresh()->load('faqs')), 'Product pinned.');
@@ -476,5 +494,10 @@ class ProductController extends Controller
         if (! $request->user()->is_seller) {
             abort(403, 'You must be a seller to manage products.');
         }
+    }
+
+    private function hideAnalyticsFromProduct(Product $product): Product
+    {
+        return $product->hideAnalyticsForBuyers();
     }
 }
