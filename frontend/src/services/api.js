@@ -282,6 +282,10 @@ export function getSellerWarnings() {
   return api.get('/seller/warnings').then(unwrap);
 }
 
+export function dismissSellerWarning(id) {
+  return api.post(`/seller/warnings/${id}/dismiss`).then(unwrap);
+}
+
 /** Seller verification request status. */
 export function getSellerVerification() {
   return api.get('/seller/verification-request').then(unwrap);

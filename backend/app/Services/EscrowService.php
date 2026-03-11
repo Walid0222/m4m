@@ -87,7 +87,9 @@ class EscrowService
      */
     public function releaseFunds(Order $order, ?User $adminUser = null): void
     {
-        DB::transaction(function () use ($order) {
+        $immediatePayoutOrderId = null;
+
+        DB::transaction(function () use ($order, &$immediatePayoutOrderId) {
             /** @var Order|null $lockedOrder */
             $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->first();
             if (! $lockedOrder) {
@@ -128,7 +130,22 @@ class EscrowService
                 }
             }
 
-            $releaseAt = Carbon::now()->addHours($delayHours);
+            // Base payout delay on delivered_at so confirming later does not reset the timer.
+            $deliveredAt = $lockedOrder->delivered_at ?? now();
+
+            // Trusted sellers (or zero delay): pay out immediately.
+            if ($delayHours <= 0) {
+                $lockedOrder->update([
+                    'escrow_status' => 'pending_release',
+                    'release_at'    => Carbon::now(),
+                    'completed_at'  => $lockedOrder->completed_at ?? now(),
+                ]);
+                $immediatePayoutOrderId = $lockedOrder->id;
+
+                return;
+            }
+
+            $releaseAt = $deliveredAt->copy()->addHours($delayHours);
 
             $lockedOrder->update([
                 'escrow_status' => 'pending_release',
@@ -136,6 +153,14 @@ class EscrowService
                 'completed_at'  => $lockedOrder->completed_at ?? now(),
             ]);
         });
+
+        // For trusted sellers we process the payout immediately instead of waiting for the cron.
+        if ($immediatePayoutOrderId) {
+            $fresh = Order::find($immediatePayoutOrderId);
+            if ($fresh) {
+                $this->processScheduledRelease($fresh);
+            }
+        }
     }
 
     /**

@@ -100,7 +100,7 @@ export default function DisputesPage() {
                     Order: {dispute.order?.order_number ?? `#${dispute.order_id}`}
                   </p>
                   <p className="text-sm text-gray-600 mt-0.5">
-                    <span className="font-medium">Reason:</span> {dispute.reason}
+                    <span className="font-medium">Buyer reason:</span> {dispute.reason}
                   </p>
                   {dispute.description && (
                     <p className="text-sm text-gray-500 mt-1 line-clamp-2">{dispute.description}</p>
@@ -108,8 +108,19 @@ export default function DisputesPage() {
                   {dispute.seller && (
                     <p className="text-xs text-gray-400 mt-1">Seller: {dispute.seller.name}</p>
                   )}
-                  {dispute.admin_note && (
-                    <p className="text-sm text-gray-600 mt-2 pt-2 border-t border-gray-100 italic">Admin note: {dispute.admin_note}</p>
+                  {dispute.admin_decision && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-700">
+                      <p className="font-medium mb-0.5">Our team reviewed the dispute.</p>
+                      <p className="mb-0.5">
+                        <span className="font-medium">Decision:</span>{' '}
+                        {dispute.admin_decision === 'refund_buyer' ? 'Buyer refunded' : 'Seller payment released'}
+                      </p>
+                      {dispute.admin_note && (
+                        <p className="mb-0.5">
+                          <span className="font-medium">Reason:</span> {dispute.admin_note}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="text-right shrink-0">

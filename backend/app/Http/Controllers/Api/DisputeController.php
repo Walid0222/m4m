@@ -25,12 +25,13 @@ class DisputeController extends Controller
 
         $order = Order::find($validated['order_id']);
 
-        if ($order->user_id !== $request->user()->id) {
+        if (! $order || $order->user_id !== $request->user()->id) {
             return $this->error('You are not the buyer of this order.', 403);
         }
 
-        if (! in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_PAID, Order::STATUS_PROCESSING])) {
-            return $this->error('Disputes can only be opened on active or delivered orders.', 422);
+        // Only allow disputes after seller has delivered (or order is already completed).
+        if (! in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true)) {
+            return $this->error('You cannot open a dispute before the seller delivers the order.', 422);
         }
 
         if (Dispute::where('order_id', $order->id)->where('status', '!=', 'resolved')->exists()) {

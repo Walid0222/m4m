@@ -17,7 +17,7 @@ return [
     | How many hours after an order is marked "delivered" before it is
     | automatically confirmed as "completed" if the buyer does not act.
     */
-    'auto_confirm_hours' => (int) env('PLATFORM_AUTO_CONFIRM_HOURS', 24),
+    'auto_confirm_hours' => (int) env('PLATFORM_AUTO_CONFIRM_HOURS', 72),
 
     /*
     |--------------------------------------------------------------------------

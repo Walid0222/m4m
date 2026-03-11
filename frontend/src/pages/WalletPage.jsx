@@ -287,10 +287,25 @@ export default function WalletPage() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Wallet</h1>
 
-      {/* Balance card */}
+      {/* Balance + explanations */}
       <section className="mb-8">
         <div className="rounded-2xl bg-gradient-to-br from-m4m-purple to-purple-900 p-6 md:p-8 shadow-lg text-white">
-          <p className="text-sm font-medium text-purple-200 uppercase tracking-wide">Available balance</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-purple-200 uppercase tracking-wide">Available balance</p>
+            <div className="relative group">
+              <button
+                type="button"
+                className="w-4 h-4 rounded-full bg-white/10 text-purple-100 text-[10px] flex items-center justify-center hover:bg-white/20 hover:text-white transition-colors"
+                aria-label="Available balance explanation"
+              >
+                ?
+              </button>
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 bg-black/80 text-white text-[11px] rounded-xl px-3 py-2 shadow-lg z-30 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity text-left leading-relaxed">
+                Money you can withdraw immediately. This includes earnings from completed orders that have passed the security holding period.
+                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-black/80" />
+              </div>
+            </div>
+          </div>
           <p className="mt-2 text-4xl md:text-5xl font-bold">
             {bal.toFixed(2)} <span className="text-2xl font-semibold text-purple-200">{CURRENCY}</span>
           </p>
@@ -314,10 +329,58 @@ export default function WalletPage() {
               </button>
             )}
           </div>
-          {!isSeller && (
-            <p className="mt-3 text-xs text-purple-300">Withdrawals are available for sellers only. Become a seller to unlock this feature.</p>
-          )}
         </div>
+        {isSeller && (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className="text-xs font-semibold text-gray-700">Funds being processed</p>
+                <div className="relative group">
+                  <button
+                    type="button"
+                    className="w-4 h-4 rounded-full bg-gray-100 text-gray-600 text-[10px] flex items-center justify-center hover:bg-m4m-purple/10 hover:text-m4m-purple transition-colors"
+                    aria-label="Funds being processed explanation"
+                  >
+                    ?
+                  </button>
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-60 bg-gray-900 text-white text-[11px] rounded-xl px-3 py-2 shadow-lg z-30 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity text-left leading-relaxed">
+                    Money from recent sales that is temporarily held by the platform to protect buyers and prevent fraud. These funds will automatically be released after the security period.
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
+                  </div>
+                </div>
+              </div>
+              <p className="text-lg font-bold text-amber-600">
+                {Number(balance?.processing_balance ?? 0).toFixed(2)} {CURRENCY}
+              </p>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className="text-xs font-semibold text-gray-700">Funds under review</p>
+                <div className="relative group">
+                  <button
+                    type="button"
+                    className="w-4 h-4 rounded-full bg-gray-100 text-gray-600 text-[10px] flex items-center justify-center hover:bg-m4m-purple/10 hover:text-m4m-purple transition-colors"
+                    aria-label="Funds under review explanation"
+                  >
+                    ?
+                  </button>
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-60 bg-gray-900 text-white text-[11px] rounded-xl px-3 py-2 shadow-lg z-30 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity text-left leading-relaxed">
+                    Money locked because a dispute is being reviewed. These funds will be released or refunded after the M4M administration reviews the case.
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
+                  </div>
+                </div>
+              </div>
+              <p className="text-lg font-bold text-red-600">
+                {Number(balance?.under_review_balance ?? 0).toFixed(2)} {CURRENCY}
+              </p>
+            </div>
+          </div>
+        )}
+        {!isSeller && (
+          <p className="mt-3 text-xs text-purple-300">
+            Withdrawals are available for sellers only. Become a seller to unlock this feature.
+          </p>
+        )}
       </section>
 
       {/* Deposit requests */}

@@ -172,8 +172,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/seller/verification-request',  [SellerVerificationController::class, 'show']);
 
             // Seller warnings + moderation status (authenticated seller)
-            Route::get('/seller/warnings',            [SellerWarningsController::class, 'index']);
-            Route::get('/seller/moderation-status',   [SellerWarningsController::class, 'status']);
+            Route::get('/seller/warnings',                 [SellerWarningsController::class, 'index']);
+            Route::post('/seller/warnings/{warning}/dismiss', [SellerWarningsController::class, 'dismiss']);
+            Route::get('/seller/moderation-status',        [SellerWarningsController::class, 'status']);
             Route::post('/seller/vacation-mode',      [SellerVacationController::class, 'toggle']);
 
             // Seller escrow (seller only)

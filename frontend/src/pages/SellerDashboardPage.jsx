@@ -28,6 +28,7 @@ import {
   getSellerVerification,
   submitSellerVerification,
   getSellerWarnings,
+  dismissSellerWarning,
   getSellerStats,
   getSellerAutoReply,
   updateSellerAutoReply,
@@ -486,7 +487,7 @@ export default function SellerDashboardPage() {
   // Auto-refresh products & orders based on interval
   useEffect(() => {
     if (!refreshInterval || refreshInterval === 'off') return;
-    const msMap = { '2s': 2000, '5s': 5000, '10s': 10000, '30s': 30000 };
+    const msMap = { '30s': 30000, '60s': 60000, '120s': 120000 };
     const ms = msMap[refreshInterval] ?? 0;
     if (!ms) return;
     const id = setInterval(() => {
@@ -1059,9 +1060,25 @@ export default function SellerDashboardPage() {
                   {w.message && <p className="text-sm text-amber-700 mt-0.5">{w.message}</p>}
                   <p className="text-xs text-amber-600 mt-1">Please review marketplace rules to avoid further action.</p>
                 </div>
-                {w.created_at && (
-                  <p className="text-xs text-amber-500 shrink-0">{new Date(w.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</p>
-                )}
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  {w.created_at && (
+                    <p className="text-xs text-amber-500">{new Date(w.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await dismissSellerWarning(w.id);
+                        setSellerWarnings((prev) => prev.filter((item) => item.id !== w.id));
+                      } catch {
+                        // ignore; keep warning visible if dismiss fails
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded-lg border border-amber-300 bg-white text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+                  >
+                    Dismiss
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -1097,10 +1114,9 @@ export default function SellerDashboardPage() {
                     className="px-2 py-1 rounded-lg border border-m4m-gray-200 bg-white text-xs text-m4m-gray-700 focus:ring-1 focus:ring-m4m-purple focus:border-transparent outline-none"
                   >
                     <option value="off">Off</option>
-                    <option value="2s">2s</option>
-                    <option value="5s">5s</option>
-                    <option value="10s">10s</option>
-                    <option value="30s">30s</option>
+                    <option value="30s">30 seconds</option>
+                    <option value="60s">60 seconds</option>
+                    <option value="120s">120 seconds</option>
                   </select>
                 </div>
               </div>
@@ -1183,12 +1199,6 @@ export default function SellerDashboardPage() {
                 subtitle="Paid, processing, or delivered"
                 icon="chart"
               />
-              <StatCard
-                title="Wallet balance"
-                value={walletBalance != null ? `${Number(walletBalance).toFixed(2)} MAD` : '—'}
-                subtitle="Available balance"
-                icon="dollar"
-              />
             </div>
 
             {/* Wallet Overview — escrow monitoring */}
@@ -1196,20 +1206,83 @@ export default function SellerDashboardPage() {
               <h2 className="text-base font-semibold text-m4m-black mb-4">Wallet Overview</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                 <div>
-                  <p className="text-xs text-m4m-gray-500 mb-0.5">Available Balance</p>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="text-xs text-m4m-gray-500 font-medium">Available balance</p>
+                    <div className="relative group">
+                      <button
+                        type="button"
+                        className="w-4 h-4 rounded-full bg-m4m-gray-100 text-m4m-gray-500 text-[10px] flex items-center justify-center hover:bg-m4m-purple/10 hover:text-m4m-purple transition-colors"
+                        aria-label="Available balance explanation"
+                      >
+                        ?
+                      </button>
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-52 bg-gray-900 text-white text-[11px] rounded-xl px-3 py-2 shadow-lg z-30 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                        Money you can withdraw immediately. This includes earnings from completed orders that have passed the security holding period.
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
+                      </div>
+                    </div>
+                  </div>
                   <p className="text-xl font-bold text-m4m-black">
-                    {escrowData?.wallet_balance != null ? `${Number(escrowData.wallet_balance).toFixed(2)} MAD` : '—'}
+                    {walletBalance != null ? `${Number(walletBalance).toFixed(2)} MAD` : '—'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-m4m-gray-500 mb-0.5">Pending Escrow</p>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="text-xs text-m4m-gray-500 font-medium">Funds being processed</p>
+                    <div className="relative group">
+                      <button
+                        type="button"
+                        className="w-4 h-4 rounded-full bg-m4m-gray-100 text-m4m-gray-500 text-[10px] flex items-center justify-center hover:bg-m4m-purple/10 hover:text-m4m-purple transition-colors"
+                        aria-label="Funds being processed explanation"
+                      >
+                        ?
+                      </button>
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-52 bg-gray-900 text-white text-[11px] rounded-xl px-3 py-2 shadow-lg z-30 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                        Money from recent sales that is temporarily held by the platform to protect buyers and prevent fraud. These funds will automatically be released after the security period.
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
+                      </div>
+                    </div>
+                  </div>
                   <p className="text-xl font-bold text-amber-600">
-                    {escrowData?.pending_escrow_balance != null ? `${Number(escrowData.pending_escrow_balance).toFixed(2)} MAD` : '—'}
+                    {escrowData?.processing_escrow_balance != null ? `${Number(escrowData.processing_escrow_balance).toFixed(2)} MAD` : '—'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-m4m-gray-500 mb-0.5">Next payout</p>
-                  <p className="text-lg font-semibold text-m4m-gray-800">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <p className="text-xs text-m4m-gray-500 font-medium">Funds under review</p>
+                    <div className="relative group">
+                      <button
+                        type="button"
+                        className="w-4 h-4 rounded-full bg-m4m-gray-100 text-m4m-gray-500 text-[10px] flex items-center justify-center hover:bg-m4m-purple/10 hover:text-m4m-purple transition-colors"
+                        aria-label="Funds under review explanation"
+                      >
+                        ?
+                      </button>
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-52 bg-gray-900 text-white text-[11px] rounded-xl px-3 py-2 shadow-lg z-30 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                        Money currently locked because a dispute was opened by the buyer. These funds will be released or refunded after the M4M administration reviews the case.
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xl font-bold text-red-600">
+                    {escrowData?.disputed_escrow_balance != null ? `${Number(escrowData.disputed_escrow_balance).toFixed(2)} MAD` : '—'}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-m4m-gray-600">
+                <div>
+                  <p className="font-medium text-m4m-gray-800 mb-0.5">Total earnings</p>
+                  <p className="text-sm text-m4m-gray-900">
+                    {escrowData?.total_earnings != null ? `${Number(escrowData.total_earnings).toFixed(2)} MAD` : '—'}
+                  </p>
+                  <p className="text-[11px] text-m4m-gray-500">
+                    Total money you have earned from all completed sales (before any withdrawals).
+                  </p>
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-m4m-gray-500">
+                <p className="font-medium mb-1">Next payout</p>
+                <p className="text-sm font-semibold text-m4m-gray-800">
                     {(() => {
                       const at = escrowData?.next_release_at;
                       if (!at) return '—';
@@ -1224,19 +1297,19 @@ export default function SellerDashboardPage() {
                       const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
                       return mins > 0 ? `in ${mins} min` : 'soon';
                     })()}
-                  </p>
-                </div>
+                </p>
               </div>
               {escrowData?.pending_orders?.length > 0 && (
                 <>
-                  <h3 className="text-sm font-medium text-m4m-gray-700 mb-2">Pending Escrow Orders</h3>
+                  <h3 className="text-sm font-medium text-m4m-gray-700 mb-2">Escrow orders (funds being processed)</h3>
                   <div className="overflow-x-auto rounded-lg border border-m4m-gray-100">
                     <table className="min-w-full text-sm">
                       <thead className="bg-m4m-gray-50">
                         <tr>
                           <th className="px-3 py-2 text-left font-medium text-m4m-gray-600">Order ID</th>
                           <th className="px-3 py-2 text-left font-medium text-m4m-gray-600">Amount</th>
-                          <th className="px-3 py-2 text-left font-medium text-m4m-gray-600">Release time</th>
+                          <th className="px-3 py-2 text-left font-medium text-m4m-gray-600">Status</th>
+                          <th className="px-3 py-2 text-left font-medium text-m4m-gray-600">Release countdown</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-m4m-gray-100">
@@ -1244,6 +1317,11 @@ export default function SellerDashboardPage() {
                           <tr key={o.id}>
                             <td className="px-3 py-2 font-medium">#{o.order_number}</td>
                             <td className="px-3 py-2">{Number(o.amount).toFixed(2)} MAD</td>
+                            <td className="px-3 py-2">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-800">
+                                {o.escrow_status === 'held' ? 'Held in escrow' : 'Pending release'}
+                              </span>
+                            </td>
                             <td className="px-3 py-2 text-m4m-gray-600">
                               {o.release_at ? (() => {
                                 const d = new Date(o.release_at);
@@ -2278,6 +2356,27 @@ export default function SellerDashboardPage() {
                         <p className="mt-1 text-sm text-m4m-gray-500">
                           {order.created_at ? new Date(order.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
                         </p>
+                        {status === 'delivered' && order.release_at && (
+                          (() => {
+                            const target = new Date(order.release_at).getTime();
+                            const now = Date.now();
+                            const diffMs = target - now;
+                            if (diffMs > 0) {
+                              const totalMinutes = Math.floor(diffMs / 60000);
+                              const days = Math.floor(totalMinutes / (60 * 24));
+                              const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+                              const parts = [];
+                              if (days > 0) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+                              parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
+                              return (
+                                <p className="mt-1 text-xs text-m4m-gray-600">
+                                  Release in <span className="font-semibold">{parts.join(' ')}</span>
+                                </p>
+                              );
+                            }
+                            return null;
+                          })()
+                        )}
                         {status === 'dispute' && (
                           <div className={`mt-4 p-4 rounded-xl border ${
                             order.escrow_status === 'released'

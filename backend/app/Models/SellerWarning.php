@@ -16,12 +16,14 @@ class SellerWarning extends Model
         'reason',
         'message',
         'is_read',
+        'dismissed_at',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_read' => 'boolean',
+            'is_read'      => 'boolean',
+            'dismissed_at' => 'datetime',
         ];
     }
 

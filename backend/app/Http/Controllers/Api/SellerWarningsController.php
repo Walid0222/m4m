@@ -19,6 +19,7 @@ class SellerWarningsController extends Controller
         $user = $request->user();
 
         $warnings = SellerWarning::where('seller_id', $user->id)
+            ->whereNull('dismissed_at')
             ->with('admin:id,name')
             ->latest()
             ->get();
@@ -35,6 +36,31 @@ class SellerWarningsController extends Controller
             'unread_count' => $unreadCount,
             'total'        => $warnings->count(),
         ]);
+    }
+
+    /**
+     * POST /seller/warnings/{warning}/dismiss
+     *
+     * Seller can dismiss a warning banner; sets dismissed_at timestamp.
+     */
+    public function dismiss(Request $request, SellerWarning $warning): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($warning->seller_id !== $user->id) {
+            return $this->error('Forbidden.', 403);
+        }
+
+        if ($warning->dismissed_at !== null) {
+            return $this->success($warning, 'Warning already dismissed.');
+        }
+
+        $warning->update([
+            'dismissed_at' => now(),
+            'is_read'      => true,
+        ]);
+
+        return $this->success($warning, 'Warning dismissed.');
     }
 
     /**

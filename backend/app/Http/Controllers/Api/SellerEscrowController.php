@@ -23,40 +23,75 @@ class SellerEscrowController extends Controller
             $wallet = $user->wallet()->create(['balance' => 0]);
         }
 
-        $pendingOrders = Order::where('seller_id', $user->id)
-            ->where('escrow_status', 'pending_release')
-            ->orderBy('release_at')
-            ->get(['id', 'order_number', 'escrow_amount', 'total_amount', 'release_at', 'status']);
+        // Orders where money is still being processed (held or scheduled for release)
+        $processingOrders = Order::where('seller_id', $user->id)
+            ->whereIn('escrow_status', ['held', 'pending_release'])
+            ->orderByRaw("CASE WHEN release_at IS NULL THEN 1 ELSE 0 END, release_at ASC")
+            ->get(['id', 'order_number', 'escrow_amount', 'total_amount', 'release_at', 'status', 'escrow_status']);
 
-        $pendingEscrowBalance = 0.0;
-        $nextReleaseAt = null;
+        // Orders where funds are under review (disputed)
+        $disputedOrders = Order::where('seller_id', $user->id)
+            ->where('escrow_status', 'disputed')
+            ->latest()
+            ->get(['id', 'order_number', 'escrow_amount', 'total_amount', 'release_at', 'status', 'escrow_status']);
 
-        foreach ($pendingOrders as $order) {
+        $processingBalance = 0.0;
+        $disputedBalance   = 0.0;
+        $nextReleaseAt     = null;
+
+        foreach ($processingOrders as $order) {
             $amount = (float) ($order->escrow_amount ?: $order->total_amount);
-            $pendingEscrowBalance += $amount;
+            $processingBalance += $amount;
 
             if ($order->release_at && ($nextReleaseAt === null || $order->release_at->lt($nextReleaseAt))) {
                 $nextReleaseAt = $order->release_at;
             }
         }
 
-        $payload = $pendingOrders->map(function ($order) {
+        foreach ($disputedOrders as $order) {
+            $amount = (float) ($order->escrow_amount ?: $order->total_amount);
+            $disputedBalance += $amount;
+        }
+
+        // Total earnings from completed seller payouts
+        $totalEarnings = (float) $wallet->transactions()
+            ->where('type', 'seller_payout')
+            ->sum('amount');
+
+        $pendingPayload = $processingOrders->map(function ($order) {
             $amount = (float) ($order->escrow_amount ?: $order->total_amount);
 
             return [
-                'id' => $order->id,
+                'id'           => $order->id,
                 'order_number' => $order->order_number,
-                'amount' => $amount,
-                'release_at' => $order->release_at?->toIso8601String(),
-                'status' => $order->status,
+                'amount'       => $amount,
+                'release_at'   => $order->release_at?->toIso8601String(),
+                'status'       => $order->status,
+                'escrow_status'=> $order->escrow_status,
+            ];
+        });
+
+        $disputedPayload = $disputedOrders->map(function ($order) {
+            $amount = (float) ($order->escrow_amount ?: $order->total_amount);
+
+            return [
+                'id'           => $order->id,
+                'order_number' => $order->order_number,
+                'amount'       => $amount,
+                'release_at'   => $order->release_at?->toIso8601String(),
+                'status'       => $order->status,
+                'escrow_status'=> $order->escrow_status,
             ];
         });
 
         return $this->success([
-            'wallet_balance' => (float) $wallet->balance,
-            'pending_escrow_balance' => $pendingEscrowBalance,
-            'next_release_at' => $nextReleaseAt?->format('Y-m-d H:i:s'),
-            'pending_orders' => $payload,
+            'wallet_balance'          => (float) $wallet->balance,
+            'processing_escrow_balance' => $processingBalance,
+            'disputed_escrow_balance' => $disputedBalance,
+            'next_release_at'         => $nextReleaseAt?->format('Y-m-d H:i:s'),
+            'pending_orders'          => $pendingPayload,
+            'disputed_orders'         => $disputedPayload,
+            'total_earnings'          => $totalEarnings,
         ]);
     }
 }

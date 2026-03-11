@@ -27,6 +27,7 @@ export default function OrderDetailPage() {
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewError, setReviewError] = useState('');
+  const [autoConfirmText, setAutoConfirmText] = useState('');
 
   useEffect(() => {
     if (!id || !getToken()) {
@@ -50,6 +51,35 @@ export default function OrderDetailPage() {
     fetchOrder();
     return () => { cancelled = true; };
   }, [id]);
+
+  // Live auto-confirmation countdown based on auto_confirm_at
+  useEffect(() => {
+    if (!order?.auto_confirm_at) {
+      setAutoConfirmText('');
+      return;
+    }
+    const target = new Date(order.auto_confirm_at);
+    const update = () => {
+      const now = new Date();
+      const diffMs = target.getTime() - now.getTime();
+      if (diffMs <= 0) {
+        setAutoConfirmText('');
+        return;
+      }
+      const totalMinutes = Math.floor(diffMs / 60000);
+      const days = Math.floor(totalMinutes / (60 * 24));
+      const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+      const minutes = totalMinutes % 60;
+      const parts = [];
+      if (days > 0) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+      if (hours > 0 || days > 0) parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
+      parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`);
+      setAutoConfirmText(parts.join(' '));
+    };
+    update();
+    const idTimer = setInterval(update, 60000);
+    return () => clearInterval(idTimer);
+  }, [order?.auto_confirm_at]);
 
   const handleConfirmDelivery = async () => {
     if (!order || confirming) return;
@@ -127,7 +157,8 @@ export default function OrderDetailPage() {
   const isCompleted = status === 'completed';
   const isDisputed = status === 'disputed' || status === 'dispute';
   const isBuyer = !user?.is_seller || order.user_id === user?.id;
-  const canDispute = isBuyer && ['delivered', 'processing', 'paid', 'pending'].includes(status) && !isDisputed;
+  // Only allow disputes after delivery or completion; hide button earlier.
+  const canDispute = isBuyer && (status === 'delivered' || status === 'completed') && !isDisputed;
 
   const isSellerOfOrder = user?.is_seller && Number(order.seller_id) === Number(user?.id);
 
@@ -203,11 +234,11 @@ export default function OrderDetailPage() {
 
       <OrderProgressTracker status={status} />
 
-      {/* Confirm delivery button */}
-      {isDelivered && (
+      {/* Confirm delivery + auto-confirm countdown (buyer view) */}
+      {isDelivered && isBuyer && (
         <div className="mb-6 p-4 bg-green-50 rounded-xl border border-green-200">
           <p className="text-sm text-green-800 mb-3 font-medium">
-            ✅ Your order has been delivered. Please confirm once you have verified the credentials.
+            ✅ Your order has been delivered. Please review the delivery before confirming.
           </p>
           <button
             type="button"
@@ -217,6 +248,15 @@ export default function OrderDetailPage() {
           >
             {confirming ? 'Confirming…' : 'Confirm Delivery'}
           </button>
+          {autoConfirmText && (
+            <div className="mt-3 text-xs sm:text-sm text-green-900">
+              <p className="font-medium">Auto confirmation in</p>
+              <p className="mt-0.5 font-semibold">{autoConfirmText}</p>
+              <p className="mt-0.5 text-green-800">
+                If you do nothing, the order will automatically be confirmed after 3 days.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -236,17 +276,19 @@ export default function OrderDetailPage() {
               <p className="font-semibold">Dispute submitted</p>
               <p className="mt-0.5">The funds are secured in escrow while our team reviews the case.</p>
             </>
-          ) : order.dispute?.admin_decision === 'refund_buyer' ? (
-            <>
-              <p className="font-semibold">You have been refunded by the admin.</p>
-            </>
           ) : (
             <>
-              <p className="font-semibold">Dispute resolved. Seller delivery was confirmed.</p>
+              <p className="font-semibold mb-1">Our team reviewed the dispute.</p>
+              <p className="mb-0.5">
+                <span className="font-medium">Decision:</span>{' '}
+                {order.dispute?.admin_decision === 'refund_buyer' ? 'Buyer refunded' : 'Seller payment released'}
+              </p>
+              {order.dispute?.admin_note && (
+                <p className="mb-0.5">
+                  <span className="font-medium">Reason:</span> {order.dispute.admin_note}
+                </p>
+              )}
             </>
-          )}
-          {order.dispute?.admin_note && (
-            <p className="mt-2 pt-2 border-t border-gray-200/50 italic">Admin note: {order.dispute.admin_note}</p>
           )}
           <Link to="/disputes" className="mt-2 inline-block text-xs font-semibold hover:underline">View dispute status →</Link>
         </div>
@@ -261,19 +303,28 @@ export default function OrderDetailPage() {
               ? 'bg-amber-50 border-amber-200 text-amber-800'
               : 'bg-red-50 border-red-200 text-red-800'
         }`}>
-          <p className="font-semibold">Status: Under dispute</p>
-          <p className="mt-0.5">Escrow amount: {Number(order.escrow_amount ?? order.total_amount ?? 0).toFixed(2)} MAD</p>
-          {order.escrow_status === 'disputed' && (
-            <p className="mt-2">This order is currently under dispute. Funds are temporarily locked until the case is reviewed by the M4M administration.</p>
-          )}
-          {order.escrow_status === 'released' && (
-            <p className="mt-2 font-medium">Dispute resolved. Funds released to your wallet.</p>
-          )}
-          {order.escrow_status === 'refunded' && (
-            <p className="mt-2">Dispute resolved. Buyer refunded. Funds were returned to the buyer after admin review.</p>
-          )}
-          {order.dispute?.admin_note && (
-            <p className="mt-2 pt-2 border-t border-gray-200/50 italic">Admin note: {order.dispute.admin_note}</p>
+          {!order.dispute?.admin_decision ? (
+            <>
+              <p className="font-semibold">Status: Under dispute</p>
+              <p className="mt-0.5">Escrow amount: {Number(order.escrow_amount ?? order.total_amount ?? 0).toFixed(2)} MAD</p>
+              <p className="mt-2">
+                This order is currently under dispute. Funds are temporarily locked until the case is reviewed by the M4M administration.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold mb-1">Dispute resolved</p>
+              <p className="mt-0.5">Escrow amount: {Number(order.escrow_amount ?? order.total_amount ?? 0).toFixed(2)} MAD</p>
+              <p className="mb-0.5">
+                <span className="font-medium">Decision:</span>{' '}
+                {order.dispute?.admin_decision === 'refund_buyer' ? 'Buyer refunded' : 'Seller payment released'}
+              </p>
+              {order.dispute?.admin_note && (
+                <p className="mb-0.5">
+                  <span className="font-medium">Reason:</span> {order.dispute.admin_note}
+                </p>
+              )}
+            </>
           )}
         </div>
       )}

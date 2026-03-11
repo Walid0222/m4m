@@ -2170,7 +2170,7 @@ export default function AdminDashboardPage() {
   // Auto-refresh by remounting panels
   useEffect(() => {
     if (!refreshInterval || refreshInterval === 'off') return;
-    const msMap = { '2s': 2000, '5s': 5000, '10s': 10000, '30s': 30000 };
+    const msMap = { '30s': 30000, '60s': 60000, '120s': 120000 };
     const ms = msMap[refreshInterval] ?? 0;
     if (!ms) return;
     const id = setInterval(() => setRefreshToken((t) => t + 1), ms);
@@ -2187,7 +2187,7 @@ export default function AdminDashboardPage() {
             {user?.name && <span className="ml-1 text-m4m-purple font-medium">({user.name})</span>}
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-3 text-xs">
           <button
             type="button"
             onClick={() => setRefreshToken((t) => t + 1)}
@@ -2213,10 +2213,9 @@ export default function AdminDashboardPage() {
               className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:ring-1 focus:ring-m4m-purple focus:border-transparent outline-none"
             >
               <option value="off">Off</option>
-              <option value="2s">2s</option>
-              <option value="5s">5s</option>
-              <option value="10s">10s</option>
-              <option value="30s">30s</option>
+              <option value="30s">30 seconds</option>
+              <option value="60s">60 seconds</option>
+              <option value="120s">120 seconds</option>
             </select>
           </div>
         </div>

@@ -15,6 +15,7 @@ export default function OrdersPage() {
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest'
   const [confirmingOrderId, setConfirmingOrderId] = useState(null);
   const [chattingSellerId, setChattingSellerId] = useState(null);
+  const [nowTs, setNowTs] = useState(Date.now());
 
   const fetchOrders = useCallback(async () => {
     if (!getToken()) {
@@ -88,6 +89,27 @@ export default function OrdersPage() {
   );
   const firstDeliveredOrder = deliveredOrders[0] ?? null;
   const isConfirmingFirst = firstDeliveredOrder && confirmingOrderId === firstDeliveredOrder.id;
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTs(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const formatRemaining = (iso) => {
+    if (!iso) return '';
+    const target = new Date(iso).getTime();
+    const diffMs = target - nowTs;
+    if (diffMs <= 0) return '';
+    const totalMinutes = Math.floor(diffMs / 60000);
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+    const parts = [];
+    if (days > 0) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+    if (hours > 0 || days > 0) parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
+    parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`);
+    return parts.join(' ');
+  };
 
   if (loading) {
     return (
@@ -177,8 +199,24 @@ export default function OrdersPage() {
                     : `✅ ${deliveredOrders.length} orders have been delivered!`}
                 </p>
                 <p className="text-orange-600 text-xs mt-0.5">
-                  Tip: Only confirm once you have verified the credentials. Orders auto-confirm after 7 days.
+                  Tip: Only confirm once you have verified the credentials. Orders auto-confirm after 3 days.
                 </p>
+                {firstDeliveredOrder?.auto_confirm_at && (
+                  (() => {
+                    const txt = formatRemaining(firstDeliveredOrder.auto_confirm_at);
+                    return txt ? (
+                      <p className="text-orange-800 text-xs mt-0.5">
+                        <span className="font-medium">Auto confirmation in</span>{' '}
+                        <span className="font-semibold">{txt}</span>
+                      </p>
+                    ) : null;
+                  })()
+                )}
+                {firstDeliveredOrder && (
+                  <p className="text-orange-700 text-[11px] mt-0.5">
+                    If you do nothing, the order will automatically be confirmed after 3 days.
+                  </p>
+                )}
               </div>
               {firstDeliveredOrder && (
                 <Link

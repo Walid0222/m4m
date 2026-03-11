@@ -2,6 +2,13 @@
  * Order status display config: card border/badge colors for Orders page.
  * Backend may return: pending, paid, processing, delivered, completed, cancelled, dispute
  * escrow_status: held, pending_release, disputed, released, refunded
+ *
+ * Colors:
+ * - Blue   → processing
+ * - Orange → delivered / pending (UX emphasis)
+ * - Red    → disputed
+ * - Green  → completed / released
+ * - Gray   → refunded / cancelled
  */
 export function getOrderStatusStyle(status) {
   const s = (status || '').toLowerCase();
@@ -37,9 +44,9 @@ export function getOrderStatusStyle(status) {
       label: 'Completed',
     },
     cancelled: {
-      border: 'border-l-red-500',
-      bg: 'bg-red-50',
-      badge: 'bg-red-100 text-red-800',
+      border: 'border-l-gray-400',
+      bg: 'bg-gray-50',
+      badge: 'bg-gray-200 text-gray-700',
       label: 'Cancelled',
     },
     dispute: {
@@ -58,13 +65,14 @@ export function getOrderStatusStyle(status) {
   return base;
 }
 
-/** Escrow-specific badges: Disputed, Refunded, Released */
+/** Escrow-specific badges: Pending release, Disputed, Refunded, Released */
 export function getEscrowBadge(escrowStatus) {
   const e = (escrowStatus || '').toLowerCase();
   const badges = {
-    disputed: { className: 'bg-red-100 text-red-800', label: 'Disputed' },
-    refunded: { className: 'bg-purple-100 text-purple-800', label: 'Refunded' },
-    released: { className: 'bg-green-100 text-green-800', label: 'Released' },
+    pending_release: { className: 'bg-orange-100 text-orange-800', label: 'Pending release' },
+    disputed:        { className: 'bg-red-100 text-red-800',    label: 'Disputed' },
+    refunded:        { className: 'bg-gray-100 text-gray-700',  label: 'Refunded' },
+    released:        { className: 'bg-green-100 text-green-800', label: 'Released' },
   };
   return badges[e] || null;
 }
