@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getWallet, getOrders, paginatedItems, getToken, api, uploadProfileAvatar } from '../services/api';
+import { getWallet, getOrders, paginatedItems, getToken, api, uploadProfileAvatar, getNotifications, markNotificationRead } from '../services/api';
 import { getBuyerPurchaseBadge } from '../lib/sellerBadge';
 
 // Try to PATCH /me if backend supports it; gracefully fail otherwise
@@ -16,7 +16,7 @@ async function updateProfile(body) {
 
 async function changePassword(body) {
   try {
-    const res = await api.post('/me/change-password', body);
+    const res = await api.patch('/me', body);
     return res.data?.data ?? res.data;
   } catch (e) {
     throw new Error(e.response?.data?.message || e.message || 'Password change failed');
@@ -58,6 +58,7 @@ export default function UserProfilePage() {
   const [pwConfirm, setPwConfirm] = useState('');
   const [pwSubmitting, setPwSubmitting] = useState(false);
   const [pwMsg, setPwMsg] = useState(null);
+  const [adminWarnings, setAdminWarnings] = useState([]);
 
   useEffect(() => {
     if (user) setEmailValue(user.email || '');
@@ -75,6 +76,22 @@ export default function UserProfilePage() {
       const list = paginatedItems(ordersData);
       setOrders(Array.isArray(list) ? list : []);
     }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Load admin warnings from notifications (SellerWarningNotification → type: 'seller_warning')
+  useEffect(() => {
+    if (!user || !getToken()) { setAdminWarnings([]); return; }
+    let cancelled = false;
+    getNotifications()
+      .then((list) => {
+        if (cancelled || !Array.isArray(list)) return;
+        const warnings = list.filter((n) => (n.type || n.data?.type) === 'seller_warning' && !n.read);
+        setAdminWarnings(warnings);
+      })
+      .catch(() => {
+        if (!cancelled) setAdminWarnings([]);
+      });
     return () => { cancelled = true; };
   }, [user]);
 
@@ -153,6 +170,48 @@ export default function UserProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      {/* Admin warning banner(s) */}
+      {adminWarnings.length > 0 && (
+        <div className="mb-4 space-y-3">
+          {adminWarnings.map((w) => {
+            const data = w.data || {};
+            return (
+              <div key={w.id} className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-amber-800 text-sm">⚠️ ADMIN WARNING</p>
+                  {data.reason && (
+                    <p className="text-sm text-amber-700 mt-0.5">
+                      <span className="font-medium">Reason:</span> {data.reason}
+                    </p>
+                  )}
+                  {data.message && (
+                    <p className="text-sm text-amber-700 mt-0.5">
+                      {data.message}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await markNotificationRead(w.id);
+                      setAdminWarnings((prev) => prev.filter((n) => n.id !== w.id));
+                    } catch {
+                      // ignore; keep warning visible if dismiss fails
+                    }
+                  }}
+                  className="ml-3 px-2.5 py-1 rounded-lg border border-amber-300 bg-white text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+                >
+                  Dismiss ✖
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {/* Profile header */}
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden mb-5">
         <div className="p-6 md:p-8 bg-gradient-to-br from-purple-50 to-white border-b border-gray-100">

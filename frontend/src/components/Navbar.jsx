@@ -117,7 +117,14 @@ export default function Navbar() {
   };
 
   const balanceDisplay = walletBalance !== null ? `${Number(walletBalance).toFixed(2)} MAD` : '—';
-  const unreadCount = notifications.filter((n) => !n.read_at).length;
+  const unreadMessages = notifications.filter((n) => {
+    const type = n.type || n.data?.type;
+    return type === 'new_message' && !n.read_at;
+  }).length;
+  const unreadCount = notifications.filter((n) => {
+    const type = n.type || n.data?.type;
+    return type !== 'new_message' && !n.read_at;
+  }).length;
 
   function getNotificationLink(n) {
     const type = n.type || n.data?.type;
@@ -344,6 +351,28 @@ export default function Navbar() {
                     </div>
                   )}
                 </div>
+
+                {/* Messages icon (chat) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationsOpen(false);
+                    setProfileOpen(false);
+                    setMobileMenuOpen(false);
+                    navigate('/chat');
+                  }}
+                  className="relative p-2 rounded-xl text-gray-500 hover:text-m4m-purple hover:bg-purple-50 transition-colors"
+                  aria-label={unreadMessages > 0 ? `${unreadMessages} unread messages` : 'Messages'}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M5 20l2.586-2.586A2 2 0 018.828 17H19a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11l2-2" />
+                  </svg>
+                  {unreadMessages > 0 && (
+                    <span className="absolute top-1 right-1 min-w-[1.1rem] h-[1.1rem] px-0.5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                      {unreadMessages > 99 ? '99+' : unreadMessages}
+                    </span>
+                  )}
+                </button>
               </>
             )}
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getOrders, confirmOrderDelivery, createConversation, paginatedItems, getToken } from '../services/api';
+import { getOrders, confirmOrderDelivery, createConversation, paginatedItems, getToken, getNotifications, markNotificationRead } from '../services/api';
 import OrderCard from '../components/OrderCard';
 import { ORDER_STATUSES } from '../lib/orderStatus';
 
@@ -16,6 +16,7 @@ export default function OrdersPage() {
   const [confirmingOrderId, setConfirmingOrderId] = useState(null);
   const [chattingSellerId, setChattingSellerId] = useState(null);
   const [nowTs, setNowTs] = useState(Date.now());
+  const [adminWarnings, setAdminWarnings] = useState([]);
 
   const fetchOrders = useCallback(async () => {
     if (!getToken()) {
@@ -95,6 +96,22 @@ export default function OrdersPage() {
     return () => clearInterval(id);
   }, []);
 
+  // Load admin warnings from notifications (SellerWarningNotification → type: 'seller_warning')
+  useEffect(() => {
+    if (!user || !getToken()) { setAdminWarnings([]); return; }
+    let cancelled = false;
+    getNotifications()
+      .then((list) => {
+        if (cancelled || !Array.isArray(list)) return;
+        const warnings = list.filter((n) => (n.type || n.data?.type) === 'seller_warning' && !n.read);
+        setAdminWarnings(warnings);
+      })
+      .catch(() => {
+        if (!cancelled) setAdminWarnings([]);
+      });
+    return () => { cancelled = true; };
+  }, [user]);
+
   const formatRemaining = (iso) => {
     if (!iso) return '';
     const target = new Date(iso).getTime();
@@ -130,6 +147,49 @@ export default function OrdersPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      {/* Admin warning banner(s) */}
+      {adminWarnings.length > 0 && (
+        <div className="mb-4 space-y-3">
+          {adminWarnings.map((w) => {
+            const data = w.data || {};
+            return (
+              <div key={w.id} className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
+                <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-amber-800 text-sm">⚠️ ADMIN WARNING</p>
+                  {data.reason && (
+                    <p className="text-sm text-amber-700 mt-0.5">
+                      <span className="font-medium">Reason:</span> {data.reason}
+                    </p>
+                  )}
+                  {data.message && (
+                    <p className="text-sm text-amber-700 mt-0.5">
+                      {data.message}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await markNotificationRead(w.id);
+                      setAdminWarnings((prev) => prev.filter((n) => n.id !== w.id));
+                    } catch {
+                      // ignore; keep warning visible if dismiss fails
+                    }
+                  }}
+                  className="ml-3 px-2.5 py-1 rounded-lg border border-amber-300 bg-white text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+                >
+                  Dismiss ✖
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <h1 className="text-2xl font-bold text-m4m-black mb-6">My Orders</h1>
 
       {/* Marketplace rules info for buyers */}

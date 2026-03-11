@@ -13,7 +13,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->redirectGuestsTo(fn ($request) => null);
         $middleware->alias([
+            'auth'                  => \App\Http\Middleware\Authenticate::class,
             'admin'                 => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'not.banned'            => \App\Http\Middleware\EnsureSellerNotBanned::class,
             'check.ban'             => \App\Http\Middleware\CheckBanStatus::class,
@@ -23,5 +25,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->shouldRenderJsonWhen(function ($request, $e) {
+            return $request->is('api/*') || $request->expectsJson();
+        });
     })->create();

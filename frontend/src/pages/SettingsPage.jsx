@@ -13,6 +13,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
+  // Interface preferences: global auto refresh
+  const [refreshInterval, setRefreshInterval] = useState(15000);
+
   // 2FA state
   const [twoFAState, setTwoFAState] = useState({ loading: false, enabling: false, secret: null, qrCode: null });
   const [twoFACode, setTwoFACode] = useState('');
@@ -26,6 +29,20 @@ export default function SettingsPage() {
       setEnabled(user.show_recent_sales_notifications ?? true);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.localStorage.getItem('platform_auto_refresh');
+    if (raw == null) {
+      window.localStorage.setItem('platform_auto_refresh', '15000');
+      setRefreshInterval(15000);
+      return;
+    }
+    const v = Number(raw);
+    if (Number.isFinite(v)) {
+      setRefreshInterval(v);
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -68,6 +85,36 @@ export default function SettingsPage() {
         <p className="text-sm text-gray-500 mt-1">
           Control your marketplace experience, security, and notification preferences.
         </p>
+      </div>
+
+      {/* Interface Preferences */}
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-4 mb-6">
+        <h2 className="text-sm font-semibold text-gray-900">Interface Preferences</h2>
+        <p className="text-xs text-gray-500">
+          Automatically refresh platform data such as orders, wallet, disputes and dashboards.
+        </p>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Auto refresh</label>
+          <select
+            value={refreshInterval}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setRefreshInterval(v);
+              if (typeof window !== 'undefined') {
+                window.localStorage.setItem('platform_auto_refresh', String(v));
+              }
+            }}
+            className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+          >
+            <option value={0}>Off</option>
+            <option value={5000}>5 seconds</option>
+            <option value={10000}>10 seconds</option>
+            <option value={15000}>15 seconds</option>
+            <option value={30000}>30 seconds</option>
+            <option value={60000}>60 seconds</option>
+            <option value={120000}>120 seconds</option>
+          </select>
+        </div>
       </div>
 
       {/* Security / Two-Factor Authentication */}

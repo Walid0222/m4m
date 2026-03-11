@@ -446,7 +446,7 @@ export default function SellerDashboardPage() {
     fetchEscrow();
   }, [fetchEscrow]);
 
-  // Fetch admin warnings for this seller
+  // Fetch admin warnings for this seller (only after user is loaded and is a seller)
   const fetchWarnings = useCallback(async () => {
     if (!getToken() || !user?.is_seller) return;
     try {
@@ -458,8 +458,10 @@ export default function SellerDashboardPage() {
   }, [user?.is_seller]);
 
   useEffect(() => {
-    fetchWarnings();
-  }, [fetchWarnings]);
+    if (user && user.is_seller) {
+      fetchWarnings();
+    }
+  }, [user, fetchWarnings]);
 
   // Fetch seller stats
   useEffect(() => {
@@ -1000,6 +1002,13 @@ export default function SellerDashboardPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                 </svg>
               )}
+              {s.id === 'service-requests' && (
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                  <circle cx="12" cy="12" r="3" strokeWidth={2} />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7.05 7.05L9.17 9.17M14.83 14.83L16.95 16.95M7.05 16.95L9.17 14.83M14.83 9.17L16.95 7.05" />
+                </svg>
+              )}
               {s.id === 'orders' && (
                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
@@ -1055,7 +1064,7 @@ export default function SellerDashboardPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-amber-800 text-sm">⚠ Warning from M4M Administration</p>
+                  <p className="font-semibold text-amber-800 text-sm">⚠️ ADMIN WARNING</p>
                   {w.reason && <p className="text-sm text-amber-700 mt-0.5"><span className="font-medium">Reason:</span> {w.reason}</p>}
                   {w.message && <p className="text-sm text-amber-700 mt-0.5">{w.message}</p>}
                   <p className="text-xs text-amber-600 mt-1">Please review marketplace rules to avoid further action.</p>
@@ -1504,26 +1513,6 @@ export default function SellerDashboardPage() {
                   </ResponsiveContainer>
                 </div>
               </div>
-            <div>
-              <h2 className="text-lg font-semibold text-m4m-black mb-4">Recent orders</h2>
-              {loadingOrders ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-20 rounded-xl bg-white border border-m4m-gray-200 animate-pulse" />
-                  ))}
-                </div>
-              ) : orders.length === 0 ? (
-                <div className="rounded-xl border border-m4m-gray-200 bg-white p-8 text-center text-m4m-gray-500">
-                  No orders yet.
-                </div>
-              ) : (
-                <ul className="space-y-3">
-                  {orders.slice(0, 5).map((order) => (
-                    <OrderCard key={order.id} order={order} />
-                  ))}
-                </ul>
-              )}
-            </div>
           </>
         )}
 

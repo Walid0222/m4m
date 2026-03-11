@@ -4,8 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Product;
 use App\Models\Report;
-use App\Models\User;
-use App\Notifications\SellerReportNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -46,13 +44,8 @@ class ReportController extends Controller
 
         $report = Report::create($data);
 
-        // Notify the seller about the report
-        if ($sellerId && $sellerId !== $request->user()->id) {
-            $seller = User::find($sellerId);
-            if ($seller) {
-                $seller->notify(new SellerReportNotification($report));
-            }
-        }
+        // Do not notify the reported user directly; reports are handled by admins only.
+        // Admin actions (warnings / bans) will still generate their own notifications.
 
         return $this->success($report, 'Report submitted.', 201);
     }

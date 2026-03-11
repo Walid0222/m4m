@@ -65,8 +65,8 @@ class ConversationController extends Controller
             $otherUser = \App\Models\User::find($other);
             if ($otherUser && $otherUser->is_seller && ! empty($otherUser->auto_reply_message)) {
                 $conversation->messages()->create([
-                    'sender_id' => $otherUser->id,
-                    'body'      => $otherUser->auto_reply_message,
+                    'user_id' => $otherUser->id,
+                    'body'    => $otherUser->auto_reply_message,
                 ]);
             }
         }
