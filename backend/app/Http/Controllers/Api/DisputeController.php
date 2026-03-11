@@ -6,6 +6,7 @@ use App\Models\BuyerStat;
 use App\Models\Dispute;
 use App\Models\Order;
 use App\Models\SellerStat;
+use App\Notifications\DisputeOpenedNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -51,8 +52,11 @@ class DisputeController extends Controller
             'status'      => 'open',
         ]);
 
-        // Put order in disputed state
-        $order->update(['status' => Order::STATUS_DISPUTE]);
+        // Put order in disputed state; block escrow auto-release
+        $order->update([
+            'status'        => Order::STATUS_DISPUTE,
+            'escrow_status' => 'disputed',
+        ]);
 
         // Update dispute counts
         BuyerStat::firstOrCreate(['buyer_id' => $request->user()->id])->increment('dispute_count');
@@ -61,6 +65,8 @@ class DisputeController extends Controller
         }
 
         $dispute->load(['buyer:id,name', 'seller:id,name', 'order:id,order_number,total_amount']);
+        $dispute->buyer?->notify(new DisputeOpenedNotification($dispute));
+        $dispute->seller?->notify(new DisputeOpenedNotification($dispute));
 
         return $this->success($dispute, 'Dispute opened.', 201);
     }

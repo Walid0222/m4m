@@ -104,24 +104,4 @@ class WithdrawVerificationController extends Controller
 
         return $this->success($withdrawRequest->fresh(['user:id,name,email']), 'Withdrawal approved and processed.');
     }
-            $wallet->decrement('balance', $amount);
-            $newBalance = (float) $wallet->fresh()->balance;
-
-            $wallet->transactions()->create([
-                'type' => 'withdrawal',
-                'amount' => -$amount,
-                'balance_after' => $newBalance,
-                'reference_type' => WithdrawRequest::class,
-                'reference_id' => $withdrawRequest->id,
-                'description' => 'Withdrawal approved',
-            ]);
-        });
-
-        $withdrawRequest->user->notify(new WithdrawApprovedNotification(
-            (float) $withdrawRequest->amount,
-            $withdrawRequest->currency ?? 'USD'
-        ));
-
-        return $this->success($withdrawRequest->fresh(['user:id,name,email']), 'Withdrawal approved and processed.');
-    }
 }

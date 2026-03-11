@@ -7,6 +7,7 @@ use App\Models\WithdrawRequest;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class WithdrawRequestController extends Controller
 {
@@ -80,21 +81,42 @@ class WithdrawRequestController extends Controller
             }
         }
 
-        $wallet = $user->wallet;
-        if (! $wallet) {
-            $wallet = $user->wallet()->create(['balance' => 0]);
-        }
+        try {
+            $withdraw = DB::transaction(function () use ($user, $validated, $amount) {
+                $wallet = $user->wallet;
+                if (! $wallet) {
+                    $wallet = $user->wallet()->create(['balance' => 0]);
+                }
+                $wallet = $user->wallet()->lockForUpdate()->first();
+                if (! $wallet) {
+                    throw new \RuntimeException('NO_WALLET');
+                }
 
-        if ((float) $wallet->balance < $amount) {
-            return $this->error('Insufficient wallet balance.', 422);
-        }
+                $pendingTotal = (float) WithdrawRequest::where('user_id', $user->id)
+                    ->where('status', 'pending')
+                    ->sum('amount');
 
-        $withdraw = $user->withdrawRequests()->create([
-            'amount' => $amount,
-            'currency' => $validated['currency'] ?? 'USD',
-            'payment_details' => $validated['payment_details'],
-            'status' => 'pending',
-        ]);
+                $balance = (float) $wallet->balance;
+                if ($balance - $pendingTotal < $amount) {
+                    throw new \RuntimeException('PENDING_EXCEEDS_BALANCE');
+                }
+
+                return $user->withdrawRequests()->create([
+                    'amount' => $amount,
+                    'currency' => $validated['currency'] ?? 'USD',
+                    'payment_details' => $validated['payment_details'],
+                    'status' => 'pending',
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'NO_WALLET') {
+                return $this->error('User has no wallet.', 422);
+            }
+            if ($e->getMessage() === 'PENDING_EXCEEDS_BALANCE') {
+                return $this->error('You already have pending withdrawal requests that exceed your available balance.', 422);
+            }
+            throw $e;
+        }
 
         return $this->success([
             'id' => $withdraw->id,

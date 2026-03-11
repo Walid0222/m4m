@@ -1,6 +1,7 @@
 /**
  * Order status display config: card border/badge colors for Orders page.
  * Backend may return: pending, paid, processing, delivered, completed, cancelled, dispute
+ * escrow_status: held, pending_release, disputed, released, refunded
  */
 export function getOrderStatusStyle(status) {
   const s = (status || '').toLowerCase();
@@ -42,18 +43,30 @@ export function getOrderStatusStyle(status) {
       label: 'Cancelled',
     },
     dispute: {
-      border: 'border-l-orange-500',
-      bg: 'bg-orange-50',
-      badge: 'bg-orange-100 text-orange-800',
-      label: 'Dispute',
+      border: 'border-l-red-500',
+      bg: 'bg-red-50',
+      badge: 'bg-red-100 text-red-800',
+      label: 'Disputed',
     },
   };
-  return configs[s] || {
+  const base = configs[s] || {
     border: 'border-l-m4m-gray-400',
     bg: 'bg-m4m-gray-50',
     badge: 'bg-m4m-gray-200 text-m4m-gray-800',
     label: (status && status.charAt(0).toUpperCase() + status.slice(1)) || '—',
   };
+  return base;
+}
+
+/** Escrow-specific badges: Disputed, Refunded, Released */
+export function getEscrowBadge(escrowStatus) {
+  const e = (escrowStatus || '').toLowerCase();
+  const badges = {
+    disputed: { className: 'bg-red-100 text-red-800', label: 'Disputed' },
+    refunded: { className: 'bg-purple-100 text-purple-800', label: 'Refunded' },
+    released: { className: 'bg-green-100 text-green-800', label: 'Released' },
+  };
+  return badges[e] || null;
 }
 
 export const ORDER_STATUSES = [

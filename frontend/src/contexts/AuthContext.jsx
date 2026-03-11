@@ -81,13 +81,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (email, password) => {
-    const res = await api.login(email, password);
-    const data = res?.data;
-    if (data?.user) {
-      setUser(data.user);
-      syncAvatar(data.user.id);
+    const payload = await api.login(email, password);
+    console.log('LOGIN RESPONSE:', payload);
+    if (payload?.requires_2fa) {
+      // 2FA step will be handled by AuthPage using the raw response.
+      return payload;
     }
-    return data;
+    if (payload?.user) {
+      setUser(payload.user);
+      syncAvatar(payload.user.id);
+    }
+    return payload;
   }, [syncAvatar]);
 
   const register = useCallback(async (nameOrPayload, email, password, passwordConfirmation, isSeller) => {
@@ -156,6 +160,93 @@ export function useAuth() {
  * Protects routes that require authentication.
  * Redirects to /login when not logged in, preserving the intended URL in state.
  */
+function EmailVerificationRequiredScreen() {
+  const { user, refreshUser } = useAuth();
+  const [sending, setSending] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const handleResend = async () => {
+    setSending(true);
+    setMessage(null);
+    try {
+      await api.api.post('/email/resend');
+      setMessage({ type: 'success', text: 'Verification email sent successfully.' });
+    } catch (e) {
+      setMessage({ type: 'error', text: e.response?.data?.message || e.message || 'Failed to resend verification email.' });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setMessage(null);
+    try {
+      await refreshUser();
+      setMessage({ type: 'info', text: 'Refreshed account status.' });
+    } catch {
+      setMessage({ type: 'error', text: 'Could not refresh account status.' });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50 dark:bg-gray-950">
+      <div className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-800 p-8">
+        <div className="flex flex-col items-center text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-300 mb-1">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-3 10H6a2 2 0 01-2-2V8a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-50">Verify your email</h1>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+              We sent a verification email to your inbox{user?.email ? ` (${user.email})` : ''}.
+            </p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-500">
+              Please check your email and click the verification link to activate your account. If you cannot find the email, check your spam folder.
+            </p>
+          </div>
+          {message && (
+            <p
+              className={`text-xs ${
+                message.type === 'success'
+                  ? 'text-green-600 dark:text-green-400'
+                  : message.type === 'error'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-gray-600 dark:text-gray-400'
+              }`}
+            >
+              {message.text}
+            </p>
+          )}
+          <div className="w-full flex flex-col sm:flex-row gap-3 mt-2">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={sending}
+              className="inline-flex justify-center items-center flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+            >
+              {sending ? 'Sending…' : 'Resend verification email'}
+            </button>
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="inline-flex justify-center items-center flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 transition-colors"
+            >
+              {refreshing ? 'Refreshing…' : 'Refresh status'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -170,6 +261,11 @@ export function ProtectedRoute({ children }) {
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // If user is logged in but not verified, show verification required screen
+  if (!user.email_verified_at) {
+    return <EmailVerificationRequiredScreen />;
   }
 
   return children;

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\AdminEscrowController;
 use App\Http\Controllers\Api\Admin\AdminDisputeController;
 use App\Http\Controllers\Api\Admin\AdminOfferTypeController;
 use App\Http\Controllers\Api\Admin\AdminReportController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Api\DepositRequestController;
 use App\Http\Controllers\Api\DisputeController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\Auth\EmailVerificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\OfferTypeController;
@@ -31,6 +33,7 @@ use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceRequestController;
+use App\Http\Controllers\Api\SellerEscrowController;
 use App\Http\Controllers\Api\SellerAutoReplyController;
 use App\Http\Controllers\Api\SellerOrderController;
 use App\Http\Controllers\Api\SellerVacationController;
@@ -39,9 +42,11 @@ use App\Http\Controllers\Api\SellerVerificationController;
 use App\Http\Controllers\Api\SellerWarningsController;
 use App\Http\Controllers\Api\StatsController;
 use App\Http\Controllers\Api\SupportController;
+use App\Http\Controllers\Api\TwoFactorController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\WalletSettingsController;
 use App\Http\Controllers\Api\WithdrawRequestController;
+use App\Http\Controllers\Api\SettingsController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -58,6 +63,7 @@ Route::prefix('v1')->group(function () {
     // ─── Public ─────────────────────────────────────────────────────────────
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:auth');
     Route::post('/login',    [AuthController::class, 'login'])->middleware('throttle:auth');
+    Route::post('/login/2fa',[AuthController::class, 'login2fa'])->middleware('throttle:auth');
 
     Route::get('/categories',                      [CategoryController::class, 'index']);
     Route::get('/services',                        [ServiceController::class, 'index']);
@@ -79,6 +85,11 @@ Route::prefix('v1')->group(function () {
     Route::get('/announcements', [AnnouncementController::class, 'index']);
 
     // ─── Authenticated ───────────────────────────────────────────────────────
+    // Public + low-auth email verification for SPA (no redirects)
+    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+        ->middleware(['signed', 'throttle:6,1'])
+        ->name('verification.verify');
+
     Route::middleware(['auth:sanctum', 'update.last_activity', 'check.ban'])->group(function () {
 
         // Auth / profile
@@ -87,101 +98,120 @@ Route::prefix('v1')->group(function () {
         Route::patch('/me',    [AuthController::class, 'updateMe']);
         Route::post('/me/avatar', [AuthController::class, 'uploadAvatar']);
 
-        // Wallet & funds
-        Route::get('/wallet',                                        [WalletController::class, 'show']);
-        Route::get('/wallet/settings',                               [WalletSettingsController::class, 'show']);
-        Route::post('/deposit-requests',                             [DepositRequestController::class, 'store']);
-        Route::get('/deposit-requests',                              [DepositRequestController::class, 'index']);
-        Route::post('/withdraw-requests',                            [WithdrawRequestController::class, 'store']);
-        Route::get('/withdraw-requests',                             [WithdrawRequestController::class, 'index']);
+        Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
+            ->middleware('throttle:6,1')
+            ->name('verification.resend');
 
-        // Products (seller management) — banned sellers blocked
-        Route::middleware('not.banned')->group(function () {
-            Route::get('/my-products',                            [ProductController::class, 'myIndex']);
-            Route::post('/my-products',                           [ProductController::class, 'store']);
-            Route::put('/my-products/{my_product}',               [ProductController::class, 'update']);
-            Route::patch('/my-products/{my_product}',             [ProductController::class, 'update']);
-            Route::delete('/my-products/{my_product}',            [ProductController::class, 'destroy']);
-            Route::post('/products/{product}/pin',                [ProductController::class, 'pin']);
+        // Settings endpoint (non-critical, but requires authentication)
+        Route::get('/settings', [SettingsController::class, 'show']);
 
-            // Instant-delivery account stock
-            Route::post('/seller/products/{my_product}/accounts', [ProductController::class, 'addAccounts']);
-            Route::get('/seller/products/{my_product}/accounts',  [ProductController::class, 'listAccounts']);
+        // All marketplace features require a verified email.
+        Route::middleware('verified.email')->group(function () {
 
-            // Service requests (seller requests new offer types)
-            Route::get('/service-requests',   [ServiceRequestController::class, 'index']);
-            Route::post('/service-requests',  [ServiceRequestController::class, 'store']);
+            // Wallet & funds
+            Route::get('/wallet',                                        [WalletController::class, 'show']);
+            Route::get('/wallet/settings',                               [WalletSettingsController::class, 'show']);
+            Route::post('/deposit-requests',                             [DepositRequestController::class, 'store']);
+            Route::get('/deposit-requests',                              [DepositRequestController::class, 'index']);
+            Route::post('/withdraw-requests',                            [WithdrawRequestController::class, 'store']);
+            Route::get('/withdraw-requests',                             [WithdrawRequestController::class, 'index']);
+
+            // Security / 2FA (optional, but only for verified users)
+            Route::post('/security/2fa/enable',  [TwoFactorController::class, 'enable']);
+            Route::post('/security/2fa/confirm', [TwoFactorController::class, 'confirm']);
+            Route::post('/security/2fa/disable', [TwoFactorController::class, 'disable']);
+
+            // Products (seller management) — banned sellers blocked
+            Route::middleware('not.banned')->group(function () {
+                Route::get('/my-products',                            [ProductController::class, 'myIndex']);
+                Route::post('/my-products',                           [ProductController::class, 'store']);
+                Route::put('/my-products/{my_product}',               [ProductController::class, 'update']);
+                Route::patch('/my-products/{my_product}',             [ProductController::class, 'update']);
+                Route::delete('/my-products/{my_product}',            [ProductController::class, 'destroy']);
+                Route::post('/products/{product}/pin',                [ProductController::class, 'pin']);
+
+                // Instant-delivery account stock
+                Route::post('/seller/products/{my_product}/accounts', [ProductController::class, 'addAccounts']);
+                Route::get('/seller/products/{my_product}/accounts',  [ProductController::class, 'listAccounts']);
+
+                // Service requests (seller requests new offer types)
+                Route::get('/service-requests',   [ServiceRequestController::class, 'index']);
+                Route::post('/service-requests',  [ServiceRequestController::class, 'store']);
+            });
+
+            // Orders (buyer) — banned users cannot place orders
+            Route::middleware('not.banned')->group(function () {
+                Route::post('/orders', [OrderController::class, 'store']);
+            });
+            Route::get('/orders',                              [OrderController::class, 'index']);
+            Route::get('/orders/{order}',                      [OrderController::class, 'show']);
+            Route::patch('/orders/{order}/confirm-delivery',   [OrderController::class, 'confirmDelivery']);
+
+            // Coupon preview (apply at checkout)
+            Route::post('/coupons/preview', [CouponController::class, 'preview']);
+
+            // Disputes (buyer)
+            Route::post('/disputes',          [DisputeController::class, 'store']);
+            Route::get('/disputes',           [DisputeController::class, 'index']);
+            Route::get('/disputes/{dispute}', [DisputeController::class, 'show']);
+
+            // Reviews
+            Route::post('/products/{product}/reviews', [ReviewController::class, 'store']);
+
+            // Seller order management — banned sellers blocked
+            Route::middleware('not.banned')->group(function () {
+                Route::get('/seller/orders',                          [SellerOrderController::class, 'index']);
+                Route::get('/seller/orders/{order}',                  [SellerOrderController::class, 'show']);
+                Route::patch('/seller/orders/{order}/status',         [SellerOrderController::class, 'updateStatus']);
+                Route::patch('/seller/orders/{order}/note',           [SellerOrderController::class, 'updateNote']);
+                Route::post('/seller/orders/{order}/deliver',         [SellerOrderController::class, 'deliver']);
+            });
+
+            // Seller verification
+            Route::post('/seller/verification-request', [SellerVerificationController::class, 'store']);
+            Route::get('/seller/verification-request',  [SellerVerificationController::class, 'show']);
+
+            // Seller warnings + moderation status (authenticated seller)
+            Route::get('/seller/warnings',            [SellerWarningsController::class, 'index']);
+            Route::get('/seller/moderation-status',   [SellerWarningsController::class, 'status']);
+            Route::post('/seller/vacation-mode',      [SellerVacationController::class, 'toggle']);
+
+            // Seller escrow (seller only)
+            Route::get('/seller/escrow', [SellerEscrowController::class, 'index']);
+
+            // Stats
+            Route::get('/stats/seller', [StatsController::class, 'sellerStats']);
+            Route::get('/stats/buyer',  [StatsController::class, 'buyerStats']);
+
+            // Chat (regular conversations)
+            Route::get('/conversations',                                  [ConversationController::class, 'index']);
+            Route::post('/conversations',                                 [ConversationController::class, 'store']);
+            Route::get('/conversations/{conversation}',                   [ConversationController::class, 'show']);
+            Route::post('/conversations/{conversation}/messages',         [ConversationController::class, 'storeMessage']);
+
+            // Support chat (user-facing)
+            Route::get('/support/conversation',  [SupportController::class, 'getOrCreate']);
+            Route::get('/support/messages',      [SupportController::class, 'messages']);
+            Route::post('/support/messages',     [SupportController::class, 'sendMessage']);
+
+            // Favorites / Wishlist
+            Route::get('/favorites',             [FavoriteController::class, 'index']);
+            Route::get('/favorites/ids',         [FavoriteController::class, 'ids']);
+            Route::post('/favorites/{product}',  [FavoriteController::class, 'toggle']);
+            Route::delete('/favorites/{product}',[FavoriteController::class, 'destroy']);
+
+            // Seller auto-reply message
+            Route::get('/seller/auto-reply',  [SellerAutoReplyController::class, 'show']);
+            Route::put('/seller/auto-reply',  [SellerAutoReplyController::class, 'update']);
+
+            // Reports
+            Route::post('/reports', [ReportController::class, 'store']);
+
+            // Notifications
+            Route::get('/notifications',                   [NotificationController::class, 'index']);
+            Route::patch('/notifications/{id}/read',       [NotificationController::class, 'markAsRead']);
+            Route::post('/notifications/read-all',         [NotificationController::class, 'markAllAsRead']);
         });
-
-        // Orders (buyer) — banned users cannot place orders
-        Route::middleware('not.banned')->group(function () {
-            Route::post('/orders', [OrderController::class, 'store']);
-        });
-        Route::get('/orders',                              [OrderController::class, 'index']);
-        Route::get('/orders/{order}',                      [OrderController::class, 'show']);
-        Route::patch('/orders/{order}/confirm-delivery',   [OrderController::class, 'confirmDelivery']);
-
-        // Coupon preview (apply at checkout)
-        Route::post('/coupons/preview', [CouponController::class, 'preview']);
-
-        // Disputes (buyer)
-        Route::post('/disputes',          [DisputeController::class, 'store']);
-        Route::get('/disputes',           [DisputeController::class, 'index']);
-        Route::get('/disputes/{dispute}', [DisputeController::class, 'show']);
-
-        // Reviews
-        Route::post('/products/{product}/reviews', [ReviewController::class, 'store']);
-
-        // Seller order management — banned sellers blocked
-        Route::middleware('not.banned')->group(function () {
-            Route::get('/seller/orders',                          [SellerOrderController::class, 'index']);
-            Route::get('/seller/orders/{order}',                  [SellerOrderController::class, 'show']);
-            Route::patch('/seller/orders/{order}/status',         [SellerOrderController::class, 'updateStatus']);
-            Route::patch('/seller/orders/{order}/note',           [SellerOrderController::class, 'updateNote']);
-            Route::post('/seller/orders/{order}/deliver',         [SellerOrderController::class, 'deliver']);
-        });
-
-        // Seller verification
-        Route::post('/seller/verification-request', [SellerVerificationController::class, 'store']);
-        Route::get('/seller/verification-request',  [SellerVerificationController::class, 'show']);
-
-        // Seller warnings + moderation status (authenticated seller)
-        Route::get('/seller/warnings',            [SellerWarningsController::class, 'index']);
-        Route::get('/seller/moderation-status',   [SellerWarningsController::class, 'status']);
-        Route::post('/seller/vacation-mode',      [SellerVacationController::class, 'toggle']);
-
-        // Stats
-        Route::get('/stats/seller', [StatsController::class, 'sellerStats']);
-        Route::get('/stats/buyer',  [StatsController::class, 'buyerStats']);
-
-        // Chat (regular conversations)
-        Route::get('/conversations',                                  [ConversationController::class, 'index']);
-        Route::post('/conversations',                                 [ConversationController::class, 'store']);
-        Route::get('/conversations/{conversation}',                   [ConversationController::class, 'show']);
-        Route::post('/conversations/{conversation}/messages',         [ConversationController::class, 'storeMessage']);
-
-        // Support chat (user-facing)
-        Route::get('/support/conversation',  [SupportController::class, 'getOrCreate']);
-        Route::get('/support/messages',      [SupportController::class, 'messages']);
-        Route::post('/support/messages',     [SupportController::class, 'sendMessage']);
-
-        // Favorites / Wishlist
-        Route::get('/favorites',             [FavoriteController::class, 'index']);
-        Route::get('/favorites/ids',         [FavoriteController::class, 'ids']);
-        Route::post('/favorites/{product}',  [FavoriteController::class, 'toggle']);
-        Route::delete('/favorites/{product}',[FavoriteController::class, 'destroy']);
-
-        // Seller auto-reply message
-        Route::get('/seller/auto-reply',  [SellerAutoReplyController::class, 'show']);
-        Route::put('/seller/auto-reply',  [SellerAutoReplyController::class, 'update']);
-
-        // Reports
-        Route::post('/reports', [ReportController::class, 'store']);
-
-        // Notifications
-        Route::get('/notifications',                   [NotificationController::class, 'index']);
-        Route::patch('/notifications/{id}/read',       [NotificationController::class, 'markAsRead']);
-        Route::post('/notifications/read-all',         [NotificationController::class, 'markAllAsRead']);
     });
 
     // ─── Admin ───────────────────────────────────────────────────────────────
@@ -237,10 +267,18 @@ Route::prefix('v1')->group(function () {
         Route::get('/support-conversations/{conversation}/messages',                [AdminSupportController::class, 'messages']);
         Route::post('/support-conversations/{conversation}/reply',                  [AdminSupportController::class, 'reply']);
 
+        // Escrow monitoring
+        Route::get('/escrow',                              [AdminEscrowController::class, 'index']);
+        Route::post('/orders/{order}/release',             [AdminEscrowController::class, 'release']);
+        Route::post('/orders/{order}/hold',                [AdminEscrowController::class, 'hold']);
+        Route::post('/orders/{order}/refund',              [AdminEscrowController::class, 'refund']);
+
         // Disputes
         Route::get('/disputes',                        [AdminDisputeController::class, 'index']);
         Route::get('/disputes/{dispute}',              [AdminDisputeController::class, 'show']);
         Route::post('/disputes/{dispute}/resolve',     [AdminDisputeController::class, 'resolve']);
+        Route::post('/disputes/{dispute}/release',     [AdminDisputeController::class, 'release']);
+        Route::post('/disputes/{dispute}/refund',      [AdminDisputeController::class, 'refund']);
 
         // Platform stats, logs, earnings
         Route::get('/stats',              [AdminStatsController::class, 'overview']);

@@ -16,6 +16,8 @@ import {
   sendAdminSupportReply,
   getAdminDisputes,
   resolveAdminDispute,
+  releaseAdminDispute,
+  refundAdminDispute,
   getAdminStats,
   getAdminCoupons,
   createAdminCoupon,
@@ -24,6 +26,10 @@ import {
   createAdminAnnouncement,
   updateAdminAnnouncement,
   deleteAdminAnnouncement,
+  getAdminEscrow,
+  adminReleaseOrderEscrow,
+  adminHoldOrderEscrow,
+  adminRefundOrderEscrow,
   getAdminServiceRequests,
   approveServiceRequest,
   rejectServiceRequest,
@@ -43,6 +49,7 @@ import {
 
 const TABS = [
   { id: 'overview', label: '📊 Overview' },
+  { id: 'escrow', label: '💰 Escrow Monitoring' },
   { id: 'deposits', label: 'Deposits' },
   { id: 'withdrawals', label: 'Withdrawals' },
   { id: 'reports', label: 'Reports' },
@@ -190,6 +197,127 @@ function WithdrawalsPanel() {
                     <div className="flex gap-2">
                       <button onClick={() => handle(w.id, 'approve')} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors">Approve</button>
                       <button onClick={() => handle(w.id, 'reject')} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">Reject</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ── Escrow Monitoring ────────────────────────────────────────────────────── */
+function EscrowPanel() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [flash, setFlash] = useState(null);
+  const [acting, setActing] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await getAdminEscrow();
+      setData(r);
+    } catch { setData(null); } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 3000); return () => clearTimeout(t); }, [flash]);
+
+  const handleRelease = async (orderId) => {
+    setActing(orderId);
+    try {
+      await adminReleaseOrderEscrow(orderId);
+      setFlash({ type: 'success', text: 'Escrow released.' });
+      load();
+    } catch { setFlash({ type: 'error', text: 'Release failed.' }); }
+    finally { setActing(null); }
+  };
+
+  const handleHold = async (orderId) => {
+    setActing(orderId);
+    try {
+      await adminHoldOrderEscrow(orderId);
+      setFlash({ type: 'success', text: 'Release extended by 48 hours.' });
+      load();
+    } catch { setFlash({ type: 'error', text: 'Hold failed.' }); }
+    finally { setActing(null); }
+  };
+
+  if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
+
+  const orders = data?.orders_pending_release ?? [];
+  const total = data?.total_pending_escrow ?? 0;
+  const count = data?.pending_orders_count ?? 0;
+
+  return (
+    <>
+      <Flash msg={flash} />
+      <h2 className="text-base font-semibold text-gray-900 mb-4">Escrow Monitoring</h2>
+      <div className="mb-5 grid grid-cols-2 gap-4">
+        <div className="rounded-xl border border-gray-200 bg-amber-50/50 p-4">
+          <p className="text-xs text-gray-500 mb-0.5">Total pending escrow</p>
+          <p className="text-xl font-bold text-amber-700">{Number(total).toFixed(2)} MAD</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <p className="text-xs text-gray-500 mb-0.5">Orders pending release</p>
+          <p className="text-xl font-bold text-gray-900">{count}</p>
+        </div>
+      </div>
+      {orders.length === 0 ? (
+        <p className="text-gray-400 text-sm">No orders pending release.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <table className="min-w-full divide-y divide-gray-200 text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                {['Order', 'Seller', 'Amount', 'Release at', 'Status', 'Actions'].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left font-semibold text-gray-600">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {orders.map((o) => (
+                <tr key={o.order_id}>
+                  <td className="px-4 py-3 font-medium">#{o.order_number ?? o.order_id}</td>
+                  <td className="px-4 py-3">{o.seller?.name ?? o.seller?.email ?? '—'}</td>
+                  <td className="px-4 py-3">{Number(o.amount).toFixed(2)} MAD</td>
+                  <td className="px-4 py-3 text-gray-500">{o.release_at ? new Date(o.release_at).toLocaleString() : '—'}</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.escrow_status === 'disputed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {o.escrow_status ?? 'pending_release'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2 flex-wrap">
+                      {o.escrow_status === 'pending_release' && (
+                        <>
+                          <button
+                            onClick={() => handleRelease(o.order_id)}
+                            disabled={acting === o.order_id}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition-colors"
+                          >
+                            {acting === o.order_id ? '…' : 'Release now'}
+                          </button>
+                          <button
+                            onClick={() => handleHold(o.order_id)}
+                            disabled={acting === o.order_id}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 transition-colors"
+                          >
+                            Hold 48h
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleRefund(o.order_id)}
+                        disabled={acting === o.order_id}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
+                      >
+                        Refund buyer
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -1415,6 +1543,9 @@ function DisputesPanel() {
   const [flash, setFlash] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [resolving, setResolving] = useState(null);
+  const [actionModal, setActionModal] = useState(null); // { disputeId, action: 'release' | 'refund' }
+  const [adminNote, setAdminNote] = useState('');
+  const [adminNoteError, setAdminNoteError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1427,16 +1558,33 @@ function DisputesPanel() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 3000); return () => clearTimeout(t); }, [flash]);
 
-  const handleResolve = async (disputeId, decision) => {
-    setResolving(disputeId);
+  const openActionModal = (e, disputeId, action) => {
+    e.stopPropagation();
+    setActionModal({ disputeId, action });
+    setAdminNote('');
+    setAdminNoteError('');
+  };
+
+  const handleResolveWithNote = async () => {
+    if (!actionModal) return;
+    const note = (adminNote || '').trim();
+    if (!note) {
+      setAdminNoteError('Admin note is required before taking action.');
+      return;
+    }
+    setResolving(actionModal.disputeId);
+    setAdminNoteError('');
     try {
-      await resolveAdminDispute(disputeId, { decision });
-      setDisputes((prev) => prev.map((d) => d.id === disputeId ? {
-        ...d,
-        status: decision === 'refund_buyer' ? 'refunded' : 'resolved',
-        admin_decision: decision,
-      } : d));
-      setFlash({ type: 'success', text: decision === 'refund_buyer' ? 'Buyer refunded.' : 'Funds released to seller.' });
+      if (actionModal.action === 'release') {
+        await releaseAdminDispute(actionModal.disputeId, { admin_note: note });
+        setDisputes((prev) => prev.map((d) => d.id === actionModal.disputeId ? { ...d, status: 'resolved', admin_decision: 'release_seller', admin_note: note } : d));
+        setFlash({ type: 'success', text: 'Funds released to seller.' });
+      } else {
+        await refundAdminDispute(actionModal.disputeId, { admin_note: note });
+        setDisputes((prev) => prev.map((d) => d.id === actionModal.disputeId ? { ...d, status: 'refunded', admin_decision: 'refund_buyer', admin_note: note } : d));
+        setFlash({ type: 'success', text: 'Buyer refunded.' });
+      }
+      setActionModal(null);
       setExpanded(null);
     } catch (e) {
       setFlash({ type: 'error', text: e.message || 'Action failed.' });
@@ -1450,13 +1598,54 @@ function DisputesPanel() {
   return (
     <div>
       <Flash msg={flash} />
+      {actionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => !resolving && setActionModal(null)}>
+          <div className="rounded-2xl bg-white shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-gray-900 mb-2">
+              {actionModal.action === 'release' ? 'Release funds to seller' : 'Refund buyer'}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">You must provide an admin note before taking this action.</p>
+            <textarea
+              value={adminNote}
+              onChange={(e) => { setAdminNote(e.target.value); setAdminNoteError(''); }}
+              placeholder="Enter your decision rationale..."
+              rows={4}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+              disabled={!!resolving}
+            />
+            {adminNoteError && <p className="mt-1 text-sm text-red-600">{adminNoteError}</p>}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => !resolving && setActionModal(null)}
+                disabled={!!resolving}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleResolveWithNote}
+                disabled={!!resolving}
+                className={`flex-1 py-2.5 rounded-xl font-semibold text-white disabled:opacity-50 ${
+                  actionModal.action === 'release' ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'
+                }`}
+              >
+                {resolving ? 'Processing…' : actionModal.action === 'release' ? 'Release to Seller' : 'Refund Buyer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <h2 className="font-semibold text-gray-900 mb-4">Disputes ({disputes.length})</h2>
       {disputes.length === 0 ? (
         <p className="text-gray-500 text-sm text-center py-8">No disputes found.</p>
       ) : (
         <div className="space-y-3">
           {disputes.map((d) => (
-            <div key={d.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+            <div key={d.id} className={`rounded-xl border overflow-hidden ${
+              d.status === 'open' ? 'border-red-200 bg-red-50/30' : 'border-gray-200 bg-white'
+            }`}>
               <div
                 className="p-4 flex flex-wrap items-start justify-between gap-3 cursor-pointer hover:bg-gray-50"
                 onClick={() => setExpanded(expanded === d.id ? null : d.id)}
@@ -1468,37 +1657,51 @@ function DisputesPanel() {
                     </span>
                   </div>
                   <p className="font-semibold text-sm text-gray-900">Order: {d.order?.order_number ?? `#${d.order_id}`}</p>
-                  <p className="text-xs text-gray-500">Buyer: {d.buyer?.name} · Seller: {d.seller?.name}</p>
-                  <p className="text-sm text-gray-700 mt-1"><span className="font-medium">Reason:</span> {d.reason}</p>
+                  <p className="text-xs text-gray-500">Buyer: {d.buyer?.name ?? d.buyer?.email ?? '—'} · Seller: {d.seller?.name ?? d.seller?.email ?? '—'}</p>
+                  <p className="text-sm text-gray-700 mt-1">
+                    Amount: {Number(d.order?.total_amount ?? d.order?.escrow_amount ?? 0).toFixed(2)} MAD
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {d.order?.created_at ? new Date(d.order.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''} · Reason: {d.reason}
+                  </p>
                 </div>
                 <p className="text-xs text-gray-400 shrink-0">{d.created_at ? new Date(d.created_at).toLocaleDateString() : ''}</p>
               </div>
 
               {expanded === d.id && (
                 <div className="border-t border-gray-100 p-4 bg-gray-50">
-                  {d.description && <p className="text-sm text-gray-600 mb-4">{d.description}</p>}
+                  {d.description && <p className="text-sm text-gray-600 mb-3"><span className="font-medium">Description:</span> {d.description}</p>}
+                  {d.order?.delivery_content && (
+                    <div className="mb-4 p-3 rounded-lg bg-gray-100 border border-gray-200">
+                      <p className="text-xs font-semibold text-gray-600 mb-1">Delivery content</p>
+                      <pre className="text-xs text-gray-800 whitespace-pre-wrap break-words font-mono">{d.order.delivery_content}</pre>
+                    </div>
+                  )}
                   {!d.admin_decision && (
                     <div className="flex flex-wrap gap-2">
                       <button
-                        onClick={() => handleResolve(d.id, 'refund_buyer')}
+                        onClick={(e) => openActionModal(e, d.id, 'refund')}
                         disabled={resolving === d.id}
                         className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 disabled:opacity-50"
                       >
-                        {resolving === d.id ? '…' : '↩ Refund Buyer'}
+                        ↩ Refund Buyer
                       </button>
                       <button
-                        onClick={() => handleResolve(d.id, 'release_to_seller')}
+                        onClick={(e) => openActionModal(e, d.id, 'release')}
                         disabled={resolving === d.id}
                         className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50"
                       >
-                        {resolving === d.id ? '…' : '→ Release to Seller'}
+                        → Release to Seller
                       </button>
                     </div>
                   )}
                   {d.admin_decision && (
-                    <p className="text-sm text-gray-500 italic">
-                      Decision: {d.admin_decision === 'refund_buyer' ? 'Buyer was refunded' : 'Funds released to seller'}
-                    </p>
+                    <div>
+                      <p className="text-sm text-gray-600">
+                        Decision: {d.admin_decision === 'refund_buyer' ? 'Buyer was refunded' : 'Funds released to seller'}
+                      </p>
+                      {d.admin_note && <p className="text-sm text-gray-500 mt-1 italic">Note: {d.admin_note}</p>}
+                    </div>
                   )}
                 </div>
               )}
@@ -2030,6 +2233,7 @@ export default function AdminDashboardPage() {
       <div className="bg-white rounded-2xl border border-gray-200 p-5 md:p-6 shadow-sm">
         {activeTab === 'overview' && <OverviewPanel key={`ov-${refreshToken}`} />}
         {activeTab === 'deposits' && <DepositsPanel key={`dep-${refreshToken}`} />}
+        {activeTab === 'escrow' && <EscrowPanel key={`esc-${refreshToken}`} />}
         {activeTab === 'withdrawals' && <WithdrawalsPanel key={`wd-${refreshToken}`} />}
         {activeTab === 'reports' && <ReportsPanel key={`rep-${refreshToken}`} />}
         {activeTab === 'disputes' && <DisputesPanel key={`dis-${refreshToken}`} />}

@@ -89,8 +89,10 @@ export default function DisputesPage() {
                       {STATUS_LABELS[dispute.status] ?? dispute.status}
                     </span>
                     {dispute.admin_decision && (
-                      <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                        Decision: {dispute.admin_decision === 'refund_buyer' ? 'Refund issued' : 'Funds released to seller'}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        dispute.admin_decision === 'refund_buyer' ? 'bg-purple-100 text-purple-800' : 'bg-green-100 text-green-800'
+                      }`}>
+                        {dispute.admin_decision === 'refund_buyer' ? 'Refunded' : 'Released'}
                       </span>
                     )}
                   </div>
@@ -105,6 +107,9 @@ export default function DisputesPage() {
                   )}
                   {dispute.seller && (
                     <p className="text-xs text-gray-400 mt-1">Seller: {dispute.seller.name}</p>
+                  )}
+                  {dispute.admin_note && (
+                    <p className="text-sm text-gray-600 mt-2 pt-2 border-t border-gray-100 italic">Admin note: {dispute.admin_note}</p>
                   )}
                 </div>
                 <div className="text-right shrink-0">

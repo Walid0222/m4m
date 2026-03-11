@@ -24,6 +24,7 @@ import {
   updateSellerOrderStatus,
   deliverOrder,
   getWallet,
+  getSellerEscrow,
   getSellerVerification,
   submitSellerVerification,
   getSellerWarnings,
@@ -37,7 +38,7 @@ import {
   createServiceRequest,
 } from '../services/api';
 import OrderCard from '../components/OrderCard';
-import { getOrderStatusStyle } from '../lib/orderStatus';
+import { getOrderStatusStyle, getEscrowBadge } from '../lib/orderStatus';
 
 const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: 'chart' },
@@ -285,6 +286,7 @@ export default function SellerDashboardPage() {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
+  const [escrowData, setEscrowData] = useState(null);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [section, setSection] = useState(() => {
@@ -429,6 +431,20 @@ export default function SellerDashboardPage() {
     fetchWallet();
   }, [fetchWallet]);
 
+  const fetchEscrow = useCallback(async () => {
+    if (!getToken() || !user?.is_seller) return;
+    try {
+      const data = await getSellerEscrow();
+      setEscrowData(data);
+    } catch {
+      setEscrowData(null);
+    }
+  }, [user?.is_seller]);
+
+  useEffect(() => {
+    fetchEscrow();
+  }, [fetchEscrow]);
+
   // Fetch admin warnings for this seller
   const fetchWarnings = useCallback(async () => {
     if (!getToken() || !user?.is_seller) return;
@@ -476,13 +492,15 @@ export default function SellerDashboardPage() {
     const id = setInterval(() => {
       fetchProducts();
       fetchOrders();
+      fetchEscrow();
     }, ms);
     return () => clearInterval(id);
-  }, [refreshInterval, fetchProducts, fetchOrders]);
+  }, [refreshInterval, fetchProducts, fetchOrders, fetchEscrow]);
 
   const handleManualRefresh = () => {
     fetchProducts();
     fetchOrders();
+    fetchEscrow();
   };
 
   useEffect(() => {
@@ -1171,6 +1189,99 @@ export default function SellerDashboardPage() {
                 subtitle="Available balance"
                 icon="dollar"
               />
+            </div>
+
+            {/* Wallet Overview — escrow monitoring */}
+            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-6 shadow-sm mb-6">
+              <h2 className="text-base font-semibold text-m4m-black mb-4">Wallet Overview</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <p className="text-xs text-m4m-gray-500 mb-0.5">Available Balance</p>
+                  <p className="text-xl font-bold text-m4m-black">
+                    {escrowData?.wallet_balance != null ? `${Number(escrowData.wallet_balance).toFixed(2)} MAD` : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-m4m-gray-500 mb-0.5">Pending Escrow</p>
+                  <p className="text-xl font-bold text-amber-600">
+                    {escrowData?.pending_escrow_balance != null ? `${Number(escrowData.pending_escrow_balance).toFixed(2)} MAD` : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-m4m-gray-500 mb-0.5">Next payout</p>
+                  <p className="text-lg font-semibold text-m4m-gray-800">
+                    {(() => {
+                      const at = escrowData?.next_release_at;
+                      if (!at) return '—';
+                      const d = new Date(at);
+                      const now = new Date();
+                      const diff = d - now;
+                      if (diff <= 0) return 'Available now';
+                      const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+                      const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                      if (days > 0) return `in ${days} day${days !== 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}`;
+                      if (hours > 0) return `in ${hours} hour${hours !== 1 ? 's' : ''}`;
+                      const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+                      return mins > 0 ? `in ${mins} min` : 'soon';
+                    })()}
+                  </p>
+                </div>
+              </div>
+              {escrowData?.pending_orders?.length > 0 && (
+                <>
+                  <h3 className="text-sm font-medium text-m4m-gray-700 mb-2">Pending Escrow Orders</h3>
+                  <div className="overflow-x-auto rounded-lg border border-m4m-gray-100">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-m4m-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-m4m-gray-600">Order ID</th>
+                          <th className="px-3 py-2 text-left font-medium text-m4m-gray-600">Amount</th>
+                          <th className="px-3 py-2 text-left font-medium text-m4m-gray-600">Release time</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-m4m-gray-100">
+                        {escrowData.pending_orders.map((o) => (
+                          <tr key={o.id}>
+                            <td className="px-3 py-2 font-medium">#{o.order_number}</td>
+                            <td className="px-3 py-2">{Number(o.amount).toFixed(2)} MAD</td>
+                            <td className="px-3 py-2 text-m4m-gray-600">
+                              {o.release_at ? (() => {
+                                const d = new Date(o.release_at);
+                                const now = new Date();
+                                const diff = d - now;
+                                if (diff <= 0) return 'Available now';
+                                const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+                                const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                                if (days > 0) return `${days} day${days !== 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}`;
+                                if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+                                const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+                                return `${mins} min`;
+                              })() : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Seller Protection System */}
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-5 mb-8">
+              <h2 className="text-base font-semibold text-blue-900 mb-2">Seller Protection System</h2>
+              <p className="text-sm text-blue-800 mb-3">
+                Funds from new orders are temporarily held to protect buyers and prevent fraud.
+              </p>
+              <p className="text-sm text-blue-800 mb-2">Payout delays depend on seller level:</p>
+              <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                <li><strong>New sellers</strong> → 72 hours</li>
+                <li><strong>Verified sellers</strong> → 24 hours</li>
+                <li><strong>Trusted sellers</strong> → instant payouts</li>
+              </ul>
+              <p className="text-xs text-blue-600 mt-3">
+                Complete orders and get verified to unlock faster payouts. See <Link to="/marketplace-rules" className="underline font-medium">Marketplace Rules</Link> for details.
+              </p>
             </div>
 
             {/* Extra analytics row + Seller progress */}
@@ -2147,6 +2258,11 @@ export default function SellerDashboardPage() {
                             {hasManualItem && (
                               <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">📦 Manual</span>
                             )}
+                            {getEscrowBadge(order.escrow_status) && (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getEscrowBadge(order.escrow_status).className}`}>
+                                {getEscrowBadge(order.escrow_status).label}
+                              </span>
+                            )}
                             <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${style.badge}`}>
                               {style.label}
                             </span>
@@ -2162,6 +2278,40 @@ export default function SellerDashboardPage() {
                         <p className="mt-1 text-sm text-m4m-gray-500">
                           {order.created_at ? new Date(order.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
                         </p>
+                        {status === 'dispute' && (
+                          <div className={`mt-4 p-4 rounded-xl border ${
+                            order.escrow_status === 'released'
+                              ? 'bg-green-50 border-green-200'
+                              : order.escrow_status === 'refunded'
+                                ? 'bg-amber-50 border-amber-200'
+                                : 'bg-red-50 border-red-200'
+                          } text-sm`}>
+                            <p className="font-semibold text-gray-900">Status: Under dispute</p>
+                            <p className="mt-0.5 text-gray-700">
+                              Escrow amount: {Number(order.escrow_amount ?? order.total_amount ?? 0).toFixed(2)} MAD
+                            </p>
+                            {order.escrow_status === 'disputed' && (
+                              <p className="mt-2 text-gray-700">
+                                This order is currently under dispute. Funds are temporarily locked until the case is reviewed by the M4M administration.
+                              </p>
+                            )}
+                            {order.escrow_status === 'released' && (
+                              <p className="mt-2 text-green-800 font-medium">
+                                Dispute resolved. Funds released to your wallet.
+                              </p>
+                            )}
+                            {order.escrow_status === 'refunded' && (
+                              <p className="mt-2 text-amber-800">
+                                Dispute resolved. Buyer refunded. Funds were returned to the buyer after admin review.
+                              </p>
+                            )}
+                            {order.dispute?.admin_note && (
+                              <p className="mt-2 pt-2 border-t border-gray-200 text-gray-600 italic">
+                                Admin note: {order.dispute.admin_note}
+                              </p>
+                            )}
+                          </div>
+                        )}
                         {(canSetProcessing || canSetDelivered) && (
                           <div className="mt-4 pt-3 border-t border-m4m-gray-100 flex flex-wrap gap-2">
                             {canSetProcessing && (

@@ -80,9 +80,9 @@ function unwrap(res) {
 
 export function login(email, password) {
   return api.post('/login', { email, password }).then((res) => {
-    const data = res.data?.data;
-    if (data?.token) setToken(data.token);
-    return res.data;
+    const payload = res.data?.data !== undefined ? res.data.data : res.data;
+    if (payload?.token) setToken(payload.token);
+    return payload;
   });
 }
 
@@ -97,10 +97,30 @@ export function register(body) {
       is_seller: is_seller ?? false,
     })
     .then((res) => {
-      const data = res.data?.data;
-      if (data?.token) setToken(data.token);
-      return res.data;
+      const payload = res.data?.data !== undefined ? res.data.data : res.data;
+      if (payload?.token) setToken(payload.token);
+      return payload;
     });
+}
+
+export function login2fa(userId, code) {
+  return api.post('/login/2fa', { user_id: userId, code }).then((res) => {
+    const payload = res.data?.data !== undefined ? res.data.data : res.data;
+    if (payload?.token) setToken(payload.token);
+    return payload;
+  });
+}
+
+export function enable2FA() {
+  return api.post('/security/2fa/enable').then(unwrap);
+}
+
+export function confirm2FA(code) {
+  return api.post('/security/2fa/confirm', { code }).then(unwrap);
+}
+
+export function disable2FA({ password, code }) {
+  return api.post('/security/2fa/disable', { password, code }).then(unwrap);
 }
 
 export function getMe() {
@@ -335,12 +355,36 @@ export function getDispute(id) {
   return api.get(`/disputes/${id}`).then(unwrap);
 }
 
+export function getAdminEscrow() {
+  return api.get('/admin/escrow').then(unwrap);
+}
+
+export function adminReleaseOrderEscrow(orderId) {
+  return api.post(`/admin/orders/${orderId}/release`).then(unwrap);
+}
+
+export function adminHoldOrderEscrow(orderId) {
+  return api.post(`/admin/orders/${orderId}/hold`).then(unwrap);
+}
+
+export function adminRefundOrderEscrow(orderId) {
+  return api.post(`/admin/orders/${orderId}/refund`).then(unwrap);
+}
+
 export function getAdminDisputes(params = {}) {
   return api.get('/admin/disputes', { params }).then(unwrap);
 }
 
 export function resolveAdminDispute(id, body) {
   return api.post(`/admin/disputes/${id}/resolve`, body).then(unwrap);
+}
+
+export function releaseAdminDispute(id, body) {
+  return api.post(`/admin/disputes/${id}/release`, body).then(unwrap);
+}
+
+export function refundAdminDispute(id, body) {
+  return api.post(`/admin/disputes/${id}/refund`, body).then(unwrap);
 }
 
 // --- Admin stats ---
@@ -371,6 +415,12 @@ export function getSellerAutoReply() {
 
 export function updateSellerAutoReply(message) {
   return api.put('/seller/auto-reply', { auto_reply_message: message }).then(unwrap);
+}
+
+// --- Seller escrow ---
+
+export function getSellerEscrow() {
+  return api.get('/seller/escrow').then(unwrap);
 }
 
 // --- Seller stats ---

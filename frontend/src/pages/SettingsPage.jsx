@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { api } from '../services/api';
+import { api, enable2FA, confirm2FA, disable2FA } from '../services/api';
 
 async function updateMe(body) {
   const res = await api.patch('/me', body);
@@ -12,6 +12,13 @@ export default function SettingsPage() {
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+
+  // 2FA state
+  const [twoFAState, setTwoFAState] = useState({ loading: false, enabling: false, secret: null, qrCode: null });
+  const [twoFACode, setTwoFACode] = useState('');
+  const [twoFADisablePw, setTwoFADisablePw] = useState('');
+  const [twoFADisableCode, setTwoFADisableCode] = useState('');
+  const [twoFAMessage, setTwoFAMessage] = useState(null);
 
   useEffect(() => {
     const isBuyer = user && !user.is_admin && !user.is_seller;
@@ -59,8 +66,177 @@ export default function SettingsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Control your marketplace experience and notification preferences.
+          Control your marketplace experience, security, and notification preferences.
         </p>
+      </div>
+
+      {/* Security / Two-Factor Authentication */}
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-6 space-y-4 mb-6">
+        <h2 className="text-sm font-semibold text-gray-900">Security</h2>
+        {twoFAMessage && (
+          <div
+            className={`text-sm px-3 py-2 rounded-xl ${
+              twoFAMessage.type === 'success'
+                ? 'bg-green-50 text-green-800 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
+          >
+            {twoFAMessage.text}
+          </div>
+        )}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Two-Factor Authentication (2FA)</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Add an extra layer of security to your account using an authenticator app like Google Authenticator or Authy.
+              </p>
+            </div>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+              user.two_factor_enabled_at ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-600'
+            }`}>
+              {user.two_factor_enabled_at ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+
+          {!user.two_factor_enabled_at ? (
+            <>
+              {!twoFAState.secret ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setTwoFAMessage(null);
+                    setTwoFAState((s) => ({ ...s, loading: true }));
+                    try {
+                      const data = await enable2FA();
+                      setTwoFAState({
+                        loading: false,
+                        enabling: true,
+                        secret: data.secret,
+                        qrCode: data.qr_code,
+                      });
+                    } catch (e) {
+                      setTwoFAMessage({ type: 'error', text: e.message || 'Failed to start 2FA setup.' });
+                      setTwoFAState({ loading: false, enabling: false, secret: null, qrCode: null });
+                    }
+                  }}
+                  disabled={twoFAState.loading}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark disabled:opacity-60"
+                >
+                  {twoFAState.loading ? 'Starting…' : 'Enable 2FA'}
+                </button>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  <p className="text-xs text-gray-600">
+                    Scan this QR code using Google Authenticator, Authy, or any TOTP-compatible app. Then enter the 6-digit code to confirm.
+                  </p>
+                  <div className="rounded-xl border border-dashed border-gray-300 p-3 text-center flex flex-col items-center">
+                    {twoFAState.qrCode && (
+                      <img
+                        src={twoFAState.qrCode}
+                        alt="2FA QR Code"
+                        className="w-40 h-40 max-w-full mx-auto mb-3"
+                      />
+                    )}
+                    <p className="text-xs text-gray-500 mb-2 break-all">
+                      If you cannot scan the QR code, add this key manually in your app:
+                    </p>
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                      <code className="px-2 py-1 rounded-md bg-gray-100 text-xs font-mono break-all">
+                        {twoFAState.secret}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => navigator.clipboard?.writeText(twoFAState.secret)}
+                        className="px-2 py-1 rounded-md border border-gray-200 text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Authenticator code</label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="123456"
+                        value={twoFACode}
+                        onChange={(e) => setTwoFACode(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setTwoFAMessage(null);
+                        try {
+                          await confirm2FA(twoFACode.trim());
+                          await refreshUser();
+                          setTwoFAMessage({ type: 'success', text: 'Two-factor authentication enabled.' });
+                          setTwoFAState({ loading: false, enabling: false, secret: null, qrCode: null });
+                          setTwoFACode('');
+                        } catch (e) {
+                          setTwoFAMessage({ type: 'error', text: e.message || 'Invalid 2FA code.' });
+                        }
+                      }}
+                      className="px-4 py-2 rounded-xl bg-m4m-green text-white text-sm font-semibold hover:bg-m4m-green-hover"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="space-y-3 mt-2">
+              <p className="text-xs text-gray-600">
+                Two-factor authentication is currently enabled on your account. To disable it, confirm your password and a 6-digit code from your authenticator app.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Password</label>
+                  <input
+                    type="password"
+                    value={twoFADisablePw}
+                    onChange={(e) => setTwoFADisablePw(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Authenticator code</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={twoFADisableCode}
+                    onChange={(e) => setTwoFADisableCode(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                  />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  setTwoFAMessage(null);
+                  try {
+                    await disable2FA({ password: twoFADisablePw, code: twoFADisableCode });
+                    await refreshUser();
+                    setTwoFAMessage({ type: 'success', text: 'Two-factor authentication disabled.' });
+                    setTwoFADisablePw('');
+                    setTwoFADisableCode('');
+                  } catch (e) {
+                    setTwoFAMessage({ type: 'error', text: e.message || 'Failed to disable 2FA.' });
+                  }
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 text-red-700 text-sm font-semibold border border-red-200 hover:bg-red-100"
+              >
+                Disable 2FA
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Buyer-only notifications block */}

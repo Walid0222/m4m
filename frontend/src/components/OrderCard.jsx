@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getOrderStatusStyle } from '../lib/orderStatus';
+import { getOrderStatusStyle, getEscrowBadge } from '../lib/orderStatus';
 import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
 
 function ConfirmDeliveryModal({ onConfirm, onCancel, isLoading }) {
@@ -101,9 +101,16 @@ export default function OrderCard({ order, onConfirmDelivery, confirmingOrderId,
         <Link to={`/orders/${order.id}`} className="block p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <span className="font-mono text-sm font-bold text-gray-500">{orderRef}</span>
-            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${style.badge}`}>
-              {style.label}
-            </span>
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              {getEscrowBadge(order.escrow_status) && (
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${getEscrowBadge(order.escrow_status).className}`}>
+                  {getEscrowBadge(order.escrow_status).label}
+                </span>
+              )}
+              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold capitalize ${style.badge}`}>
+                {style.label}
+              </span>
+            </div>
           </div>
 
           {/* Product name */}

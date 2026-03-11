@@ -26,6 +26,7 @@ class SellerOrderController extends Controller
             ->with([
                 'orderItems.product:id,name,slug,delivery_type,delivery_time',
                 'buyer:id,name',
+                'dispute:id,order_id,admin_note,admin_decision,status',
             ])
             ->latest()
             ->paginate($request->integer('per_page', 15));

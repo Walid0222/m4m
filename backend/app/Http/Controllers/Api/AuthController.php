@@ -38,6 +38,9 @@ class AuthController extends Controller
             SecurityLogService::flagUser($user, 'Possible multi-account: shares IP/device with banned user(s)');
         }
 
+        // Send email verification
+        $user->sendEmailVerificationNotification();
+
         $token = $user->createToken('auth')->plainTextToken;
 
         return $this->success([
@@ -58,7 +61,10 @@ class AuthController extends Controller
 
         // If we can identify the user and they have exceeded fraud_score threshold, block login.
         if ($user && ($user->fraud_score ?? 0) > 20) {
-            return $this->error('Too many authentication attempts. Please try again later.', 429);
+            return response()->json([
+                'error' => 'too_many_requests',
+                'message' => 'Too many authentication attempts. Please try again later.',
+            ], 429);
         }
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
@@ -97,6 +103,14 @@ class AuthController extends Controller
         // Temporary ban — allow login so seller can see suspension message
         // (seller-action routes are protected by EnsureSellerNotBanned middleware)
 
+        // If 2FA is enabled, do not issue token yet; ask for TOTP code.
+        if ($user->two_factor_secret && $user->two_factor_enabled_at) {
+            return response()->json([
+                'requires_2fa' => true,
+                'user_id'      => $user->id,
+            ]);
+        }
+
         $user->tokens()->where('name', 'auth')->delete();
         $token = $user->createToken('auth')->plainTextToken;
 
@@ -105,6 +119,42 @@ class AuthController extends Controller
             $user->update(['fraud_score' => 0]);
         }
         SecurityLogService::log($user, 'login', $request);
+
+        return $this->success([
+            'user'       => $this->userFields($user),
+            'token'      => $token,
+            'token_type' => 'Bearer',
+        ]);
+    }
+
+    public function login2fa(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id'      => ['required', 'integer'],
+            'code'         => ['required', 'string'],
+        ]);
+
+        $user = User::find($data['user_id']);
+        if (! $user || ! $user->two_factor_secret || ! $user->two_factor_enabled_at) {
+            return $this->error('Two-factor authentication is not enabled.', 422);
+        }
+
+        $secret = \Illuminate\Support\Facades\Crypt::decryptString($user->two_factor_secret);
+        $totp = \OTPHP\TOTP::create($secret);
+
+        if (! $totp->verify($data['code'])) {
+            SecurityLogService::log($user, 'login_2fa_failed', $request);
+            return $this->error('Invalid 2FA code.', 422);
+        }
+
+        $user->tokens()->where('name', 'auth')->delete();
+        $token = $user->createToken('auth')->plainTextToken;
+
+        if ($user->fraud_score !== null && $user->fraud_score > 0) {
+            $user->update(['fraud_score' => 0]);
+        }
+
+        SecurityLogService::log($user, 'login_2fa_success', $request);
 
         return $this->success([
             'user'       => $this->userFields($user),
@@ -177,6 +227,8 @@ class AuthController extends Controller
             'auto_reply_message', 'product_limit', 'limits_overridden',
             'show_recent_sales_notifications',
             'vacation_mode',
+            'two_factor_enabled_at',
+            'email_verified_at',
             'updated_at',
         ]);
         if (array_key_exists('avatar', $user->getAttributes()) && $user->avatar) {

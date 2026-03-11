@@ -67,7 +67,7 @@ class OrderController extends Controller
             'orderItems',
             'buyer:id,name',
             'seller:id,name',
-            'dispute:id,order_id,status,reason',
+            'dispute:id,order_id,status,reason,admin_decision,admin_note',
         ]);
 
         $payload = $this->orderPayload($order);

@@ -22,12 +22,5 @@ class WalletController extends Controller
         ]);
     }
 
-    public function show(Request $request)
-{
-    $wallet = $request->user()->wallet;
-
-    return response()->json([
-        'balance' => $wallet->balance
-    ]);
-}
+    
 }

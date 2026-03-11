@@ -23,6 +23,7 @@ class Order extends Model
         'delivered_at',
         'completed_at',
         'auto_confirm_at',
+        'release_at',
         'delivery_content',
         'delivery_type',
         'buyer_note',
@@ -37,6 +38,7 @@ class Order extends Model
             'delivered_at' => 'datetime',
             'completed_at' => 'datetime',
             'auto_confirm_at' => 'datetime',
+            'release_at' => 'datetime',
         ];
     }
 

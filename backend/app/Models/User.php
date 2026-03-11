@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
@@ -32,7 +32,11 @@ class User extends Authenticatable
         'ban_reason',
         'warning_count',
         'fraud_score',
+        'two_factor_secret',
+        'two_factor_enabled_at',
         'is_verified_seller',
+        'seller_level',
+        'seller_payout_delay_hours',
         'last_activity_at',
         'auto_reply_message',
         'product_limit',
@@ -66,12 +70,27 @@ class User extends Authenticatable
      *
      * @return array<string, string>
      */
+    protected static function booted(): void
+    {
+        static::saving(function (User $user) {
+            if ($user->isDirty('seller_level')) {
+                $newLevel = $user->getAttributes()['seller_level'] ?? $user->getRawOriginal('seller_level') ?? 'new';
+                $user->seller_payout_delay_hours = match ((string) $newLevel) {
+                    'trusted'  => 0,
+                    'verified' => 24,
+                    default    => 72,
+                };
+            }
+        });
+    }
+
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'last_activity_at' => 'datetime',
             'banned_until' => 'datetime',
+            'two_factor_enabled_at' => 'datetime',
             'password' => 'hashed',
             'is_seller' => 'boolean',
             'is_admin' => 'boolean',
@@ -79,6 +98,7 @@ class User extends Authenticatable
             'is_verified_seller' => 'boolean',
             'show_recent_sales_notifications' => 'boolean',
             'vacation_mode' => 'boolean',
+            'seller_payout_delay_hours' => 'integer',
         ];
     }
 

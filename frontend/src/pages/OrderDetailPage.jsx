@@ -222,12 +222,59 @@ export default function OrderDetailPage() {
 
       {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
-      {/* Disputed status banner */}
-      {isDisputed && (
-        <div className="mb-6 p-4 bg-red-50 rounded-xl border border-red-200 text-sm text-red-800">
-          <p className="font-semibold">⚠ Dispute opened</p>
-          <p className="mt-0.5 text-red-600">Our team is reviewing this order. Funds are held until resolved.</p>
-          <Link to="/disputes" className="mt-2 inline-block text-xs font-semibold text-red-700 hover:underline">View dispute status →</Link>
+      {/* Disputed status banner — buyer view */}
+      {isDisputed && isBuyer && (
+        <div className={`mb-6 p-4 rounded-xl border text-sm ${
+          order.dispute?.admin_decision === 'refund_buyer'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : order.dispute?.admin_decision === 'release_seller'
+              ? 'bg-amber-50 border-amber-200 text-amber-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {!order.dispute?.admin_decision ? (
+            <>
+              <p className="font-semibold">Dispute submitted</p>
+              <p className="mt-0.5">The funds are secured in escrow while our team reviews the case.</p>
+            </>
+          ) : order.dispute?.admin_decision === 'refund_buyer' ? (
+            <>
+              <p className="font-semibold">You have been refunded by the admin.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold">Dispute resolved. Seller delivery was confirmed.</p>
+            </>
+          )}
+          {order.dispute?.admin_note && (
+            <p className="mt-2 pt-2 border-t border-gray-200/50 italic">Admin note: {order.dispute.admin_note}</p>
+          )}
+          <Link to="/disputes" className="mt-2 inline-block text-xs font-semibold hover:underline">View dispute status →</Link>
+        </div>
+      )}
+
+      {/* Disputed status banner — seller view */}
+      {isDisputed && isSellerOfOrder && (
+        <div className={`mb-6 p-4 rounded-xl border text-sm ${
+          order.escrow_status === 'released'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : order.escrow_status === 'refunded'
+              ? 'bg-amber-50 border-amber-200 text-amber-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <p className="font-semibold">Status: Under dispute</p>
+          <p className="mt-0.5">Escrow amount: {Number(order.escrow_amount ?? order.total_amount ?? 0).toFixed(2)} MAD</p>
+          {order.escrow_status === 'disputed' && (
+            <p className="mt-2">This order is currently under dispute. Funds are temporarily locked until the case is reviewed by the M4M administration.</p>
+          )}
+          {order.escrow_status === 'released' && (
+            <p className="mt-2 font-medium">Dispute resolved. Funds released to your wallet.</p>
+          )}
+          {order.escrow_status === 'refunded' && (
+            <p className="mt-2">Dispute resolved. Buyer refunded. Funds were returned to the buyer after admin review.</p>
+          )}
+          {order.dispute?.admin_note && (
+            <p className="mt-2 pt-2 border-t border-gray-200/50 italic">Admin note: {order.dispute.admin_note}</p>
+          )}
         </div>
       )}
 

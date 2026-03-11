@@ -9,6 +9,7 @@ use App\Models\PlatformWallet;
 use App\Models\SellerStat;
 use App\Models\User;
 use App\Models\Wallet;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class EscrowService
@@ -77,13 +78,12 @@ class EscrowService
     }
 
     /**
-     * Release escrow to seller minus platform commission on order completion.
-     * Creates: seller_payout + platform_fee transactions.
+     * Schedule escrow release by setting a future release_at timestamp.
+     * Actual wallet credit is performed by the escrow:release command.
      *
-     * Concurrency guarantees:
-     * - Locks the order row and re-checks escrow_status inside the transaction.
-     * - Strict state machine: only 'held' -> 'released' is allowed.
-     * - Guards against duplicate seller_payout transactions for the same order.
+     * New state machine transition:
+     *  held -> pending_release  (here)
+     *  pending_release -> released (EscrowService::processScheduledRelease)
      */
     public function releaseFunds(Order $order, ?User $adminUser = null): void
     {
@@ -94,11 +94,81 @@ class EscrowService
                 return;
             }
 
-            // Only release from held state; idempotent and state-safe.
-            if ($lockedOrder->escrow_status !== 'held') {
-                \Log::warning('Escrow release skipped: order not in held state', [
+            // Do NOT run when disputed; only transition from held state.
+            if ($lockedOrder->escrow_status === 'disputed' || $lockedOrder->escrow_status !== 'held') {
+                \Log::warning('Escrow release scheduling skipped: order not in held state', [
                     'order_id'      => $lockedOrder->id,
                     'escrow_status' => $lockedOrder->escrow_status,
+                ]);
+
+                return;
+            }
+
+            $sellerId = $lockedOrder->seller_id;
+            if (! $sellerId) {
+                $lockedOrder->loadMissing('orderItems.product');
+                $sellerId = $lockedOrder->orderItems->first()?->product?->user_id;
+            }
+
+            $delayHours = 72;
+            if ($sellerId) {
+                $seller = User::find($sellerId);
+                if ($seller) {
+                    // Prefer explicit seller_payout_delay_hours if set; otherwise derive from seller_level label.
+                    if ($seller->seller_payout_delay_hours !== null) {
+                        $delayHours = (int) $seller->seller_payout_delay_hours;
+                    } else {
+                        $rawLevel = $seller->getRawOriginal('seller_level') ?? 'new';
+                        $delayHours = match ($rawLevel) {
+                            'trusted'  => 0,
+                            'verified' => 24,
+                            default    => 72,
+                        };
+                    }
+                }
+            }
+
+            $releaseAt = Carbon::now()->addHours($delayHours);
+
+            $lockedOrder->update([
+                'escrow_status' => 'pending_release',
+                'release_at'    => $releaseAt,
+                'completed_at'  => $lockedOrder->completed_at ?? now(),
+            ]);
+        });
+    }
+
+    /**
+     * Perform the actual wallet credit for orders whose release_at has passed.
+     * This is called from the escrow:release artisan command.
+     */
+    public function processScheduledRelease(Order $order): void
+    {
+        DB::transaction(function () use ($order) {
+            /** @var Order|null $lockedOrder */
+            $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->first();
+            if (! $lockedOrder) {
+                return;
+            }
+
+            if (
+                $lockedOrder->escrow_status !== 'pending_release'
+                || $lockedOrder->release_at === null
+                || $lockedOrder->release_at->isFuture()
+            ) {
+                \Log::warning('Escrow scheduled release skipped: order not ready', [
+                    'order_id'      => $lockedOrder->id,
+                    'escrow_status' => $lockedOrder->escrow_status,
+                    'release_at'    => $lockedOrder->release_at,
+                ]);
+
+                return;
+            }
+
+            // Skip if order has an open dispute
+            if ($lockedOrder->dispute()->whereNotIn('status', ['resolved', 'refunded'])->exists()) {
+                \Log::warning('Escrow scheduled release skipped: order has open dispute', [
+                    'order_id' => $lockedOrder->id,
                 ]);
 
                 return;
@@ -174,7 +244,7 @@ class EscrowService
                         ->exists();
 
                     if ($alreadyPaid) {
-                        \Log::warning('Duplicate seller payout avoided', [
+                        \Log::warning('Duplicate seller payout avoided (scheduled)', [
                             'order_id'  => $lockedOrder->id,
                             'seller_id' => $seller->id,
                         ]);
@@ -214,9 +284,94 @@ class EscrowService
                 PlatformWallet::singleton()->credit($platformFee);
             }
 
-            // Mark escrow released on order (strict held -> released transition)
+            // Mark escrow released on order (strict pending_release -> released transition)
             $lockedOrder->update([
                 'escrow_status' => 'released',
+                'completed_at'  => $lockedOrder->completed_at ?? now(),
+            ]);
+        });
+    }
+
+    /**
+     * Force release escrow to seller when admin resolves dispute in seller's favour.
+     * Accepts held, pending_release, or disputed.
+     */
+    public function forceReleaseForDisputeResolution(Order $order): void
+    {
+        $validStatuses = ['held', 'pending_release', 'disputed'];
+        DB::transaction(function () use ($order, $validStatuses) {
+            /** @var Order|null $lockedOrder */
+            $lockedOrder = Order::whereKey($order->id)->lockForUpdate()->first();
+            if (! $lockedOrder || ! in_array($lockedOrder->escrow_status, $validStatuses, true)) {
+                if ($lockedOrder) {
+                    \Log::warning('Dispute release skipped: invalid escrow state', [
+                        'order_id' => $lockedOrder->id,
+                        'escrow_status' => $lockedOrder->escrow_status,
+                    ]);
+                }
+
+                return;
+            }
+
+            $totalAmount = (float) ($lockedOrder->escrow_amount ?: $lockedOrder->total_amount);
+            $lockedOrder->loadMissing('orderItems');
+            $subtotal = (float) $lockedOrder->orderItems->sum('total_price') ?: $totalAmount;
+            $discountAmount = max(0.0, round($subtotal - $totalAmount, 2));
+
+            $sellerId = $lockedOrder->seller_id ?: $lockedOrder->orderItems->first()?->product?->user_id;
+            $platformFee = 0.0;
+            $sellerAmount = $totalAmount;
+
+            if ($sellerId) {
+                $seller = User::find($sellerId);
+                if ($seller) {
+                    $completedOrders = Order::where('seller_id', $sellerId)->where('status', Order::STATUS_COMPLETED)->count();
+                    $commissionPct = match (true) {
+                        $completedOrders >= 100 => 8.0,
+                        $completedOrders >= 20 => 10.0,
+                        $completedOrders >= 10 => 12.0,
+                        default => 15.0,
+                    };
+                    $baseCommission = round($subtotal * ($commissionPct / 100), 2);
+                    $platformFee = max(0.0, round($baseCommission - $discountAmount, 2));
+                    $sellerAmount = max(0.0, round($totalAmount - $platformFee, 2));
+
+                    $isBanned = $seller->is_banned && (
+                        $seller->ban_type === 'permanent'
+                        || ($seller->ban_type === 'temporary' && $seller->banned_until?->isFuture())
+                    );
+
+                    $sellerWallet = $this->getOrCreateWallet($seller);
+                    $sellerWallet = Wallet::whereKey($sellerWallet->id)->lockForUpdate()->first();
+                    if ($sellerWallet && ! $sellerWallet->transactions()
+                        ->where('type', 'seller_payout')
+                        ->where('reference_type', Order::class)
+                        ->where('reference_id', $lockedOrder->id)
+                        ->exists()) {
+                        if (! $isBanned) {
+                            $sellerWallet->increment('balance', $sellerAmount);
+                            $sellerWallet->transactions()->create([
+                                'type'           => 'seller_payout',
+                                'status'         => 'completed',
+                                'amount'         => $sellerAmount,
+                                'balance_after'  => (float) $sellerWallet->fresh()->balance,
+                                'reference_type' => Order::class,
+                                'reference_id'   => $lockedOrder->id,
+                                'description'    => "Payout for order #{$lockedOrder->order_number} (dispute resolved)",
+                            ]);
+                        }
+                        $this->incrementSellerStats($seller, $sellerAmount, $lockedOrder);
+                    }
+                }
+            }
+
+            if ($platformFee > 0) {
+                PlatformWallet::singleton()->credit($platformFee);
+            }
+
+            $lockedOrder->update([
+                'escrow_status' => 'released',
+                'status'        => Order::STATUS_COMPLETED,
                 'completed_at'  => $lockedOrder->completed_at ?? now(),
             ]);
         });
@@ -239,8 +394,8 @@ class EscrowService
                 return;
             }
 
-            // Only refund from held state; idempotent and state-safe.
-            if ($lockedOrder->escrow_status !== 'held') {
+            // Only refund from held, pending_release, or disputed (money not yet paid to seller); idempotent and state-safe.
+            if (! in_array($lockedOrder->escrow_status, ['held', 'pending_release', 'disputed'], true)) {
                 \Log::warning('Escrow refund skipped: order not in held state', [
                     'order_id'      => $lockedOrder->id,
                     'escrow_status' => $lockedOrder->escrow_status,

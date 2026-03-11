@@ -16,3 +16,9 @@ Artisan::command('inspire', function () {
 
 // Auto-confirm delivered orders every 15 minutes
 Schedule::command('orders:auto-confirm')->everyFifteenMinutes();
+
+// Release escrow payouts whose seller delay has passed
+Schedule::command('escrow:release')->everyFifteenMinutes();
+
+// Auto-upgrade sellers based on orders, rating, dispute rate
+Schedule::command('sellers:upgrade')->daily();
