@@ -181,8 +181,13 @@ export default function OrderDetailPage() {
   const isCompleted = status === 'completed';
   const isDisputed = status === 'disputed' || status === 'dispute';
   const isBuyer = !user?.is_seller || order.user_id === user?.id;
-  // Only allow disputes after delivery or completion; hide button earlier.
-  const canDispute = isBuyer && (status === 'delivered' || status === 'completed') && !isDisputed;
+  // Only allow disputes after delivery or completion; hide for finalized escrow.
+  const canDispute =
+    isBuyer &&
+    (status === 'delivered' || status === 'completed') &&
+    !isDisputed &&
+    order.escrow_status !== 'released' &&
+    order.escrow_status !== 'refunded';
 
   const isSellerOfOrder = user?.is_seller && Number(order.seller_id) === Number(user?.id);
 

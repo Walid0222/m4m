@@ -1,5 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  ShoppingCart,
+  PackageCheck,
+  MessageCircle,
+  Wallet,
+  Banknote,
+  RotateCcw,
+  Scale,
+  AlertTriangle,
+  ShieldCheck,
+  ShieldX,
+  UserCheck,
+  UserX,
+  Bell,
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getWallet, getNotifications, markNotificationRead, searchOfferTypes, getToken, getSellerWarnings, toggleVacationMode } from '../services/api';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -23,7 +38,8 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [vacationToggleLoading, setVacationToggleLoading] = useState(false);
   const profileRef = useRef(null);
-  const notificationsRef = useRef(null);
+  const desktopNotificationsRef = useRef(null);
+  const mobileNotificationsRef = useRef(null);
 
   useEffect(() => {
     setSearchQuery(searchParams.get('search') || '');
@@ -121,7 +137,9 @@ export default function Navbar() {
   useEffect(() => {
     function outside(e) {
       if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
-      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) setNotificationsOpen(false);
+      const insideDesktop = desktopNotificationsRef.current?.contains(e.target);
+      const insideMobile = mobileNotificationsRef.current?.contains(e.target);
+      if (!insideDesktop && !insideMobile) setNotificationsOpen(false);
     }
     document.addEventListener('mousedown', outside);
     return () => document.removeEventListener('mousedown', outside);
@@ -202,17 +220,62 @@ export default function Navbar() {
     return null;
   }
 
+  function getNotificationIcon(type) {
+    const baseClass = 'flex-shrink-0';
+    const size = 18;
+    switch (type) {
+      case 'new_order':
+        return <ShoppingCart size={size} className={`${baseClass} text-amber-500`} />;
+      case 'order_delivered':
+      case 'order_completed':
+        return <PackageCheck size={size} className={`${baseClass} text-green-500`} />;
+      case 'new_message':
+      case 'support_reply':
+        return <MessageCircle size={size} className={`${baseClass} text-blue-500`} />;
+      case 'deposit_approved':
+      case 'escrow_payout_released':
+        return <Wallet size={size} className={`${baseClass} text-green-500`} />;
+      case 'withdraw_approved':
+        return <Banknote size={size} className={`${baseClass} text-gray-600`} />;
+      case 'dispute_refunded':
+      case 'escrow_refunded_buyer':
+      case 'escrow_refunded_seller':
+        return <RotateCcw size={size} className={`${baseClass} text-green-500`} />;
+      case 'dispute_opened':
+      case 'dispute_seller_paid':
+      case 'dispute_resolved_buyer_loses':
+      case 'dispute_refunded_to_buyer':
+        return <Scale size={size} className={`${baseClass} text-amber-500`} />;
+      case 'seller_warning':
+      case 'seller_report':
+        return <AlertTriangle size={size} className={`${baseClass} text-amber-500`} />;
+      case 'seller_banned':
+        return <UserX size={size} className={`${baseClass} text-red-500`} />;
+      case 'seller_unbanned':
+        return <UserCheck size={size} className={`${baseClass} text-green-500`} />;
+      case 'verification_approved':
+        return <ShieldCheck size={size} className={`${baseClass} text-green-500`} />;
+      case 'verification_rejected':
+        return <ShieldX size={size} className={`${baseClass} text-red-500`} />;
+      case 'escrow_payout_delayed':
+        return <Bell size={size} className={`${baseClass} text-amber-500`} />;
+      default:
+        return null;
+    }
+  }
+
   function getNotificationDisplay(n) {
     const type = n.type || n.data?.type;
     const data = n.data || {};
-    const fallback = data.message || n.message || 'Notification';
-    const icons = {
-      new_order: <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>,
-      new_message: <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
-      order_delivered: <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-      deposit_approved: <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-    };
-    return { icon: icons[type] || null, message: fallback };
+    let message = data.message || n.message || 'Notification';
+    if (
+      (type === 'dispute_refunded' || type === 'escrow_refunded_buyer') &&
+      typeof data.amount === 'number'
+    ) {
+      message = `Your refund of MAD ${Number(data.amount).toFixed(2)} has been processed.`;
+    }
+    const icon = getNotificationIcon(type);
+    return { icon, message };
   }
 
   async function handleNotificationClick(n) {
@@ -367,7 +430,7 @@ export default function Navbar() {
                 )}
 
                 {/* Notification bell */}
-                <div className="relative" ref={notificationsRef}>
+                <div className="relative" ref={desktopNotificationsRef}>
                   <button
                     type="button"
                     onClick={() => setNotificationsOpen((o) => !o)}
@@ -508,7 +571,7 @@ export default function Navbar() {
           {/* Mobile right: bell + hamburger */}
           <div className="flex md:hidden items-center gap-1 ml-auto">
             {user && (
-              <div className="relative" ref={notificationsRef}>
+              <div className="relative" ref={mobileNotificationsRef}>
                 <button
                   type="button"
                   onClick={() => setNotificationsOpen((o) => !o)}

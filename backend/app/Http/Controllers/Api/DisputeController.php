@@ -38,6 +38,10 @@ class DisputeController extends Controller
             return $this->error('A dispute for this order is already open.', 422);
         }
 
+        if ($order->escrow_status === 'released' || $order->escrow_status === 'refunded') {
+            return $this->error('Dispute cannot be opened for finalized orders.', 422);
+        }
+
         $sellerId = $order->seller_id;
         if (! $sellerId) {
             $order->loadMissing('orderItems.product');

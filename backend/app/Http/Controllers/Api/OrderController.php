@@ -228,15 +228,14 @@ class OrderController extends Controller
             $deliveryType = $firstProduct->delivery_type ?? 'manual';
 
             $order = $user->orders()->create([
-                'order_number'    => $orderNumber,
-                'seller_id'       => $sellerId,
-                'delivery_type'   => $deliveryType,
-                'status'          => Order::STATUS_PROCESSING,
-                'total_amount'    => $finalTotal,
-                'escrow_amount'   => $finalTotal,
-                'escrow_status'   => 'held',
-                'auto_confirm_at' => now()->addHours($autoConfirmHours + 48),
-                'buyer_note'      => $buyerNote,
+                'order_number'  => $orderNumber,
+                'seller_id'     => $sellerId,
+                'delivery_type' => $deliveryType,
+                'status'        => Order::STATUS_PROCESSING,
+                'total_amount'  => $finalTotal,
+                'escrow_amount' => $finalTotal,
+                'escrow_status' => 'held',
+                'buyer_note'    => $buyerNote,
             ]);
 
             $isInstant          = false;

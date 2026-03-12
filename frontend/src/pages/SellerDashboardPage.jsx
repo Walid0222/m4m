@@ -1238,31 +1238,53 @@ export default function SellerDashboardPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-m4m-gray-100">
-                        {escrowData.pending_orders.map((o) => (
-                          <tr key={o.id}>
-                            <td className="px-3 py-2 font-medium">#{o.order_number}</td>
-                            <td className="px-3 py-2">{Number(o.amount).toFixed(2)} MAD</td>
-                            <td className="px-3 py-2">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-800">
-                                {o.escrow_status === 'held' ? 'Held in escrow' : 'Pending release'}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-m4m-gray-600">
-                              {o.release_at ? (() => {
-                                const d = new Date(o.release_at);
-                                const now = new Date();
-                                const diff = d - now;
-                                if (diff <= 0) return 'Available now';
-                                const days = Math.floor(diff / (24 * 60 * 60 * 1000));
-                                const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-                                if (days > 0) return `${days} day${days !== 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}`;
-                                if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
-                                const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
-                                return `${mins} min`;
-                              })() : '—'}
-                            </td>
-                          </tr>
-                        ))}
+                        {escrowData.pending_orders.map((o) => {
+                          const isHeld = o.escrow_status === 'held';
+                          const isPendingRelease = o.escrow_status === 'pending_release';
+                          const hasAutoConfirm = isHeld && o.auto_confirm_at;
+                          const formatCountdown = (at, pastLabel) => {
+                            if (!at) return '—';
+                            const d = new Date(at);
+                            const now = Date.now();
+                            const diff = d - now;
+                            if (diff <= 0) return pastLabel ?? 'soon';
+                            const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+                            const hours = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                            const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+                            if (days > 0) return `${days} day${days !== 1 ? 's' : ''} ${hours} hour${hours !== 1 ? 's' : ''}`;
+                            if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+                            return mins > 0 ? `${mins} min` : 'soon';
+                          };
+                          const statusLabel = hasAutoConfirm
+                            ? 'Waiting buyer confirmation'
+                            : isHeld
+                              ? 'Held in escrow'
+                              : 'Pending release';
+                          const countdownText = hasAutoConfirm
+                            ? `Buyer confirmation in ${formatCountdown(o.auto_confirm_at)}`
+                            : isPendingRelease && o.release_at
+                              ? (() => {
+                                  const x = formatCountdown(o.release_at, 'Available now');
+                                  return x === 'Available now' ? x : `Funds released in ${x}`;
+                                })()
+                              : o.release_at
+                                ? formatCountdown(o.release_at, 'Available now')
+                                : '—';
+                          return (
+                            <tr key={o.id}>
+                              <td className="px-3 py-2 font-medium">#{o.order_number}</td>
+                              <td className="px-3 py-2">{Number(o.amount).toFixed(2)} MAD</td>
+                              <td className="px-3 py-2">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-800">
+                                  {statusLabel}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-m4m-gray-600">
+                                {countdownText}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

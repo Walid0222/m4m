@@ -23,11 +23,14 @@ class SellerEscrowController extends Controller
             $wallet = $user->wallet()->create(['balance' => 0]);
         }
 
-        // Orders where money is still being processed (held or scheduled for release)
+        // Only include orders that are delivered or already pending release (exclude undelivered "processing" orders)
         $processingOrders = Order::where('seller_id', $user->id)
             ->whereIn('escrow_status', ['held', 'pending_release'])
+            ->where(function ($q) {
+                $q->whereNotNull('delivered_at')->orWhere('escrow_status', 'pending_release');
+            })
             ->orderByRaw("CASE WHEN release_at IS NULL THEN 1 ELSE 0 END, release_at ASC")
-            ->get(['id', 'order_number', 'escrow_amount', 'total_amount', 'release_at', 'status', 'escrow_status']);
+            ->get(['id', 'order_number', 'escrow_amount', 'total_amount', 'release_at', 'auto_confirm_at', 'status', 'escrow_status']);
 
         // Orders where funds are under review (disputed)
         $disputedOrders = Order::where('seller_id', $user->id)
@@ -62,12 +65,13 @@ class SellerEscrowController extends Controller
             $amount = (float) ($order->escrow_amount ?: $order->total_amount);
 
             return [
-                'id'           => $order->id,
-                'order_number' => $order->order_number,
-                'amount'       => $amount,
-                'release_at'   => $order->release_at?->toIso8601String(),
-                'status'       => $order->status,
-                'escrow_status'=> $order->escrow_status,
+                'id'              => $order->id,
+                'order_number'    => $order->order_number,
+                'amount'          => $amount,
+                'release_at'      => $order->release_at?->toIso8601String(),
+                'auto_confirm_at' => $order->auto_confirm_at?->toIso8601String(),
+                'status'          => $order->status,
+                'escrow_status'   => $order->escrow_status,
             ];
         });
 
