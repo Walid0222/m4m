@@ -328,6 +328,17 @@ export default function ChatPage() {
         // Remove pending if failed
         setMessages((prev) => prev.filter((m) => m._tempId !== tempId));
       }
+      // Immediately refresh the full conversation to ensure we have the latest state
+      try {
+        const data = await getConversation(selected.id);
+        const list = data?.messages ? paginatedItems(data.messages) : [];
+        if (Array.isArray(list)) {
+          const reversed = [...list].reverse();
+          setMessages(reversed);
+        }
+      } catch {
+        // ignore; Echo and fallback polling will still update messages
+      }
       refreshConversations();
     } catch {
       setMessages((prev) => prev.filter((m) => m._tempId !== tempId));

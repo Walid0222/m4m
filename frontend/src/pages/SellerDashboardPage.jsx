@@ -297,10 +297,6 @@ export default function SellerDashboardPage() {
   const [autoReplyMsg, setAutoReplyMsg] = useState('');
   const [autoReplySaving, setAutoReplySaving] = useState(false);
   const [autoReplySaved, setAutoReplySaved] = useState(false);
-  const [refreshInterval, setRefreshInterval] = useState(() => {
-    if (typeof window === 'undefined') return 'off';
-    return localStorage.getItem('m4m_seller_refresh_interval') || 'off';
-  });
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [pinningProductId, setPinningProductId] = useState(null);
@@ -468,29 +464,13 @@ export default function SellerDashboardPage() {
     }
   };
 
-  // Auto-refresh products & orders based on interval
-  useEffect(() => {
-    if (!refreshInterval || refreshInterval === 'off') return;
-    const msMap = { '30s': 30000, '60s': 60000, '120s': 120000 };
-    const ms = msMap[refreshInterval] ?? 0;
-    if (!ms) return;
-    const id = setInterval(() => {
-      fetchProducts();
-      fetchOrders();
-      fetchEscrow();
-    }, ms);
-    return () => clearInterval(id);
-  }, [refreshInterval, fetchProducts, fetchOrders, fetchEscrow]);
-
-  // Global refresh tick as fallback when per-seller auto refresh is off
   useEffect(() => {
     if (!tick) return;
-    if (refreshInterval && refreshInterval !== 'off') return;
     if (!getToken() || !user?.is_seller) return;
     fetchProducts();
     fetchOrders();
     fetchEscrow();
-  }, [tick, refreshInterval, user?.is_seller, fetchProducts, fetchOrders, fetchEscrow]);
+  }, [tick, user?.is_seller, fetchProducts, fetchOrders, fetchEscrow]);
 
   const handleManualRefresh = () => {
     fetchProducts();
@@ -1064,25 +1044,6 @@ export default function SellerDashboardPage() {
                   </svg>
                   Refresh
                 </button>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-m4m-gray-500">Auto refresh</span>
-                  <select
-                    value={refreshInterval}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setRefreshInterval(v);
-                      if (typeof window !== 'undefined') {
-                        localStorage.setItem('m4m_seller_refresh_interval', v);
-                      }
-                    }}
-                    className="px-2 py-1 rounded-lg border border-m4m-gray-200 bg-white text-xs text-m4m-gray-700 focus:ring-1 focus:ring-m4m-purple focus:border-transparent outline-none"
-                  >
-                    <option value="off">Off</option>
-                    <option value="30s">30 seconds</option>
-                    <option value="60s">60 seconds</option>
-                    <option value="120s">120 seconds</option>
-                  </select>
-                </div>
               </div>
             </div>
 

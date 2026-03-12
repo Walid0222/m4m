@@ -110,8 +110,6 @@ export default function SettingsPage() {
             className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
           >
             <option value={0}>Off</option>
-            <option value={5000}>5 seconds</option>
-            <option value={10000}>10 seconds</option>
             <option value={15000}>15 seconds</option>
             <option value={30000}>30 seconds</option>
             <option value={60000}>60 seconds</option>

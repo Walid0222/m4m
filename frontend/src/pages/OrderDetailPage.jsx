@@ -3,11 +3,13 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getToken, getOrder, confirmOrderDelivery, openDispute, updateSellerOrderNote, createReview } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import OrderProgressTracker from '../components/OrderProgressTracker';
+import { useRefresh } from '../contexts/RefreshContext';
 
 export default function OrderDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { tick } = useRefresh();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -51,6 +53,28 @@ export default function OrderDetailPage() {
     fetchOrder();
     return () => { cancelled = true; };
   }, [id]);
+
+  // Auto-refresh order details when global refresh tick advances
+  useEffect(() => {
+    if (!tick) return;
+    if (!id || !getToken()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getOrder(id);
+        if (!cancelled) {
+          setOrder(data);
+          setError('');
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(e.status === 403 ? 'Access denied.' : 'Order not found.');
+          setOrder(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tick, id]);
 
   // Live auto-confirmation countdown based on auto_confirm_at
   useEffect(() => {

@@ -2173,10 +2173,6 @@ export default function AdminDashboardPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [refreshToken, setRefreshToken] = useState(0);
-  const [refreshInterval, setRefreshInterval] = useState(() => {
-    if (typeof window === 'undefined') return 'off';
-    return localStorage.getItem('m4m_admin_refresh_interval') || 'off';
-  });
   const { tick } = useRefresh();
 
   if (!getToken()) {
@@ -2187,23 +2183,11 @@ export default function AdminDashboardPage() {
     );
   }
 
-  // Auto-refresh by remounting panels
   useEffect(() => {
-    if (!refreshInterval || refreshInterval === 'off') return;
-    const msMap = { '30s': 30000, '60s': 60000, '120s': 120000 };
-    const ms = msMap[refreshInterval] ?? 0;
-    if (!ms) return;
-    const id = setInterval(() => setRefreshToken((t) => t + 1), ms);
-    return () => clearInterval(id);
-  }, [refreshInterval]);
-
-  // Also bump refreshToken when global refresh tick advances
-  useEffect(() => {
+    if (!user?.is_admin) return;
     if (!tick) return;
-    // If a local admin auto-refresh interval is configured, prefer that over the global tick
-    if (refreshInterval && refreshInterval !== 'off') return;
     setRefreshToken((t) => t + 1);
-  }, [tick, refreshInterval]);
+  }, [tick, user?.is_admin]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -2215,7 +2199,7 @@ export default function AdminDashboardPage() {
             {user?.name && <span className="ml-1 text-m4m-purple font-medium">({user.name})</span>}
           </p>
         </div>
-          <div className="flex items-center gap-3 text-xs">
+        <div className="flex items-center gap-3 text-xs">
           <button
             type="button"
             onClick={() => setRefreshToken((t) => t + 1)}
@@ -2227,25 +2211,6 @@ export default function AdminDashboardPage() {
             </svg>
             Refresh
           </button>
-          <div className="flex items-center gap-1.5">
-            <span className="text-gray-500">Auto refresh</span>
-            <select
-              value={refreshInterval}
-              onChange={(e) => {
-                const v = e.target.value;
-                setRefreshInterval(v);
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('m4m_admin_refresh_interval', v);
-                }
-              }}
-              className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-xs text-gray-700 focus:ring-1 focus:ring-m4m-purple focus:border-transparent outline-none"
-            >
-              <option value="off">Off</option>
-              <option value="30s">30 seconds</option>
-              <option value="60s">60 seconds</option>
-              <option value="120s">120 seconds</option>
-            </select>
-          </div>
         </div>
       </div>
 

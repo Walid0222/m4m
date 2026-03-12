@@ -435,6 +435,12 @@ export default function ProductPage() {
       if (balance < total) { setError('Insufficient wallet balance.'); setBuying(false); return; }
       await createOrder([{ product_id: product.id, quantity }], couponInfo ? couponCode.trim() : null, buyerNote?.trim() || null);
       setProduct((prev) => prev ? { ...prev, stock: Math.max(0, Number(prev.stock ?? 0) - quantity) } : prev);
+      // Immediately refresh wallet balance in the Navbar
+      try {
+        window.dispatchEvent(new Event('wallet:refresh'));
+      } catch {
+        // ignore; wallet will still refresh on next global tick
+      }
       navigate('/orders');
     } catch (err) {
       setError(err.message || 'Purchase failed');

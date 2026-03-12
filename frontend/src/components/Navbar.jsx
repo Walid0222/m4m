@@ -29,12 +29,28 @@ export default function Navbar() {
     setSearchQuery(searchParams.get('search') || '');
   }, [searchParams]);
 
-  useEffect(() => {
-    if (!user || !getToken()) { setWalletBalance(null); return; }
+  const refreshWallet = useCallback(async () => {
+    if (!user || !getToken()) {
+      setWalletBalance(null);
+      return;
+    }
     let cancelled = false;
-    getWallet().then((d) => { if (!cancelled && d != null) setWalletBalance(d.balance); }).catch(() => {});
-    return () => { cancelled = true; };
+    try {
+      const d = await getWallet();
+      if (!cancelled && d != null) {
+        setWalletBalance(d.balance);
+      }
+    } catch {
+      // ignore; wallet can be refreshed again later
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
+
+  useEffect(() => {
+    refreshWallet();
+  }, [refreshWallet]);
 
   // Fetch unread admin warnings count for sellers
   useEffect(() => {
@@ -56,27 +72,51 @@ export default function Navbar() {
     }
   }, [user]);
 
-  // Auto-refresh notifications when global refresh tick advances
-  useEffect(() => {
+  const refreshNotifications = useCallback(async () => {
     if (!user || !getToken()) return;
     let cancelled = false;
-    getNotifications()
-      .then((list) => {
-        if (!cancelled && Array.isArray(list)) {
-          setNotifications(list);
-        }
-      })
-      .catch(() => {});
+    try {
+      const list = await getNotifications();
+      if (!cancelled && Array.isArray(list)) {
+        setNotifications(list);
+      }
+    } catch {
+      // ignore; will retry on next tick
+    }
     return () => {
       cancelled = true;
     };
-  }, [tick, user]);
+  }, [user]);
+
+  // Auto-refresh notifications when global refresh tick advances
+  useEffect(() => {
+    if (!tick) return;
+    refreshNotifications();
+  }, [tick, refreshNotifications]);
 
   useEffect(() => {
     if (notificationsOpen && user && getToken()) {
-      getNotifications().then((list) => Array.isArray(list) && setNotifications(list)).catch(() => {});
+      refreshNotifications();
     }
-  }, [notificationsOpen]);
+  }, [notificationsOpen, user, refreshNotifications]);
+
+  // Allow other parts of the app to force a notification refresh via a DOM event
+  useEffect(() => {
+    const handler = () => {
+      refreshNotifications();
+    };
+    window.addEventListener('notifications:refresh', handler);
+    return () => window.removeEventListener('notifications:refresh', handler);
+  }, [refreshNotifications]);
+
+  // Allow other parts of the app to force a wallet refresh via a DOM event
+  useEffect(() => {
+    const handler = () => {
+      refreshWallet();
+    };
+    window.addEventListener('wallet:refresh', handler);
+    return () => window.removeEventListener('wallet:refresh', handler);
+  }, [refreshWallet]);
 
   useEffect(() => {
     function outside(e) {
@@ -149,8 +189,12 @@ export default function Navbar() {
   }).length;
 
   function getNotificationLink(n) {
-    const type = n.type || n.data?.type;
     const data = n.data || {};
+    // Prefer explicit link from backend when provided
+    if (n.link) return n.link;
+    if (data.link) return data.link;
+
+    const type = n.type || data.type;
     if (type === 'new_order') return '/seller-dashboard';
     if (type === 'new_message' && data.conversation_id) return `/chat?conversation=${data.conversation_id}`;
     if (type === 'order_delivered') return '/orders';
