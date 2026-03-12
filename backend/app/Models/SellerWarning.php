@@ -27,6 +27,21 @@ class SellerWarning extends Model
         ];
     }
 
+    /**
+     * Guard against invalid string values being written into dismissed_at.
+     * Accepts null or any value Laravel can cast to a datetime; coerces the
+     * known bad literal "dismissed_at" back to null.
+     */
+    public function setDismissedAtAttribute($value): void
+    {
+        if ($value === 'dismissed_at') {
+            $this->attributes['dismissed_at'] = null;
+            return;
+        }
+
+        $this->attributes['dismissed_at'] = $value;
+    }
+
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'seller_id');

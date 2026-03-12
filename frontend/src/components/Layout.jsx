@@ -4,6 +4,7 @@ import Footer from './Footer';
 import RecentSalesPopup from './RecentSalesPopup';
 import AnnouncementBanner from './AnnouncementBanner';
 import EmailVerificationBanner from './EmailVerificationBanner';
+import AdminWarningBanner from './AdminWarningBanner';
 
 export default function Layout() {
   return (
@@ -11,6 +12,7 @@ export default function Layout() {
       <AnnouncementBanner />
       <EmailVerificationBanner />
       <Navbar />
+      <AdminWarningBanner />
       <main className="flex-1">
         <Outlet />
       </main>

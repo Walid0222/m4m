@@ -27,8 +27,6 @@ import {
   getSellerEscrow,
   getSellerVerification,
   submitSellerVerification,
-  getSellerWarnings,
-  dismissSellerWarning,
   getSellerStats,
   getSellerAutoReply,
   updateSellerAutoReply,
@@ -38,6 +36,7 @@ import {
   getMyServiceRequests,
   createServiceRequest,
 } from '../services/api';
+import { useRefresh } from '../contexts/RefreshContext';
 import OrderCard from '../components/OrderCard';
 import { getOrderStatusStyle, getEscrowBadge } from '../lib/orderStatus';
 
@@ -294,7 +293,6 @@ export default function SellerDashboardPage() {
     const s = searchParams.get('section');
     return SECTIONS.some((x) => x.id === s) ? s : 'overview';
   });
-  const [sellerWarnings, setSellerWarnings] = useState([]);
   const [sellerStats, setSellerStats] = useState(null);
   const [autoReplyMsg, setAutoReplyMsg] = useState('');
   const [autoReplySaving, setAutoReplySaving] = useState(false);
@@ -343,6 +341,7 @@ export default function SellerDashboardPage() {
   const [serviceRequestForm, setServiceRequestForm] = useState({ service_name: '', category_id: '', description: '' });
   const [serviceRequestSubmitting, setServiceRequestSubmitting] = useState(false);
   const [serviceRequestError, setServiceRequestError] = useState('');
+  const { tick } = useRefresh();
 
   const fetchProducts = useCallback(async () => {
     if (!getToken() || !user?.is_seller) return;
@@ -446,23 +445,6 @@ export default function SellerDashboardPage() {
     fetchEscrow();
   }, [fetchEscrow]);
 
-  // Fetch admin warnings for this seller (only after user is loaded and is a seller)
-  const fetchWarnings = useCallback(async () => {
-    if (!getToken() || !user?.is_seller) return;
-    try {
-      const data = await getSellerWarnings();
-      setSellerWarnings(Array.isArray(data) ? data : (data?.warnings ?? []));
-    } catch {
-      setSellerWarnings([]);
-    }
-  }, [user?.is_seller]);
-
-  useEffect(() => {
-    if (user && user.is_seller) {
-      fetchWarnings();
-    }
-  }, [user, fetchWarnings]);
-
   // Fetch seller stats
   useEffect(() => {
     if (!getToken() || !user?.is_seller) return;
@@ -499,6 +481,16 @@ export default function SellerDashboardPage() {
     }, ms);
     return () => clearInterval(id);
   }, [refreshInterval, fetchProducts, fetchOrders, fetchEscrow]);
+
+  // Global refresh tick as fallback when per-seller auto refresh is off
+  useEffect(() => {
+    if (!tick) return;
+    if (refreshInterval && refreshInterval !== 'off') return;
+    if (!getToken() || !user?.is_seller) return;
+    fetchProducts();
+    fetchOrders();
+    fetchEscrow();
+  }, [tick, refreshInterval, user?.is_seller, fetchProducts, fetchOrders, fetchEscrow]);
 
   const handleManualRefresh = () => {
     fetchProducts();
@@ -1053,43 +1045,6 @@ export default function SellerDashboardPage() {
             role="alert"
           >
             {actionMessage.text}
-          </div>
-        )}
-        {/* Admin warnings banner */}
-        {sellerWarnings.length > 0 && (
-          <div className="mb-6 space-y-3">
-            {sellerWarnings.map((w) => (
-              <div key={w.id} className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
-                <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-amber-800 text-sm">⚠️ ADMIN WARNING</p>
-                  {w.reason && <p className="text-sm text-amber-700 mt-0.5"><span className="font-medium">Reason:</span> {w.reason}</p>}
-                  {w.message && <p className="text-sm text-amber-700 mt-0.5">{w.message}</p>}
-                  <p className="text-xs text-amber-600 mt-1">Please review marketplace rules to avoid further action.</p>
-                </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
-                  {w.created_at && (
-                    <p className="text-xs text-amber-500">{new Date(w.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await dismissSellerWarning(w.id);
-                        setSellerWarnings((prev) => prev.filter((item) => item.id !== w.id));
-                      } catch {
-                        // ignore; keep warning visible if dismiss fails
-                      }
-                    }}
-                    className="px-2.5 py-1 rounded-lg border border-amber-300 bg-white text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition-colors"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              </div>
-            ))}
           </div>
         )}
 

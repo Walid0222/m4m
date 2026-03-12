@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, ProtectedRoute, SellerRoute, AdminRoute } from './contexts/AuthContext';
 import { MarketplaceSettingsProvider } from './contexts/MarketplaceSettingsContext';
+import { RefreshProvider } from './contexts/RefreshContext';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import ProductPage from './pages/ProductPage';
@@ -25,9 +26,10 @@ export default function App() {
   return (
     <AuthProvider>
       <MarketplaceSettingsProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
+        <RefreshProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="service/:slug" element={<ServicePage />} />
             <Route path="offer-type/:slug" element={<OfferTypePage />} />
@@ -116,15 +118,16 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-          </Route>
-          {/* Help center — public pages */}
-          <Route path="/help/:slug" element={<Layout><HelpPage /></Layout>} />
-          <Route path="/help" element={<Navigate to="/help/faq" replace />} />
-          {/* Marketplace rules standalone page */}
-          <Route path="/marketplace-rules" element={<Layout><MarketplaceRulesPage /></Layout>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+              </Route>
+              {/* Help center — public pages */}
+              <Route path="/help/:slug" element={<Layout><HelpPage /></Layout>} />
+              <Route path="/help" element={<Navigate to="/help/faq" replace />} />
+              {/* Marketplace rules standalone page */}
+              <Route path="/marketplace-rules" element={<Layout><MarketplaceRulesPage /></Layout>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </RefreshProvider>
       </MarketplaceSettingsProvider>
     </AuthProvider>
   );

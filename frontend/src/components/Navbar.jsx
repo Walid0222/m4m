@@ -2,9 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getWallet, getNotifications, markNotificationRead, searchOfferTypes, getToken, getSellerWarnings, toggleVacationMode } from '../services/api';
+import { useRefresh } from '../contexts/RefreshContext';
 
 export default function Navbar() {
   const { user, logout, avatar, refreshUser } = useAuth();
+  const { tick } = useRefresh();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -47,12 +49,28 @@ export default function Navbar() {
     return () => { cancelled = true; };
   }, [user]);
 
+  // Clear notifications when user logs out / changes
   useEffect(() => {
-    if (!user || !getToken()) { setNotifications([]); return; }
-    let cancelled = false;
-    getNotifications().then((list) => { if (!cancelled && Array.isArray(list)) setNotifications(list); }).catch(() => {});
-    return () => { cancelled = true; };
+    if (!user || !getToken()) {
+      setNotifications([]);
+    }
   }, [user]);
+
+  // Auto-refresh notifications when global refresh tick advances
+  useEffect(() => {
+    if (!user || !getToken()) return;
+    let cancelled = false;
+    getNotifications()
+      .then((list) => {
+        if (!cancelled && Array.isArray(list)) {
+          setNotifications(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [tick, user]);
 
   useEffect(() => {
     if (notificationsOpen && user && getToken()) {
@@ -117,6 +135,10 @@ export default function Navbar() {
   };
 
   const balanceDisplay = walletBalance !== null ? `${Number(walletBalance).toFixed(2)} MAD` : '—';
+  const visibleNotifications = notifications.filter((n) => {
+    const type = n.type || n.data?.type;
+    return type !== 'new_message';
+  });
   const unreadMessages = notifications.filter((n) => {
     const type = n.type || n.data?.type;
     return type === 'new_message' && !n.read_at;
@@ -323,11 +345,11 @@ export default function Navbar() {
                         <span className="font-semibold text-gray-900">Notifications</span>
                         {unreadCount > 0 && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">{unreadCount} new</span>}
                       </div>
-                      {notifications.length === 0 ? (
+                      {visibleNotifications.length === 0 ? (
                         <p className="px-4 py-8 text-sm text-gray-400 text-center">No notifications yet.</p>
                       ) : (
                         <ul>
-                          {notifications.map((n) => {
+                          {visibleNotifications.map((n) => {
                             const { icon, message } = getNotificationDisplay(n);
                             return (
                               <li key={n.id}>
@@ -461,11 +483,11 @@ export default function Navbar() {
                 {notificationsOpen && (
                   <div className="absolute right-0 mt-2 w-72 max-h-80 overflow-y-auto rounded-2xl bg-white border border-gray-200 shadow-xl z-50">
                     <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-900 text-sm">Notifications</div>
-                    {notifications.length === 0 ? (
+                      {visibleNotifications.length === 0 ? (
                       <p className="px-4 py-6 text-sm text-gray-400 text-center">No notifications.</p>
                     ) : (
                       <ul>
-                        {notifications.map((n) => {
+                          {visibleNotifications.map((n) => {
                           const { icon, message } = getNotificationDisplay(n);
                           return (
                             <li key={n.id}>

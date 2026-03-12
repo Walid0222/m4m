@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useRefresh } from '../contexts/RefreshContext';
 import { useMarketplaceSettings } from '../contexts/MarketplaceSettingsContext';
 import {
   getToken,
@@ -818,7 +819,7 @@ function ServiceManagementPanel() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ name: '', category_id: '', description: '', status: 'active' });
+  const [form, setForm] = useState({ name: '', category_id: '', service_id: '', description: '', status: 'active' });
   const [submitting, setSubmitting] = useState(false);
   const [servicesEditingId, setServicesEditingId] = useState(null);
   const [serviceForm, setServiceForm] = useState({ name: '', icon: '' });
@@ -844,7 +845,7 @@ function ServiceManagementPanel() {
   useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 4000); return () => clearTimeout(t); }, [flash]);
 
   const openCreate = () => {
-    setForm({ name: '', category_id: '', description: '', status: 'active' });
+    setForm({ name: '', category_id: '', service_id: '', description: '', status: 'active' });
     setCreateOpen(true);
   };
 
@@ -853,18 +854,20 @@ function ServiceManagementPanel() {
     setForm({
       name: ot.name || '',
       category_id: String(ot.category_id || ''),
+      service_id: ot.service_id ? String(ot.service_id) : '',
       description: ot.description || '',
       status: ot.status || 'active',
     });
   };
 
   const handleCreate = async () => {
-    if (!form.name.trim() || !form.category_id) return;
+    if (!form.name.trim() || !form.category_id || !form.service_id) return;
     setSubmitting(true);
     try {
       await createAdminOfferType({
         name: form.name.trim(),
         category_id: parseInt(form.category_id, 10),
+        service_id: parseInt(form.service_id, 10),
         description: form.description.trim() || undefined,
         status: form.status,
       });
@@ -879,12 +882,13 @@ function ServiceManagementPanel() {
   };
 
   const handleUpdate = async () => {
-    if (!editingId || !form.name.trim() || !form.category_id) return;
+    if (!editingId || !form.name.trim() || !form.category_id || !form.service_id) return;
     setSubmitting(true);
     try {
       await updateAdminOfferType(editingId, {
         name: form.name.trim(),
         category_id: parseInt(form.category_id, 10),
+        service_id: parseInt(form.service_id, 10),
         description: form.description.trim() || undefined,
         status: form.status,
       });
@@ -1026,8 +1030,8 @@ function ServiceManagementPanel() {
 
       {createOpen && (
         <div className="rounded-xl border border-gray-200 bg-white p-6 mb-6">
-          <h3 className="font-semibold text-gray-900 mb-4">Create service</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl">
+          <h3 className="font-semibold text-gray-900 mb-4">Create offer type</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
               <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Netflix Account" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
@@ -1041,11 +1045,20 @@ function ServiceManagementPanel() {
                 ))}
               </select>
             </div>
-            <div className="md:col-span-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Service *</label>
+              <select value={form.service_id} onChange={(e) => setForm((f) => ({ ...f, service_id: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                <option value="">Select</option>
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-3">
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none" />
             </div>
-            <div>
+            <div className="md:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
                 <option value="active">Active</option>
@@ -1055,7 +1068,7 @@ function ServiceManagementPanel() {
           </div>
           <div className="flex gap-2 mt-4">
             <button type="button" onClick={() => setCreateOpen(false)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Cancel</button>
-            <button type="button" onClick={handleCreate} disabled={submitting || !form.name.trim() || !form.category_id} className="px-4 py-2 rounded-lg text-sm font-semibold bg-m4m-purple text-white hover:bg-purple-600 disabled:opacity-60">Create</button>
+            <button type="button" onClick={handleCreate} disabled={submitting || !form.name.trim() || !form.category_id || !form.service_id} className="px-4 py-2 rounded-lg text-sm font-semibold bg-m4m-purple text-white hover:bg-purple-600 disabled:opacity-60">Create</button>
           </div>
         </div>
       )}
@@ -1071,14 +1084,20 @@ function ServiceManagementPanel() {
           {offerTypes.map((ot) => (
             <div key={ot.id} className="rounded-xl border border-gray-200 bg-white p-4 flex flex-wrap items-center justify-between gap-3">
               {editingId === ot.id ? (
-                <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-4 gap-3">
                   <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
                   <select value={form.category_id} onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
-                  <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="w-full md:col-span-2 px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none" />
+                  <select value={form.service_id} onChange={(e) => setForm((f) => ({ ...f, service_id: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                    <option value="">Service</option>
+                    {services.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="w-full md:col-span-4 px-3 py-2 rounded-lg border border-gray-200 text-sm resize-none" />
                   <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
                     <option value="active">Active</option>
                     <option value="disabled">Disabled</option>
@@ -2158,6 +2177,7 @@ export default function AdminDashboardPage() {
     if (typeof window === 'undefined') return 'off';
     return localStorage.getItem('m4m_admin_refresh_interval') || 'off';
   });
+  const { tick } = useRefresh();
 
   if (!getToken()) {
     return (
@@ -2176,6 +2196,14 @@ export default function AdminDashboardPage() {
     const id = setInterval(() => setRefreshToken((t) => t + 1), ms);
     return () => clearInterval(id);
   }, [refreshInterval]);
+
+  // Also bump refreshToken when global refresh tick advances
+  useEffect(() => {
+    if (!tick) return;
+    // If a local admin auto-refresh interval is configured, prefer that over the global tick
+    if (refreshInterval && refreshInterval !== 'off') return;
+    setRefreshToken((t) => t + 1);
+  }, [tick, refreshInterval]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

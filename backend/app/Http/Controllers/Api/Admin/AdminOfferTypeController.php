@@ -38,6 +38,7 @@ class AdminOfferTypeController extends Controller
         $validated = $request->validate([
             'name'        => ['required', 'string', 'max:255'],
             'category_id' => ['required', 'integer', 'exists:categories,id'],
+            'service_id'  => ['required', 'integer', 'exists:services,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'status'      => ['sometimes', 'string', 'in:active,disabled'],
         ]);
@@ -51,6 +52,7 @@ class AdminOfferTypeController extends Controller
 
         $offerType = OfferType::create([
             'category_id'  => $validated['category_id'],
+            'service_id'   => $validated['service_id'],
             'name'         => $validated['name'],
             'slug'         => $slug,
             'description'  => $validated['description'] ?? null,
@@ -84,6 +86,7 @@ class AdminOfferTypeController extends Controller
         $validated = $request->validate([
             'name'        => ['sometimes', 'string', 'max:255'],
             'category_id' => ['sometimes', 'integer', 'exists:categories,id'],
+            'service_id'  => ['sometimes', 'integer', 'exists:services,id'],
             'description' => ['nullable', 'string', 'max:2000'],
             'status'      => ['sometimes', 'string', 'in:active,disabled'],
         ]);

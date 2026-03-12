@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useRefresh } from '../contexts/RefreshContext';
 import {
   getWallet,
   getDepositRequests,
@@ -128,6 +129,7 @@ function ConfirmModal({ title, message, onConfirm, onCancel }) {
 export default function WalletPage() {
   const { user } = useAuth();
   const { balance, deposits, withdrawals, loading, error, refresh } = useWalletData();
+  const { tick } = useRefresh();
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
@@ -170,6 +172,12 @@ export default function WalletPage() {
     list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return list;
   }, [balance?.transactions, deposits, withdrawals]);
+
+  // Auto-refresh wallet data (balance, deposit/withdraw requests) on global refresh tick
+  useEffect(() => {
+    if (!getToken()) return;
+    refresh();
+  }, [tick, refresh]);
 
   useEffect(() => {
     if (!getToken()) return;

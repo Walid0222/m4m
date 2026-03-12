@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useRefresh } from '../contexts/RefreshContext';
 import { getDisputes, paginatedItems } from '../services/api';
 
 const STATUS_STYLES = {
@@ -19,6 +20,7 @@ const STATUS_LABELS = {
 export default function DisputesPage() {
   const [disputes, setDisputes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { tick } = useRefresh();
 
   const fetchDisputes = useCallback(async () => {
     setLoading(true);
@@ -35,6 +37,11 @@ export default function DisputesPage() {
   useEffect(() => {
     fetchDisputes();
   }, [fetchDisputes]);
+
+  // Auto-refresh disputes when global refresh tick advances
+  useEffect(() => {
+    fetchDisputes();
+  }, [tick, fetchDisputes]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api, enable2FA, confirm2FA, disable2FA } from '../services/api';
+import { useRefresh } from '../contexts/RefreshContext';
 
 async function updateMe(body) {
   const res = await api.patch('/me', body);
@@ -9,6 +10,7 @@ async function updateMe(body) {
 
 export default function SettingsPage() {
   const { user, loading, refreshUser } = useAuth();
+  const { setIntervalMs } = useRefresh();
   const [enabled, setEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -103,6 +105,7 @@ export default function SettingsPage() {
               if (typeof window !== 'undefined') {
                 window.localStorage.setItem('platform_auto_refresh', String(v));
               }
+              setIntervalMs(v);
             }}
             className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
           >
