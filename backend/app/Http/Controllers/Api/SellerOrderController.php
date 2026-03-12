@@ -76,6 +76,17 @@ class SellerOrderController extends Controller
             'status' => ['required', 'in:processing,delivered,cancelled'],
         ]);
 
+        // Only allow transition to "delivered"; forbid setting processing, cancelled, or completed (state machine).
+        if (in_array($validated['status'], ['processing', 'cancelled', 'completed'], true)) {
+            return $this->error('This status cannot be set via this endpoint. Only marking as delivered is allowed.', 422);
+        }
+
+        $currentStatus = strtolower((string) $order->status);
+        $allowedFromForDelivered = ['processing', 'pending', 'paid'];
+        if ($validated['status'] === 'delivered' && ! in_array($currentStatus, $allowedFromForDelivered, true)) {
+            return $this->error('Order can only be marked as delivered when its current status is processing, pending, or paid.', 422);
+        }
+
         // Manual delivery: don't allow marking "delivered" without sending credentials first.
         // If the product is manual delivery and no delivery_content yet, require the deliver endpoint.
         $firstItem = $order->orderItems()->whereIn('product_id', $sellerProductIds)->with('product')->first();
