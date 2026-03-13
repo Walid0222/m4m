@@ -12,6 +12,8 @@ import WalletPage from './pages/WalletPage';
 import OrdersPage from './pages/OrdersPage';
 import ChatPage from './pages/ChatPage';
 import AuthPage from './pages/AuthPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import SellerDashboardPage from './pages/SellerDashboardPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
@@ -38,6 +40,8 @@ export default function App() {
             <Route path="product/:id" element={<ProductPage />} />
             <Route path="seller/:id" element={<SellerProfilePage />} />
             <Route path="login" element={<AuthPage />} />
+            <Route path="forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="reset-password" element={<ResetPasswordPage />} />
 
             {/* Protected routes: require login */}
             <Route

@@ -111,6 +111,14 @@ export function login2fa(userId, code) {
   });
 }
 
+export function forgotPassword(email) {
+  return api.post('/forgot-password', { email }).then((res) => res.data);
+}
+
+export function resetPassword(body) {
+  return api.post('/reset-password', body).then((res) => res.data);
+}
+
 export function enable2FA() {
   return api.post('/security/2fa/enable').then(unwrap);
 }
@@ -317,8 +325,21 @@ export function createDepositRequest({ amount, currency = 'USD', payment_method 
   });
 }
 
-export function createWithdrawRequest({ amount, currency = 'USD', payment_details }) {
-  return api.post('/withdraw-requests', { amount, currency, payment_details }).then(unwrap);
+export function createWithdrawRequest({
+  amount,
+  currency = 'USD',
+  payment_details,
+  current_password,
+  two_factor_code,
+}) {
+  const payload = {
+    amount,
+    currency,
+    payment_details,
+  };
+  if (current_password) payload.current_password = current_password;
+  if (two_factor_code) payload.two_factor_code = two_factor_code;
+  return api.post('/withdraw-requests', payload).then(unwrap);
 }
 
 // --- Favorites ---

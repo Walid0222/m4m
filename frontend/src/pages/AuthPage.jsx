@@ -154,6 +154,16 @@ export default function AuthPage() {
                   className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
                   placeholder="••••••••"
                 />
+                {isLogin && (
+                  <div className="mt-2">
+                    <Link
+                      to="/forgot-password"
+                      className="text-xs text-m4m-purple hover:underline"
+                    >
+                      Forgot your password?
+                    </Link>
+                  </div>
+                )}
               </div>
             </>
           )}

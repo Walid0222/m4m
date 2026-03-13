@@ -56,6 +56,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend SPA URL
+    |--------------------------------------------------------------------------
+    |
+    | This URL is used when generating links that should point to the
+    | frontend single-page application, such as password reset links
+    | included in notification emails.
+    |
+    */
+
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

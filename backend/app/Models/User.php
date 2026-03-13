@@ -245,6 +245,14 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Send the password reset notification with a SPA frontend URL.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new \App\Notifications\ResetPasswordNotification($token));
+    }
+
+    /**
      * Numeric seller level based on completed orders.
      * Formula: level = floor(total_completed_orders / 2)
      */

@@ -51,6 +51,8 @@ export default function UserProfilePage() {
   const [emailValue, setEmailValue] = useState('');
   const [emailSubmitting, setEmailSubmitting] = useState(false);
   const [emailMsg, setEmailMsg] = useState(null);
+  const [emailPassword, setEmailPassword] = useState('');
+  const [email2FACode, setEmail2FACode] = useState('');
 
   // Password form
   const [pwCurrent, setPwCurrent] = useState('');
@@ -110,11 +112,22 @@ export default function UserProfilePage() {
     setEmailSubmitting(true);
     setEmailMsg(null);
     try {
-      await updateProfile({ email: emailValue.trim() });
-      setEmailMsg({ type: 'success', text: 'Verification email sent. Please check your inbox to confirm your new email address.' });
-    } catch {
-      // Backend may not support email change yet — show email-sent UX anyway
-      setEmailMsg({ type: 'success', text: 'Verification email sent. Please check your inbox to confirm your new email address.' });
+      await updateProfile({
+        email: emailValue.trim(),
+        current_password: user?.two_factor_enabled_at ? undefined : emailPassword,
+        two_factor_code: user?.two_factor_enabled_at ? email2FACode : undefined,
+      });
+      setEmailMsg({
+        type: 'success',
+        text: 'Verification email sent. Please check your inbox to confirm your new email address.',
+      });
+      setEmailPassword('');
+      setEmail2FACode('');
+    } catch (err) {
+      setEmailMsg({
+        type: 'error',
+        text: err.message || 'Failed to update email.',
+      });
     } finally {
       setEmailSubmitting(false);
     }
@@ -284,6 +297,31 @@ export default function UserProfilePage() {
                 required
               />
             </div>
+            {user?.two_factor_enabled_at ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">2FA code</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={email2FACode}
+                  onChange={(e) => setEmail2FACode(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                  placeholder="123456"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Current password</label>
+                <input
+                  type="password"
+                  value={emailPassword}
+                  onChange={(e) => setEmailPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                  placeholder="••••••••"
+                />
+              </div>
+            )}
             <button type="submit" disabled={emailSubmitting || emailValue === user?.email} className="w-full py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors">
               {emailSubmitting ? 'Saving…' : 'Update email'}
             </button>

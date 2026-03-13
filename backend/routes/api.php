@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\OfferTypeController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\ServiceRequestController;
@@ -83,6 +84,11 @@ Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:auth');
     Route::post('/login',    [AuthController::class, 'login'])->middleware('throttle:auth');
     Route::post('/login/2fa',[AuthController::class, 'login2fa'])->middleware('throttle:auth');
+
+    Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])
+        ->middleware('throttle:6,1');
+    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])
+        ->middleware('throttle:6,1');
 
     Route::get('/categories',                      [CategoryController::class, 'index']);
     Route::get('/services',                        [ServiceController::class, 'index']);

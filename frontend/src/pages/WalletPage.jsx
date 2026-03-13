@@ -146,6 +146,8 @@ export default function WalletPage() {
   const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
   const [withdrawConfirmPending, setWithdrawConfirmPending] = useState(false);
+  const [withdrawPassword, setWithdrawPassword] = useState('');
+  const [withdraw2FACode, setWithdraw2FACode] = useState('');
 
   const [walletSettings, setWalletSettings] = useState(null);
   const [walletSettingsError, setWalletSettingsError] = useState('');
@@ -268,6 +270,8 @@ export default function WalletPage() {
       }
     }
     setWithdrawError('');
+    setWithdrawPassword('');
+    setWithdraw2FACode('');
     setWithdrawConfirmPending(true);
   };
 
@@ -280,9 +284,17 @@ export default function WalletPage() {
     setWithdrawSubmitting(true);
     setWithdrawError('');
     try {
-      await createWithdrawRequest({ amount, currency: CURRENCY, payment_details: withdrawDetails.trim() });
+      await createWithdrawRequest({
+        amount,
+        currency: CURRENCY,
+        payment_details: withdrawDetails.trim(),
+        current_password: user?.two_factor_enabled_at ? undefined : withdrawPassword,
+        two_factor_code: user?.two_factor_enabled_at ? withdraw2FACode : undefined,
+      });
       setWithdrawAmount('');
       setWithdrawDetails('');
+      setWithdrawPassword('');
+      setWithdraw2FACode('');
       setWithdrawOpen(false);
       await refresh();
     } catch (err) {
@@ -750,32 +762,83 @@ export default function WalletPage() {
               <p className="text-sm text-purple-800 font-medium">Available: <span className="font-bold">{bal.toFixed(2)} {CURRENCY}</span></p>
             </div>
             {withdrawError && <p className="text-sm text-red-600 mb-4">{withdrawError}</p>}
-            <form onSubmit={handleWithdrawSubmitRequest}>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Amount ({CURRENCY})</label>
-              <input
-                type="number"
-                min="1"
-                step="0.01"
-                max={bal}
-                placeholder="0.00"
-                value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none mb-4"
-                required
-              />
-              <label className="block text-sm font-medium text-gray-700 mb-2">Payment details</label>
-              <p className="text-xs text-gray-400 mb-2">Enter your bank account number, IBAN, or e-wallet address.</p>
-              <textarea
-                rows={3}
-                placeholder="Bank: IBAN / Account number..."
-                value={withdrawDetails}
-                onChange={(e) => setWithdrawDetails(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none mb-5"
-                required
-              />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setWithdrawOpen(false)} className="flex-1 py-3 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-                <button type="submit" disabled={withdrawSubmitting} className="flex-1 py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors">
+            <form onSubmit={handleWithdrawSubmitRequest} className="space-y-4">
+              <div>
+                <label htmlFor="withdraw_amount" className="block text-sm font-medium text-gray-700 mb-1">
+                  Amount ({CURRENCY})
+                </label>
+                <input
+                  id="withdraw_amount"
+                  type="number"
+                  min="1"
+                  step="0.01"
+                  max={bal}
+                  placeholder="0.00"
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="withdraw_details" className="block text-sm font-medium text-gray-700 mb-1">
+                  Payment details
+                </label>
+                <p className="text-xs text-gray-400 mb-2">Enter your bank account number, IBAN, or e-wallet address.</p>
+                <textarea
+                  id="withdraw_details"
+                  rows={3}
+                  placeholder="Bank: IBAN / Account number..."
+                  value={withdrawDetails}
+                  onChange={(e) => setWithdrawDetails(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none"
+                  required
+                />
+              </div>
+              {user?.two_factor_enabled_at ? (
+                <div>
+                  <label htmlFor="withdraw_2fa" className="block text-sm font-medium text-gray-700 mb-1">
+                    2FA Code
+                  </label>
+                  <input
+                    id="withdraw_2fa"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={withdraw2FACode}
+                    onChange={(e) => setWithdraw2FACode(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                    placeholder="123456"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label htmlFor="withdraw_password" className="block text-sm font-medium text-gray-700 mb-1">
+                    Current password
+                  </label>
+                  <input
+                    id="withdraw_password"
+                    type="password"
+                    value={withdrawPassword}
+                    onChange={(e) => setWithdrawPassword(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                    placeholder="••••••••"
+                  />
+                </div>
+              )}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setWithdrawOpen(false); setWithdrawError(''); }}
+                  className="flex-1 py-3 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={withdrawSubmitting}
+                  className="flex-1 py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors"
+                >
                   {withdrawSubmitting ? 'Submitting…' : 'Request withdrawal'}
                 </button>
               </div>

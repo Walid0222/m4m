@@ -178,13 +178,39 @@ class AuthController extends Controller
     public function updateMe(Request $request): JsonResponse
     {
         $user = $request->user();
+        $oldEmail = $user->email;
         $validated = $request->validate([
             'email' => ['sometimes', 'email', 'max:255', 'unique:users,email,' . $user->id],
             'password' => ['sometimes', 'confirmed', Password::defaults()],
+            'two_factor_code' => ['nullable', 'string'],
+            'current_password' => ['nullable', 'string'],
             'is_seller' => ['sometimes', 'boolean'],
             'show_recent_sales_notifications' => ['sometimes', 'boolean'],
             'vacation_mode' => ['sometimes', 'boolean'],
         ]);
+
+        // If email is being changed, require step-up authentication.
+        if ($request->filled('email') && $request->input('email') !== $oldEmail) {
+            if ($user->two_factor_enabled_at) {
+                if (! $request->filled('two_factor_code')) {
+                    return $this->error('Two-factor authentication code is required.', 422);
+                }
+
+                $secret = \Illuminate\Support\Facades\Crypt::decryptString($user->two_factor_secret);
+                $totp = \OTPHP\TOTP::create($secret);
+
+                if (! $totp->verify($request->input('two_factor_code'))) {
+                    return $this->error('Invalid two-factor authentication code.', 422);
+                }
+            } else {
+                if (
+                    ! $request->filled('current_password')
+                    || ! Hash::check($request->input('current_password'), $user->password)
+                ) {
+                    return $this->error('Current password is incorrect.', 422);
+                }
+            }
+        }
 
         if (array_key_exists('password', $validated)) {
             if (! $request->filled('current_password') || ! Hash::check($request->input('current_password'), $user->password)) {
@@ -196,6 +222,23 @@ class AuthController extends Controller
         }
 
         $user->update($validated);
+
+        // If email changed, reset verification, log, send email, and harden sessions.
+        if (array_key_exists('email', $validated) && $validated['email'] !== $oldEmail) {
+            $user->email_verified_at = null;
+            $user->save();
+
+            SecurityLogService::log(
+                $user,
+                'email_change',
+                $request,
+                ['new_email' => $validated['email']]
+            );
+
+            $user->sendEmailVerificationNotification();
+
+            $user->tokens()->delete();
+        }
 
         return $this->success($this->userFields($user->fresh()), 'Profile updated.');
     }

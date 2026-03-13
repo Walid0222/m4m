@@ -27,9 +27,38 @@ class WithdrawRequestController extends Controller
             'amount' => ['required', 'numeric', 'min:1'],
             'currency' => ['sometimes', 'string', 'size:3'],
             'payment_details' => ['required', 'string', 'max:1000'],
+            'current_password' => ['nullable', 'string'],
+            'two_factor_code' => ['nullable', 'string'],
         ]);
 
         $user = $request->user();
+        // Step-up authentication: require 2FA code if enabled, otherwise current password.
+        if ($user->two_factor_enabled_at) {
+            if (! $request->filled('two_factor_code')) {
+                return response()->json([
+                    'message' => 'Two-factor authentication code is required.',
+                ], 422);
+            }
+
+            $secret = \Illuminate\Support\Facades\Crypt::decryptString($user->two_factor_secret);
+            $totp = \OTPHP\TOTP::create($secret);
+
+            if (! $totp->verify($request->input('two_factor_code'))) {
+                return response()->json([
+                    'message' => 'Invalid two-factor authentication code.',
+                ], 422);
+            }
+        } else {
+            if (
+                ! $request->filled('current_password')
+                || ! \Illuminate\Support\Facades\Hash::check($request->input('current_password'), $user->password)
+            ) {
+                return response()->json([
+                    'message' => 'Current password is incorrect.',
+                ], 422);
+            }
+        }
+
         $settings = WalletSetting::current();
 
         $amount = (float) $validated['amount'];
