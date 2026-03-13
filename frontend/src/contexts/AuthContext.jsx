@@ -124,12 +124,7 @@ export function AuthProvider({ children }) {
     setAvatarState(null); // always clear avatar on logout
   }, []);
 
-  // Normalize API avatar URL (backend may return http://localhost without port)
-  const apiAvatar = user?.avatar
-    ? user.avatar.replace('http://localhost/', 'http://localhost:8000/')
-    : null;
-
-  const displayAvatar = apiAvatar || avatar;
+  const displayAvatar = user?.avatar || avatar;
 
   const value = {
     user,

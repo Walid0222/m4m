@@ -517,7 +517,11 @@ export default function Navbar() {
                   >
                     <span className="w-8 h-8 rounded-full bg-m4m-purple text-white flex items-center justify-center text-sm font-bold overflow-hidden">
                       {avatar
-                        ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+                        ? <img
+                            src={user?.updated_at ? `${avatar}?v=${encodeURIComponent(user.updated_at)}` : avatar}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
                         : (user.name?.charAt(0)?.toUpperCase() || '?')
                       }
                     </span>
@@ -658,7 +662,11 @@ export default function Navbar() {
                   <div className="flex items-center gap-3 px-4 py-3 mb-1">
                     <span className="w-9 h-9 rounded-full bg-m4m-purple text-white flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
                       {avatar
-                        ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+                        ? <img
+                            src={user?.updated_at ? `${avatar}?v=${encodeURIComponent(user.updated_at)}` : avatar}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
                         : (user.name?.charAt(0)?.toUpperCase() || '?')
                       }
                     </span>

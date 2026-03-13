@@ -32,7 +32,7 @@ class SellerProfileController extends Controller
 
         $products = $seller->products()
             ->where('status', 'active')
-            ->with('seller:id,name,is_verified_seller,last_activity_at,vacation_mode')
+            ->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,vacation_mode')
             ->orderByDesc('is_pinned')
             ->latest()
             ->get();
@@ -42,6 +42,8 @@ class SellerProfileController extends Controller
         $data = [
             'id'               => $seller->id,
             'name'             => $seller->name,
+            'avatar'           => $seller->avatar,
+            'updated_at'       => $seller->updated_at?->toIso8601String(),
             'member_since'     => $seller->member_since,
             'is_verified_seller' => (bool) $seller->is_verified_seller,
             'last_activity_at' => $seller->last_activity_at?->toIso8601String(),

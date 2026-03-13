@@ -84,6 +84,24 @@ class User extends Authenticatable implements MustVerifyEmail
         });
     }
 
+    public function getAvatarAttribute($value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        // If already an absolute URL, return as is
+        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+            return $value;
+        }
+
+        try {
+            return \Illuminate\Support\Facades\Storage::disk('public')->url($value);
+        } catch (\Throwable $e) {
+            return $value;
+        }
+    }
+
     protected function casts(): array
     {
         return [

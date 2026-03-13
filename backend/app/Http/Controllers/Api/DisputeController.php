@@ -70,7 +70,7 @@ class DisputeController extends Controller
             SellerStat::firstOrCreate(['seller_id' => $sellerId])->increment('dispute_count');
         }
 
-        $dispute->load(['buyer:id,name', 'seller:id,name', 'order:id,order_number,total_amount']);
+        $dispute->load(['buyer:id,name', 'seller:id,name,avatar,updated_at', 'order:id,order_number,total_amount']);
         $dispute->buyer?->notify(new DisputeOpenedNotification($dispute));
         $dispute->seller?->notify(new DisputeOpenedNotification($dispute));
 
@@ -99,7 +99,7 @@ class DisputeController extends Controller
             : Dispute::where('buyer_id', $userId);
 
         $disputes = $query
-            ->with(['order:id,order_number,total_amount,status', 'buyer:id,name', 'seller:id,name'])
+            ->with(['order:id,order_number,total_amount,status', 'buyer:id,name', 'seller:id,name,avatar,updated_at'])
             ->latest()
             ->paginate($request->integer('per_page', 15));
 
@@ -116,7 +116,7 @@ class DisputeController extends Controller
             return $this->error('Forbidden.', 403);
         }
 
-        $dispute->load(['order:id,order_number,total_amount,status', 'buyer:id,name', 'seller:id,name']);
+        $dispute->load(['order:id,order_number,total_amount,status', 'buyer:id,name', 'seller:id,name,avatar,updated_at']);
 
         return $this->success($dispute);
     }

@@ -9,6 +9,7 @@ import {
   createDepositRequest,
   createWithdrawRequest,
   getWalletSettings,
+  getSellerEscrow,
   paginatedItems,
   getToken,
 } from '../services/api';
@@ -152,6 +153,7 @@ export default function WalletPage() {
   const [depositsVisible, setDepositsVisible] = useState(REQUESTS_PAGE_SIZE);
   const [withdrawalsVisible, setWithdrawalsVisible] = useState(REQUESTS_PAGE_SIZE);
 
+  const [escrowData, setEscrowData] = useState(null);
   const bal = Number(balance?.available_balance ?? balance?.balance ?? 0);
   const isSeller = user?.is_seller === true || user?.is_seller === 1;
 
@@ -193,6 +195,14 @@ export default function WalletPage() {
         setWalletSettingsError('Could not load withdrawal rules. You can still request withdrawals, but some limits may apply.');
       });
   }, []);
+
+  // Load escrow data (for sellers) so WalletPage matches SellerDashboard semantics
+  useEffect(() => {
+    if (!getToken() || !user?.is_seller) return;
+    getSellerEscrow()
+      .then((data) => setEscrowData(data))
+      .catch(() => setEscrowData(null));
+  }, [tick, user?.is_seller]);
 
   const handleDepositSubmitRequest = (e) => {
     e.preventDefault();
@@ -377,7 +387,11 @@ export default function WalletPage() {
                 </div>
               </div>
               <p className="text-lg font-bold text-amber-600">
-                {Number(balance?.processing_balance ?? 0).toFixed(2)} {CURRENCY}
+                {Number(
+                  isSeller
+                    ? (escrowData?.processing_escrow_balance ?? balance?.pending_escrow_balance ?? 0)
+                    : 0
+                ).toFixed(2)} {CURRENCY}
               </p>
             </div>
             <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -398,7 +412,11 @@ export default function WalletPage() {
                 </div>
               </div>
               <p className="text-lg font-bold text-red-600">
-                {Number(balance?.under_review_balance ?? 0).toFixed(2)} {CURRENCY}
+                {Number(
+                  isSeller
+                    ? (escrowData?.disputed_escrow_balance ?? 0)
+                    : 0
+                ).toFixed(2)} {CURRENCY}
               </p>
             </div>
           </div>

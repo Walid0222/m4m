@@ -154,8 +154,7 @@ export default function SellerProfilePage() {
               <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-m4m-purple text-white flex items-center justify-center text-2xl md:text-3xl font-bold shrink-0 overflow-hidden">
                 {seller?.avatar ? (
                   <img
-                    src={`${seller.avatar.replace('http://localhost/', 'http://localhost:8000/')}` +
-                      `?v=${seller.updated_at || Date.now()}`}
+                    src={`${seller.avatar}?v=${seller.updated_at || Date.now()}`}
                     alt="seller avatar"
                     className="w-full h-full object-cover"
                   />

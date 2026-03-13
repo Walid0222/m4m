@@ -160,9 +160,15 @@ export default function UserProfilePage() {
             {/* Avatar */}
             <div className="relative flex-shrink-0">
               <div className="w-18 h-18 w-[72px] h-[72px] rounded-full overflow-hidden bg-m4m-purple text-white flex items-center justify-center text-2xl font-bold border-4 border-white shadow">
-                {(avatarPreviewUrl || avatar) ? (
+                {avatarPreviewUrl ? (
                   <img
-                    src={avatarPreviewUrl || avatar}
+                    src={avatarPreviewUrl}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : user.avatar ? (
+                  <img
+                    src={`${user.avatar}?v=${user.updated_at || Date.now()}`}
                     alt="Profile"
                     className="w-full h-full object-cover"
                   />

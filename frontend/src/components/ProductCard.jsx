@@ -16,9 +16,7 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
   const isOutOfStock = Number(stock ?? 0) <= 0;
   const sellerName = seller?.name ?? 'Seller';
   const sellerDisplayName = seller?.username ?? seller?.name ?? 'Seller';
-  const rawSellerAvatar = seller?.avatar
-    ? seller.avatar.replace('http://localhost/', 'http://localhost:8000/')
-    : null;
+  const rawSellerAvatar = seller?.avatar || null;
   const sellerAvatarSrc = rawSellerAvatar
     ? `${rawSellerAvatar}?v=${seller?.updated_at || Date.now()}`
     : '/default-avatar.png';

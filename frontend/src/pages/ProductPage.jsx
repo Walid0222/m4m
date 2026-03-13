@@ -954,8 +954,7 @@ export default function ProductPage() {
                 <span className="w-10 h-10 rounded-full bg-m4m-purple text-white flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden">
                   {seller?.avatar ? (
                     <img
-                      src={`${seller.avatar.replace('http://localhost/', 'http://localhost:8000/')}` +
-                        `?v=${seller.updated_at || Date.now()}`}
+                      src={`${seller.avatar}?v=${seller.updated_at || Date.now()}`}
                       alt="seller avatar"
                       className="w-full h-full object-cover"
                     />

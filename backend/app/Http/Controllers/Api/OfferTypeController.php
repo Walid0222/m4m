@@ -87,7 +87,7 @@ class OfferTypeController extends Controller
         $products = Product::query()
             ->where('offer_type_id', $offer_type->id)
             ->where('status', 'active')
-            ->with('seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode')
+            ->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);

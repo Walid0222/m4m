@@ -29,7 +29,7 @@ class OrderController extends Controller
             ->orders()
             ->with([
                 'orderItems.product:id,name,slug,user_id,images,delivery_type',
-                'orderItems.product.seller:id,name,is_verified_seller',
+                'orderItems.product.seller:id,name,avatar,updated_at,is_verified_seller',
                 'dispute:id,order_id,status',
             ])
             ->latest()
@@ -66,7 +66,7 @@ class OrderController extends Controller
             'orderItems.product:id,name,slug,price,images,delivery_type,delivery_time',
             'orderItems',
             'buyer:id,name',
-            'seller:id,name',
+            'seller:id,name,avatar,updated_at',
             'dispute:id,order_id,status,reason,admin_decision,admin_note',
         ]);
 

@@ -186,11 +186,12 @@ class AuthController extends Controller
             'vacation_mode' => ['sometimes', 'boolean'],
         ]);
 
-        if (isset($validated['password'])) {
-            $validated['password'] = Hash::make($validated['password']);
-        }
+        if (array_key_exists('password', $validated)) {
+            if (! $request->filled('current_password') || ! Hash::check($request->input('current_password'), $user->password)) {
+                return $this->error('Current password is incorrect.', 422);
+            }
 
-        if (isset($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
             SecurityLogService::log($user, 'password_change', $request);
         }
 
@@ -221,7 +222,7 @@ class AuthController extends Controller
     private function userFields(User $user): array
     {
         $fields = $user->only([
-            'id', 'name', 'email', 'is_seller', 'is_admin',
+            'id', 'name', 'email', 'avatar', 'is_seller', 'is_admin',
             'is_verified_seller', 'is_banned', 'ban_type', 'banned_until',
             'ban_reason', 'warning_count', 'last_activity_at',
             'auto_reply_message', 'product_limit', 'limits_overridden',
@@ -231,11 +232,6 @@ class AuthController extends Controller
             'email_verified_at',
             'updated_at',
         ]);
-        if (array_key_exists('avatar', $user->getAttributes()) && $user->avatar) {
-            $fields['avatar'] = Storage::disk('public')->url($user->avatar);
-        } else {
-            $fields['avatar'] = $user->avatar;
-        }
         return $fields;
     }
 }

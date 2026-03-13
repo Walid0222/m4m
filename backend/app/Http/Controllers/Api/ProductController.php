@@ -27,7 +27,7 @@ class ProductController extends Controller
                 ->orderByDesc('is_pinned');
         }
 
-        $products = $query->with('seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode')
+        $products = $query->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
@@ -54,7 +54,7 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->where('status', 'active')
-            ->with('seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode')
+            ->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
@@ -83,7 +83,7 @@ class ProductController extends Controller
             $product->increment('views_last_3_days');
         }
         $product->load([
-            'seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode',
+            'seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode',
             'reviews.reviewer:id,name',
             'faqs',
         ]);
@@ -104,7 +104,7 @@ class ProductController extends Controller
         $query = Product::query()
             ->where('status', 'active')
             ->where('id', '!=', $product->id)
-            ->with('seller:id,name,is_verified_seller,last_activity_at,created_at,vacation_mode')
+            ->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
