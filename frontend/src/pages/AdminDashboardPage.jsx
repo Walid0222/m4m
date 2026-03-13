@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useMarketplaceSettings } from '../contexts/MarketplaceSettingsContext';
@@ -1696,6 +1697,14 @@ function DisputesPanel() {
                       <pre className="text-xs text-gray-800 whitespace-pre-wrap break-words font-mono">{d.order.delivery_content}</pre>
                     </div>
                   )}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    <Link
+                      to={`/disputes/${d.id}`}
+                      className="inline-block px-4 py-2 rounded-lg bg-gray-700 text-white text-sm font-semibold hover:bg-gray-800"
+                    >
+                      Investigate
+                    </Link>
+                  </div>
                   {!d.admin_decision && (
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -2169,11 +2178,19 @@ function MarketplaceSettingsPanel() {
 }
 
 /* ── Main admin page ──────────────────────────────────────────────────────── */
+const VALID_ADMIN_TABS = ['overview', 'deposits', 'escrow', 'withdrawals', 'reports', 'disputes', 'verification', 'service-requests', 'services', 'coupons', 'announcements', 'support', 'marketplace-settings'];
+
 export default function AdminDashboardPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [searchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(() => (VALID_ADMIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'overview'));
   const [refreshToken, setRefreshToken] = useState(0);
   const { tick } = useRefresh();
+
+  useEffect(() => {
+    if (VALID_ADMIN_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
+  }, [tabFromUrl]);
 
   if (!getToken()) {
     return (

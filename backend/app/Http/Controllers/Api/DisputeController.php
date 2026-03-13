@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\BuyerStat;
 use App\Models\Dispute;
+use App\Models\DisputeActivity;
 use App\Models\Order;
 use App\Models\SellerStat;
 use App\Notifications\DisputeOpenedNotification;
@@ -73,16 +74,32 @@ class DisputeController extends Controller
         $dispute->buyer?->notify(new DisputeOpenedNotification($dispute));
         $dispute->seller?->notify(new DisputeOpenedNotification($dispute));
 
+        DisputeActivity::create([
+            'dispute_id' => $dispute->id,
+            'user_id'    => $request->user()->id,
+            'type'       => 'dispute_opened',
+            'data'       => [
+                'order_id' => $dispute->order_id,
+            ],
+        ]);
+
         return $this->success($dispute, 'Dispute opened.', 201);
     }
 
     /**
-     * Buyer views their own disputes.
+     * List disputes for the current user (buyer or seller).
+     * Buyer: GET /disputes (default)
+     * Seller: GET /disputes?seller=1
      */
     public function index(Request $request): JsonResponse
     {
-        $disputes = Dispute::where('buyer_id', $request->user()->id)
-            ->with(['order:id,order_number,total_amount,status', 'seller:id,name'])
+        $userId = $request->user()->id;
+        $query = $request->boolean('seller')
+            ? Dispute::where('seller_id', $userId)
+            : Dispute::where('buyer_id', $userId);
+
+        $disputes = $query
+            ->with(['order:id,order_number,total_amount,status', 'buyer:id,name', 'seller:id,name'])
             ->latest()
             ->paginate($request->integer('per_page', 15));
 
@@ -102,5 +119,23 @@ class DisputeController extends Controller
         $dispute->load(['order:id,order_number,total_amount,status', 'buyer:id,name', 'seller:id,name']);
 
         return $this->success($dispute);
+    }
+
+    /**
+     * List activities for a dispute (buyer, seller, admin).
+     */
+    public function activities(Request $request, Dispute $dispute): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->is_admin && $dispute->buyer_id !== $user->id && $dispute->seller_id !== $user->id) {
+            return $this->error('Forbidden.', 403);
+        }
+
+        $activities = $dispute->activities()
+            ->orderBy('created_at')
+            ->with(['user:id,name'])
+            ->get(['id', 'dispute_id', 'user_id', 'type', 'data', 'created_at']);
+
+        return $this->success($activities);
     }
 }

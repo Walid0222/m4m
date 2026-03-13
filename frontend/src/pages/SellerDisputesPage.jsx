@@ -17,18 +17,22 @@ const STATUS_LABELS = {
   refunded:     'Refunded',
 };
 
-export default function DisputesPage() {
+export default function SellerDisputesPage() {
   const [disputes, setDisputes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { tick } = useRefresh();
 
   const fetchDisputes = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data = await getDisputes({ per_page: 50 });
-      setDisputes(paginatedItems(data) ?? []);
-    } catch {
+      const data = await getDisputes({ seller: 1, per_page: 50 });
+      const list = paginatedItems(data);
+      setDisputes(Array.isArray(list) ? list : []);
+    } catch (err) {
       setDisputes([]);
+      setError(err?.message ?? 'Failed to load disputes.');
     } finally {
       setLoading(false);
     }
@@ -38,31 +42,30 @@ export default function DisputesPage() {
     fetchDisputes();
   }, [fetchDisputes]);
 
-  // Auto-refresh disputes when global refresh tick advances
   useEffect(() => {
     fetchDisputes();
   }, [tick, fetchDisputes]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
-          <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Disputes</h1>
+            <p className="text-sm text-gray-500">Disputes related to your orders</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">My Disputes</h1>
-          <p className="text-sm text-gray-500">Track the status of your opened disputes</p>
-        </div>
-      </div>
-
-      {/* Info banner */}
-      <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 flex gap-3">
-        <svg className="w-5 h-5 shrink-0 mt-0.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p>M4M holds your payment securely until your order is completed. If you have an issue with a delivery, open a dispute from your order page and our team will review it within 24 hours.</p>
+        <Link
+          to="/seller-dashboard"
+          className="text-sm text-m4m-purple hover:underline"
+        >
+          ← Seller Dashboard
+        </Link>
       </div>
 
       {loading ? (
@@ -74,15 +77,30 @@ export default function DisputesPage() {
             </div>
           ))}
         </div>
+      ) : error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-12 text-center">
+          <svg className="w-12 h-12 mx-auto mb-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 className="text-lg font-semibold text-red-800 mb-1">Could not load disputes</h3>
+          <p className="text-red-700 text-sm mb-4">{error}</p>
+          <button
+            type="button"
+            onClick={() => fetchDisputes()}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700"
+          >
+            Try again
+          </button>
+        </div>
       ) : disputes.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-12 text-center">
           <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h3 className="text-lg font-semibold text-gray-700 mb-1">No disputes opened</h3>
-          <p className="text-gray-500 text-sm">If you experience an issue with a delivery, you can open a dispute from your order page.</p>
-          <Link to="/orders" className="mt-4 inline-block text-sm font-semibold text-m4m-purple hover:underline">
-            View my orders →
+          <h3 className="text-lg font-semibold text-gray-700 mb-1">No disputes</h3>
+          <p className="text-gray-500 text-sm">You have no disputes at the moment.</p>
+          <Link to="/seller-dashboard" className="mt-4 inline-block text-sm font-semibold text-m4m-purple hover:underline">
+            Back to dashboard
           </Link>
         </div>
       ) : (
@@ -107,26 +125,18 @@ export default function DisputesPage() {
                     Order: {dispute.order?.order_number ?? `#${dispute.order_id}`}
                   </p>
                   <p className="text-sm text-gray-600 mt-0.5">
-                    <span className="font-medium">Buyer reason:</span> {dispute.reason}
+                    <span className="font-medium">Buyer:</span> {dispute.buyer?.name ?? '—'}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    <span className="font-medium">Reason:</span> {dispute.reason}
                   </p>
                   {dispute.description && (
                     <p className="text-sm text-gray-500 mt-1 line-clamp-2">{dispute.description}</p>
                   )}
-                  {dispute.seller && (
-                    <p className="text-xs text-gray-400 mt-1">Seller: {dispute.seller.name}</p>
-                  )}
                   {dispute.admin_decision && (
                     <div className="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-700">
-                      <p className="font-medium mb-0.5">Our team reviewed the dispute.</p>
-                      <p className="mb-0.5">
-                        <span className="font-medium">Decision:</span>{' '}
-                        {dispute.admin_decision === 'refund_buyer' ? 'Buyer refunded' : 'Seller payment released'}
-                      </p>
-                      {dispute.admin_note && (
-                        <p className="mb-0.5">
-                          <span className="font-medium">Reason:</span> {dispute.admin_note}
-                        </p>
-                      )}
+                      <p className="font-medium mb-0.5">Decision: {dispute.admin_decision === 'refund_buyer' ? 'Buyer refunded' : 'Seller payment released'}</p>
+                      {dispute.admin_note && <p className="mb-0.5 text-gray-600">{dispute.admin_note}</p>}
                     </div>
                   )}
                 </div>
@@ -134,20 +144,18 @@ export default function DisputesPage() {
                   <p className="text-xs text-gray-400">
                     {dispute.created_at ? new Date(dispute.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : ''}
                   </p>
-                  <div className="mt-2 flex flex-col gap-1 items-end">
-                    <Link
-                      to={`/disputes/${dispute.id}`}
-                      className="text-xs font-semibold text-m4m-purple hover:underline"
-                    >
-                      View details →
-                    </Link>
-                    <Link
-                      to={`/orders/${dispute.order_id}`}
-                      className="text-xs text-gray-500 hover:underline"
-                    >
-                      View order
-                    </Link>
-                  </div>
+                  <Link
+                    to={`/disputes/${dispute.id}`}
+                    className="mt-2 inline-block px-4 py-2 rounded-lg text-sm font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark"
+                  >
+                    View dispute
+                  </Link>
+                  <Link
+                    to={`/orders/${dispute.order_id}`}
+                    className="mt-2 block text-xs text-gray-500 hover:underline"
+                  >
+                    View order
+                  </Link>
                 </div>
               </div>
             </div>

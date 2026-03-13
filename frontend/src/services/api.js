@@ -359,6 +359,32 @@ export function getDispute(id) {
   return api.get(`/disputes/${id}`).then(unwrap);
 }
 
+export function getDisputeActivities(disputeId) {
+  return api.get(`/disputes/${disputeId}/activities`).then(unwrap);
+}
+
+export function getDisputeMessages(disputeId) {
+  return api.get(`/disputes/${disputeId}/messages`).then(unwrap);
+}
+
+export function postDisputeMessage(disputeId, body) {
+  return api.post(`/disputes/${disputeId}/messages`, body).then(unwrap);
+}
+
+export function getDisputeEvidence(disputeId) {
+  return api.get(`/disputes/${disputeId}/evidence`).then(unwrap);
+}
+
+export function postDisputeEvidence(disputeId, formData) {
+  return api.post(`/disputes/${disputeId}/evidence`, formData).then(unwrap);
+}
+
+/** Fetch evidence file as blob (for images/files). */
+export function getDisputeEvidenceFile(disputeId, evidenceId) {
+  return api.get(`/disputes/${disputeId}/evidence/${evidenceId}/file`, { responseType: 'blob' })
+    .then((res) => res.data);
+}
+
 export function getAdminEscrow() {
   return api.get('/admin/escrow').then(unwrap);
 }
@@ -377,6 +403,10 @@ export function adminRefundOrderEscrow(orderId) {
 
 export function getAdminDisputes(params = {}) {
   return api.get('/admin/disputes', { params }).then(unwrap);
+}
+
+export function getAdminDispute(id) {
+  return api.get(`/admin/disputes/${id}`).then(unwrap);
 }
 
 export function resolveAdminDispute(id, body) {

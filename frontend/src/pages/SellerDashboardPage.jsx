@@ -44,6 +44,7 @@ const SECTIONS = [
   { id: 'overview', label: 'Overview', icon: 'chart' },
   { id: 'products', label: 'Products', icon: 'box' },
   { id: 'service-requests', label: 'My Service Requests', icon: 'request' },
+  { id: 'disputes', label: 'Disputes', icon: 'disputes', href: '/seller-disputes' },
   { id: 'orders', label: 'Orders', icon: 'order' },
   { id: 'settings', label: 'Settings', icon: 'settings' },
   { id: 'verification', label: 'Get Verified', icon: 'verify' },
@@ -291,7 +292,7 @@ export default function SellerDashboardPage() {
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [section, setSection] = useState(() => {
     const s = searchParams.get('section');
-    return SECTIONS.some((x) => x.id === s) ? s : 'overview';
+    return SECTIONS.some((x) => x.id === s && !x.href) ? s : 'overview';
   });
   const [sellerStats, setSellerStats] = useState(null);
   const [autoReplyMsg, setAutoReplyMsg] = useState('');
@@ -953,17 +954,13 @@ export default function SellerDashboardPage() {
           <p className="text-sm text-m4m-gray-500 mt-0.5">{user.name}</p>
         </div>
         <nav className="p-2">
-          {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setSection(s.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-colors ${
-                section === s.id
-                  ? 'bg-m4m-purple text-white'
-                  : 'text-m4m-gray-700 hover:bg-m4m-gray-100'
-              }`}
-            >
+          {SECTIONS.map((s) => {
+            const isActive = s.href ? false : section === s.id;
+            const className = `w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-colors ${
+              isActive ? 'bg-m4m-purple text-white' : 'text-m4m-gray-700 hover:bg-m4m-gray-100'
+            }`;
+            const content = (
+              <>
               {s.id === 'overview' && (
                 <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -979,6 +976,11 @@ export default function SellerDashboardPage() {
                   <circle cx="12" cy="12" r="9" strokeWidth={2} />
                   <circle cx="12" cy="12" r="3" strokeWidth={2} />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7.05 7.05L9.17 9.17M14.83 14.83L16.95 16.95M7.05 16.95L9.17 14.83M14.83 9.17L16.95 7.05" />
+                </svg>
+              )}
+              {s.id === 'disputes' && (
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
               )}
               {s.id === 'orders' && (
@@ -997,8 +999,18 @@ export default function SellerDashboardPage() {
                 </svg>
               )}
               <span className="flex-1">{s.label}</span>
-            </button>
-          ))}
+              </>
+            );
+            return s.href ? (
+              <Link key={s.id} to={s.href} className={className}>
+                {content}
+              </Link>
+            ) : (
+              <button key={s.id} type="button" onClick={() => setSection(s.id)} className={className}>
+                {content}
+              </button>
+            );
+          })}
         </nav>
         <div className="p-4 border-t border-m4m-gray-200">
           <Link
@@ -2256,7 +2268,7 @@ export default function SellerDashboardPage() {
                           <span className="font-mono font-semibold text-m4m-black">
                             {order.order_number ?? `M4M-${String(order.id).padStart(6, '0')}`}
                           </span>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             {hasInstantItem && (
                               <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">⚡ Instant</span>
                             )}
@@ -2271,6 +2283,14 @@ export default function SellerDashboardPage() {
                             <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${style.badge}`}>
                               {style.label}
                             </span>
+                            {(order.dispute || status === 'dispute' || status === 'disputed') && order.dispute?.id && (
+                              <Link
+                                to={`/disputes/${order.dispute.id}`}
+                                className="px-3 py-1 rounded-full text-sm font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark"
+                              >
+                                View dispute
+                              </Link>
+                            )}
                           </div>
                         </div>
                         <p className="mt-2 text-m4m-black line-clamp-2">{productTitles}</p>
@@ -2304,7 +2324,7 @@ export default function SellerDashboardPage() {
                             return null;
                           })()
                         )}
-                        {status === 'dispute' && (
+                        {(order.dispute || status === 'dispute' || status === 'disputed') && (
                           <div className={`mt-4 p-4 rounded-xl border ${
                             order.escrow_status === 'released'
                               ? 'bg-green-50 border-green-200'
@@ -2335,6 +2355,14 @@ export default function SellerDashboardPage() {
                               <p className="mt-2 pt-2 border-t border-gray-200 text-gray-600 italic">
                                 Admin note: {order.dispute.admin_note}
                               </p>
+                            )}
+                            {order.dispute?.id && (
+                              <Link
+                                to={`/disputes/${order.dispute.id}`}
+                                className="mt-3 inline-block px-4 py-2 rounded-lg text-sm font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark"
+                              >
+                                View dispute
+                              </Link>
                             )}
                           </div>
                         )}

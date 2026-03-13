@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Dispute extends Model
 {
@@ -48,5 +49,30 @@ class Dispute extends Model
     public function resolvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'resolved_by');
+    }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(DisputeMessage::class);
+    }
+
+    public function evidences(): HasMany
+    {
+        return $this->hasMany(DisputeEvidence::class, 'dispute_id');
+    }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(DisputeActivity::class)->orderBy('created_at');
+    }
+
+    public function publicMessages(): HasMany
+    {
+        return $this->messages()->where('is_internal', false);
+    }
+
+    public function internalMessages(): HasMany
+    {
+        return $this->messages()->where('is_internal', true);
     }
 }

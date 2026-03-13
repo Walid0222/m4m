@@ -192,6 +192,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Dispute::class, 'buyer_id');
     }
 
+    public function disputeMessages(): HasMany
+    {
+        return $this->hasMany(DisputeMessage::class);
+    }
+
+    public function disputeEvidences(): HasMany
+    {
+        return $this->hasMany(DisputeEvidence::class);
+    }
+
     /** Warnings issued to this seller. */
     public function warnings(): HasMany
     {

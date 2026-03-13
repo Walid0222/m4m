@@ -19,6 +19,8 @@ import UserProfilePage from './pages/UserProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import FavoritesPage from './pages/FavoritesPage';
 import DisputesPage from './pages/DisputesPage';
+import SellerDisputesPage from './pages/SellerDisputesPage';
+import DisputeDetailPage from './pages/DisputeDetailPage';
 import HelpPage from './pages/HelpPage';
 import MarketplaceRulesPage from './pages/MarketplaceRulesPage';
 
@@ -95,6 +97,14 @@ export default function App() {
               }
             />
             <Route
+              path="seller-disputes"
+              element={
+                <SellerRoute>
+                  <SellerDisputesPage />
+                </SellerRoute>
+              }
+            />
+            <Route
               path="admin"
               element={
                 <AdminRoute>
@@ -115,6 +125,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <DisputesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="disputes/:id"
+              element={
+                <ProtectedRoute>
+                  <DisputeDetailPage />
                 </ProtectedRoute>
               }
             />

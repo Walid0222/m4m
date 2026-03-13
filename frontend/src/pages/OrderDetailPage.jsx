@@ -132,12 +132,16 @@ export default function OrderDetailPage() {
     setDisputeSubmitting(true);
     setDisputeError('');
     try {
-      await openDispute({
+      const dispute = await openDispute({
         order_id: order.id,
         reason: disputeReason,
         description: disputeDesc,
       });
       setDisputeOpen(false);
+      if (dispute?.id) {
+        navigate(`/disputes/${dispute.id}`);
+        return;
+      }
       const updated = await getOrder(id);
       setOrder(updated);
     } catch (err) {

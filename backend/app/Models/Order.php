@@ -102,4 +102,10 @@ class Order extends Model
     {
         return $this->hasOne(Dispute::class);
     }
+
+    /** All disputes associated with this order. */
+    public function disputes(): HasMany
+    {
+        return $this->hasMany(Dispute::class);
+    }
 }

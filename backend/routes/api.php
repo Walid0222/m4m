@@ -22,6 +22,8 @@ use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\DepositRequestController;
 use App\Http\Controllers\Api\DisputeController;
+use App\Http\Controllers\Api\DisputeEvidenceController;
+use App\Http\Controllers\Api\DisputeMessageController;
 use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Auth\EmailVerificationController;
@@ -56,6 +58,23 @@ RateLimiter::for('auth', function (Request $request) {
     return Limit::perMinute(5)->by(
         $request->ip() . '|' . (string) $request->input('email')
     );
+});
+
+// Throttle high-churn dispute endpoints to reduce spam / abuse
+RateLimiter::for('dispute-messages', function (Request $request) {
+    $userKey = optional($request->user())->id ?: 'guest';
+    return [
+        Limit::perMinute(30)->by($userKey),
+        Limit::perMinute(60)->by($request->ip()),
+    ];
+});
+
+RateLimiter::for('dispute-evidence', function (Request $request) {
+    $userKey = optional($request->user())->id ?: 'guest';
+    return [
+        Limit::perMinute(10)->by($userKey),
+        Limit::perMinute(20)->by($request->ip()),
+    ];
 });
 
 Route::prefix('v1')->group(function () {
@@ -150,10 +169,18 @@ Route::prefix('v1')->group(function () {
             // Coupon preview (apply at checkout)
             Route::post('/coupons/preview', [CouponController::class, 'preview']);
 
-            // Disputes (buyer)
+            // Disputes (buyer, seller, admin)
             Route::post('/disputes',          [DisputeController::class, 'store']);
             Route::get('/disputes',           [DisputeController::class, 'index']);
             Route::get('/disputes/{dispute}', [DisputeController::class, 'show']);
+            Route::get('/disputes/{dispute}/activities', [DisputeController::class, 'activities']);
+            Route::get('/disputes/{dispute}/messages',   [DisputeMessageController::class, 'index']);
+            Route::post('/disputes/{dispute}/messages',  [DisputeMessageController::class, 'store'])
+                ->middleware('throttle:dispute-messages');
+            Route::get('/disputes/{dispute}/evidence',              [DisputeEvidenceController::class, 'index']);
+            Route::post('/disputes/{dispute}/evidence',             [DisputeEvidenceController::class, 'store'])
+                ->middleware('throttle:dispute-evidence');
+            Route::get('/disputes/{dispute}/evidence/{evidence}/file', [DisputeEvidenceController::class, 'showFile']);
 
             // Reviews
             Route::post('/products/{product}/reviews', [ReviewController::class, 'store']);
