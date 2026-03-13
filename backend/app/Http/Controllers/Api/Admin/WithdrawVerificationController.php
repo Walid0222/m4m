@@ -9,6 +9,7 @@ use App\Notifications\WithdrawApprovedNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class WithdrawVerificationController extends Controller
 {
@@ -27,6 +28,7 @@ class WithdrawVerificationController extends Controller
         $validated = $request->validate([
             'action' => ['required', 'in:approve,reject'],
             'rejection_reason' => ['nullable', 'string', 'max:500'],
+            'receipt' => ['nullable', 'image', 'max:4096'],
         ]);
 
         if ($validated['action'] === 'reject') {
@@ -43,8 +45,13 @@ class WithdrawVerificationController extends Controller
             return $this->success($withdrawRequest->fresh(), 'Withdrawal request rejected.');
         }
 
+        $receiptPath = null;
+        if ($request->hasFile('receipt')) {
+            $receiptPath = $request->file('receipt')->store('withdraw_receipts', 'public');
+        }
+
         try {
-            DB::transaction(function () use (&$withdrawRequest, $validated) {
+            DB::transaction(function () use (&$withdrawRequest, $validated, $receiptPath) {
                 // Lock the withdraw request row and re-check status inside the transaction
                 $withdrawRequest = WithdrawRequest::whereKey($withdrawRequest->id)->lockForUpdate()->first();
                 if (! $withdrawRequest || $withdrawRequest->status !== 'pending') {
@@ -70,6 +77,7 @@ class WithdrawVerificationController extends Controller
                 $withdrawRequest->update([
                     'status' => 'completed',
                     'processed_at' => now(),
+                    'receipt_path' => $receiptPath ?? $withdrawRequest->receipt_path,
                 ]);
 
                 $wallet->decrement('balance', $amount);
@@ -102,6 +110,12 @@ class WithdrawVerificationController extends Controller
             $withdrawRequest->currency ?? 'USD'
         ));
 
-        return $this->success($withdrawRequest->fresh(['user:id,name,email']), 'Withdrawal approved and processed.');
+        $withdrawRequest = $withdrawRequest->fresh(['user:id,name,email']);
+        $data = $withdrawRequest->toArray();
+        $data['receipt_url'] = $withdrawRequest->receipt_path
+            ? Storage::disk('public')->url($withdrawRequest->receipt_path)
+            : null;
+
+        return $this->success($data, 'Withdrawal approved and processed.');
     }
 }

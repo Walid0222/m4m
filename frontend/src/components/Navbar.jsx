@@ -54,7 +54,8 @@ export default function Navbar() {
     try {
       const d = await getWallet();
       if (!cancelled && d != null) {
-        setWalletBalance(d.balance);
+        const available = d.available_balance ?? d.balance;
+        setWalletBalance(available);
       }
     } catch {
       // ignore; wallet can be refreshed again later
@@ -108,7 +109,8 @@ export default function Navbar() {
   useEffect(() => {
     if (!tick) return;
     refreshNotifications();
-  }, [tick, refreshNotifications]);
+    refreshWallet();
+  }, [tick, refreshNotifications, refreshWallet]);
 
   useEffect(() => {
     if (notificationsOpen && user && getToken()) {

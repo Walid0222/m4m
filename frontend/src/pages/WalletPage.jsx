@@ -258,6 +258,14 @@ export default function WalletPage() {
       setWithdrawError('Insufficient balance.');
       return;
     }
+    if (!user?.two_factor_enabled_at && !withdrawPassword.trim()) {
+      setWithdrawError('Please enter your current password.');
+      return;
+    }
+    if (user?.two_factor_enabled_at && !withdraw2FACode.trim()) {
+      setWithdrawError('Please enter your 2FA code.');
+      return;
+    }
     if (walletSettings) {
       const { min_withdraw_amount, max_withdraw_amount } = walletSettings;
       if (min_withdraw_amount && amount < Number(min_withdraw_amount)) {
@@ -270,8 +278,6 @@ export default function WalletPage() {
       }
     }
     setWithdrawError('');
-    setWithdrawPassword('');
-    setWithdraw2FACode('');
     setWithdrawConfirmPending(true);
   };
 
@@ -284,12 +290,12 @@ export default function WalletPage() {
     setWithdrawSubmitting(true);
     setWithdrawError('');
     try {
+      console.log('withdrawPassword:', withdrawPassword);
       await createWithdrawRequest({
         amount,
         currency: CURRENCY,
         payment_details: withdrawDetails.trim(),
-        current_password: user?.two_factor_enabled_at ? undefined : withdrawPassword,
-        two_factor_code: user?.two_factor_enabled_at ? withdraw2FACode : undefined,
+        current_password: withdrawPassword,
       });
       setWithdrawAmount('');
       setWithdrawDetails('');
@@ -431,6 +437,31 @@ export default function WalletPage() {
                 ).toFixed(2)} {CURRENCY}
               </p>
             </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className="text-xs font-semibold text-gray-700">Withdraw under review</p>
+                <div className="relative group">
+                  <button
+                    type="button"
+                    className="w-4 h-4 rounded-full bg-gray-100 text-gray-600 text-[10px] flex items-center justify-center hover:bg-m4m-purple/10 hover:text-m4m-purple transition-colors"
+                    aria-label="Withdraw under review explanation"
+                  >
+                    ?
+                  </button>
+                  <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-60 bg-gray-900 text-white text-[11px] rounded-xl px-3 py-2 shadow-lg z-30 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity text-left leading-relaxed">
+                    Total amount of withdrawal requests that are still pending review by M4M administration.
+                    <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
+                  </div>
+                </div>
+              </div>
+              <p className="text-lg font-bold text-blue-600">
+                {Number(
+                  isSeller
+                    ? (balance?.withdraw_under_review ?? 0)
+                    : 0
+                ).toFixed(2)} {CURRENCY}
+              </p>
+            </div>
           </div>
         )}
         {!isSeller && (
@@ -505,9 +536,25 @@ export default function WalletPage() {
               <ul className="space-y-3">
                 {visibleWithdrawals.map((w) => (
                   <li key={w.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-wrap items-center gap-3">
-                    <span className="font-semibold text-gray-900 text-sm">{Number(w.amount).toFixed(2)} {CURRENCY}</span>
+                    <span className="font-semibold text-gray-900 text-sm">
+                      {Number(w.amount).toFixed(2)} {CURRENCY}
+                    </span>
                     <StatusBadge status={w.status} />
-                    {w.created_at && <span className="text-xs text-gray-400 ml-auto">{new Date(w.created_at).toLocaleString()}</span>}
+                    {w.receipt_url && w.status && (w.status || '').toLowerCase() === 'completed' && (
+                      <a
+                        href={w.receipt_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-medium text-m4m-purple hover:underline"
+                      >
+                        View receipt
+                      </a>
+                    )}
+                    {w.created_at && (
+                      <span className="text-xs text-gray-400 ml-auto">
+                        {new Date(w.created_at).toLocaleString()}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -809,6 +856,7 @@ export default function WalletPage() {
                     onChange={(e) => setWithdraw2FACode(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
                     placeholder="123456"
+                    required={user?.two_factor_enabled_at}
                   />
                 </div>
               ) : (
@@ -823,6 +871,7 @@ export default function WalletPage() {
                     onChange={(e) => setWithdrawPassword(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
                     placeholder="••••••••"
+                    required={!user?.two_factor_enabled_at}
                   />
                 </div>
               )}

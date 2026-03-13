@@ -418,7 +418,8 @@ export default function SellerDashboardPage() {
     if (!getToken()) return;
     try {
       const data = await getWallet();
-      setWalletBalance(data?.balance ?? 0);
+      const available = data?.available_balance ?? data?.balance ?? 0;
+      setWalletBalance(available);
     } catch {
       setWalletBalance(0);
     }

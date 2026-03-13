@@ -72,6 +72,7 @@ class WalletController extends Controller
             'available_balance' => $available,
             'processing_balance' => $pendingWithdrawals,
             'under_review_balance' => $pendingDeposits,
+            'withdraw_under_review' => $pendingWithdrawals,
             'currency' => $wallet->currency ?? 'USD',
             'transactions' => $transactions,
             'pending_escrow_balance' => $pendingEscrow,

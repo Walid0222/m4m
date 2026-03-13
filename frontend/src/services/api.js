@@ -656,8 +656,19 @@ export function getAdminWithdrawRequests() {
   return api.get('/admin/withdraw-requests').then(unwrap);
 }
 
-export function verifyAdminWithdraw(withdrawId, action) {
-  return api.patch(`/admin/withdraw-requests/${withdrawId}/verify`, { action }).then(() => {});
+export function verifyAdminWithdraw(withdrawId, { action, receipt } = {}) {
+  const formData = new FormData();
+  formData.append('action', action);
+  if (receipt) {
+    formData.append('receipt', receipt);
+  }
+  return api
+    .patch(`/admin/withdraw-requests/${withdrawId}/verify`, formData, {
+      headers: {
+        'Content-Type': false,
+      },
+    })
+    .then(() => {});
 }
 
 // --- Reports (client-side store, submitted to /reports if backend exists) ---

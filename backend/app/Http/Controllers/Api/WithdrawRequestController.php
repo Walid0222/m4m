@@ -23,6 +23,7 @@ class WithdrawRequestController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        \Log::info('Withdraw request payload', $request->all());
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
             'currency' => ['sometimes', 'string', 'size:3'],

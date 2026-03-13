@@ -185,6 +185,7 @@ function WithdrawalsPanel() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState(null);
+   const [selectedReceipt, setSelectedReceipt] = useState({});
 
   useEffect(() => {
     let c = false;
@@ -196,9 +197,14 @@ function WithdrawalsPanel() {
 
   const handle = async (id, action) => {
     try {
-      await verifyAdminWithdraw(id, action);
+      await verifyAdminWithdraw(id, { action, receipt: selectedReceipt[id] });
       setItems((w) => w.filter((x) => x.id !== id));
       setFlash({ type: 'success', text: action === 'approve' ? 'Withdrawal approved.' : 'Withdrawal rejected.' });
+      setSelectedReceipt((prev) => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
     } catch { setFlash({ type: 'error', text: 'Action failed.' }); }
   };
 
@@ -212,23 +218,69 @@ function WithdrawalsPanel() {
         <div className="overflow-x-auto rounded-xl border border-gray-200">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
-              <tr>{['User', 'Amount', 'Payment details', 'Date', 'Actions'].map((h) => <th key={h} className="px-4 py-3 text-left font-semibold text-gray-600">{h}</th>)}</tr>
+              <tr>
+                {['User', 'Amount', 'Payment details', 'Date', 'Receipt', 'Actions'].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left font-semibold text-gray-600">
+                    {h}
+                  </th>
+                ))}
+              </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
-              {items.map((w) => (
-                <tr key={w.id}>
-                  <td className="px-4 py-3">{w.user?.name ?? w.user?.email ?? '—'}</td>
-                  <td className="px-4 py-3 font-medium">{Number(w.amount).toFixed(2)} MAD</td>
-                  <td className="px-4 py-3 text-gray-500 max-w-xs truncate" title={w.payment_details}>{w.payment_details || '—'}</td>
-                  <td className="px-4 py-3 text-gray-500">{w.created_at ? new Date(w.created_at).toLocaleDateString() : '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <button onClick={() => handle(w.id, 'approve')} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors">Approve</button>
-                      <button onClick={() => handle(w.id, 'reject')} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">Reject</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                {items.map((w) => {
+                  const file = selectedReceipt[w.id];
+                  return (
+                    <tr key={w.id}>
+                      <td className="px-4 py-3">{w.user?.name ?? w.user?.email ?? '—'}</td>
+                      <td className="px-4 py-3 font-medium">{Number(w.amount).toFixed(2)} MAD</td>
+                      <td className="px-4 py-3 text-gray-500 max-w-xs truncate" title={w.payment_details}>
+                        {w.payment_details || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500">
+                        {w.created_at ? new Date(w.created_at).toLocaleDateString() : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-gray-600">
+                            <span className="block mb-1">Upload receipt</span>
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/jpg"
+                              onChange={(e) =>
+                                setSelectedReceipt((prev) => ({
+                                  ...prev,
+                                  [w.id]: e.target.files?.[0] || undefined,
+                                }))
+                              }
+                              className="block text-xs text-gray-500"
+                            />
+                          </label>
+                          {file && (
+                            <span className="text-[11px] text-gray-500 truncate max-w-[180px]">
+                              {file.name}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handle(w.id, 'approve')}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handle(w.id, 'reject')}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
