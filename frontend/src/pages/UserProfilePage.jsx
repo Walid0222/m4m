@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../contexts/AuthContext';
 import { getWallet, getOrders, paginatedItems, getToken, api, uploadProfileAvatar } from '../services/api';
 import { getBuyerPurchaseBadge } from '../lib/sellerBadge';
@@ -51,6 +52,7 @@ export default function UserProfilePage() {
   const [emailValue, setEmailValue] = useState('');
   const [emailSubmitting, setEmailSubmitting] = useState(false);
   const [emailMsg, setEmailMsg] = useState(null);
+  const [emailChangeConfirm, setEmailChangeConfirm] = useState(false);
   const [emailPassword, setEmailPassword] = useState('');
   const [email2FACode, setEmail2FACode] = useState('');
 
@@ -286,7 +288,14 @@ export default function UserProfilePage() {
               {emailMsg.text}
             </div>
           )}
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!emailValue.trim() || emailValue === user?.email) return;
+              setEmailChangeConfirm(true);
+            }}
+            className="space-y-4"
+          >
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">New email address</label>
               <input
@@ -326,6 +335,39 @@ export default function UserProfilePage() {
               {emailSubmitting ? 'Saving…' : 'Update email'}
             </button>
           </form>
+          {emailChangeConfirm && (
+            <ConfirmModal
+              title="Confirm email change"
+              message={`Change your email to ${emailValue.trim()}? A verification email will be sent to confirm the new address.`}
+              confirmLabel="Confirm"
+              onConfirm={async () => {
+                setEmailChangeConfirm(false);
+                setEmailSubmitting(true);
+                setEmailMsg(null);
+                try {
+                  await updateProfile({
+                    email: emailValue.trim(),
+                    current_password: user?.two_factor_enabled_at ? undefined : emailPassword,
+                    two_factor_code: user?.two_factor_enabled_at ? email2FACode : undefined,
+                  });
+                  setEmailMsg({
+                    type: 'success',
+                    text: 'Verification email sent. Please check your inbox to confirm your new email address.',
+                  });
+                  setEmailPassword('');
+                  setEmail2FACode('');
+                } catch (err) {
+                  setEmailMsg({
+                    type: 'error',
+                    text: err.message || 'Failed to update email.',
+                  });
+                } finally {
+                  setEmailSubmitting(false);
+                }
+              }}
+              onCancel={() => setEmailChangeConfirm(false)}
+            />
+          )}
         </div>
       )}
 

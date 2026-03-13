@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api, enable2FA, confirm2FA, disable2FA } from '../services/api';
+import ConfirmModal from '../components/ConfirmModal';
 import { useRefresh } from '../contexts/RefreshContext';
 
 async function updateMe(body) {
@@ -24,6 +25,7 @@ export default function SettingsPage() {
   const [twoFADisablePw, setTwoFADisablePw] = useState('');
   const [twoFADisableCode, setTwoFADisableCode] = useState('');
   const [twoFAMessage, setTwoFAMessage] = useState(null);
+  const [disable2FAConfirm, setDisable2FAConfirm] = useState(false);
 
   useEffect(() => {
     const isBuyer = user && !user.is_admin && !user.is_seller;
@@ -266,22 +268,41 @@ export default function SettingsPage() {
               </div>
               <button
                 type="button"
-                onClick={async () => {
-                  setTwoFAMessage(null);
-                  try {
-                    await disable2FA({ password: twoFADisablePw, code: twoFADisableCode });
-                    await refreshUser();
-                    setTwoFAMessage({ type: 'success', text: 'Two-factor authentication disabled.' });
-                    setTwoFADisablePw('');
-                    setTwoFADisableCode('');
-                  } catch (e) {
-                    setTwoFAMessage({ type: 'error', text: e.message || 'Failed to disable 2FA.' });
+                onClick={() => {
+                  if (!twoFADisablePw.trim() || !twoFADisableCode.trim()) {
+                    setTwoFAMessage({ type: 'error', text: 'Enter password and authenticator code first.' });
+                    return;
                   }
+                  setTwoFAMessage(null);
+                  setDisable2FAConfirm(true);
                 }}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 text-red-700 text-sm font-semibold border border-red-200 hover:bg-red-100"
               >
                 Disable 2FA
               </button>
+              {disable2FAConfirm && (
+                <ConfirmModal
+                  title="Disable two-factor authentication"
+                  message="Are you sure you want to disable 2FA? Your account will be less secure. You can re-enable it anytime from this page."
+                  confirmLabel="Disable 2FA"
+                  cancelLabel="Cancel"
+                  confirmDanger
+                  onConfirm={async () => {
+                    setDisable2FAConfirm(false);
+                    setTwoFAMessage(null);
+                    try {
+                      await disable2FA({ password: twoFADisablePw, code: twoFADisableCode });
+                      await refreshUser();
+                      setTwoFAMessage({ type: 'success', text: 'Two-factor authentication disabled.' });
+                      setTwoFADisablePw('');
+                      setTwoFADisableCode('');
+                    } catch (e) {
+                      setTwoFAMessage({ type: 'error', text: e.message || 'Failed to disable 2FA.' });
+                    }
+                  }}
+                  onCancel={() => setDisable2FAConfirm(false)}
+                />
+              )}
             </div>
           )}
         </div>

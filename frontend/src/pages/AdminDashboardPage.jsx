@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
 import { useMarketplaceSettings } from '../contexts/MarketplaceSettingsContext';
@@ -107,6 +108,7 @@ function DepositsPanel() {
   const [deposits, setDeposits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState(null);
+  const [confirm, setConfirm] = useState(null); // { id, action }
 
   useEffect(() => {
     let c = false;
@@ -121,6 +123,7 @@ function DepositsPanel() {
       await verifyAdminDeposit(id, action);
       setDeposits((d) => d.filter((x) => x.id !== id));
       setFlash({ type: 'success', text: action === 'approve' ? 'Deposit approved.' : 'Deposit rejected.' });
+      setConfirm(null);
     } catch { setFlash({ type: 'error', text: 'Action failed.' }); }
   };
 
@@ -129,6 +132,19 @@ function DepositsPanel() {
   return (
     <>
       <Flash msg={flash} />
+      {confirm && (
+        <ConfirmModal
+          title={confirm.action === 'approve' ? 'Approve deposit' : 'Reject deposit'}
+          message={
+            confirm.action === 'approve'
+              ? 'Are you sure you want to approve this deposit? Funds will be credited to the user\'s wallet.'
+              : 'Are you sure you want to reject this deposit request?'
+          }
+          confirmLabel={confirm.action === 'approve' ? 'Approve' : 'Reject'}
+          onConfirm={() => handle(confirm.id, confirm.action)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
       <h2 className="text-base font-semibold text-gray-900 mb-4">Deposit requests</h2>
       {deposits.length === 0 ? <p className="text-gray-400 text-sm">No deposit requests.</p> : (
         <div className="overflow-x-auto rounded-xl border border-gray-200">
@@ -166,8 +182,8 @@ function DepositsPanel() {
                   <td className="px-4 py-3 text-gray-500">{d.created_at ? new Date(d.created_at).toLocaleDateString() : '—'}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <button onClick={() => handle(d.id, 'approve')} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors">Approve</button>
-                      <button onClick={() => handle(d.id, 'reject')} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">Reject</button>
+                      <button onClick={() => setConfirm({ id: d.id, action: 'approve' })} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors">Approve</button>
+                      <button onClick={() => setConfirm({ id: d.id, action: 'reject' })} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors">Reject</button>
                     </div>
                   </td>
                 </tr>
@@ -185,7 +201,8 @@ function WithdrawalsPanel() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState(null);
-   const [selectedReceipt, setSelectedReceipt] = useState({});
+  const [selectedReceipt, setSelectedReceipt] = useState({});
+  const [confirm, setConfirm] = useState(null); // { id, action }
 
   useEffect(() => {
     let c = false;
@@ -200,11 +217,8 @@ function WithdrawalsPanel() {
       await verifyAdminWithdraw(id, { action, receipt: selectedReceipt[id] });
       setItems((w) => w.filter((x) => x.id !== id));
       setFlash({ type: 'success', text: action === 'approve' ? 'Withdrawal approved.' : 'Withdrawal rejected.' });
-      setSelectedReceipt((prev) => {
-        const copy = { ...prev };
-        delete copy[id];
-        return copy;
-      });
+      setSelectedReceipt((prev) => { const copy = { ...prev }; delete copy[id]; return copy; });
+      setConfirm(null);
     } catch { setFlash({ type: 'error', text: 'Action failed.' }); }
   };
 
@@ -213,6 +227,19 @@ function WithdrawalsPanel() {
   return (
     <>
       <Flash msg={flash} />
+      {confirm && (
+        <ConfirmModal
+          title={confirm.action === 'approve' ? 'Approve withdrawal' : 'Reject withdrawal'}
+          message={
+            confirm.action === 'approve'
+              ? 'Are you sure you want to approve this withdrawal? This will deduct funds from the seller\'s wallet.'
+              : 'Are you sure you want to reject this withdrawal request?'
+          }
+          confirmLabel={confirm.action === 'approve' ? 'Approve' : 'Reject'}
+          onConfirm={() => handle(confirm.id, confirm.action)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
       <h2 className="text-base font-semibold text-gray-900 mb-4">Withdraw requests</h2>
       {items.length === 0 ? <p className="text-gray-400 text-sm">No pending withdrawals.</p> : (
         <div className="overflow-x-auto rounded-xl border border-gray-200">
@@ -265,13 +292,13 @@ function WithdrawalsPanel() {
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
                           <button
-                            onClick={() => handle(w.id, 'approve')}
+                            onClick={() => setConfirm({ id: w.id, action: 'approve' })}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
                           >
                             Approve
                           </button>
                           <button
-                            onClick={() => handle(w.id, 'reject')}
+                            onClick={() => setConfirm({ id: w.id, action: 'reject' })}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
                           >
                             Reject
@@ -295,6 +322,7 @@ function EscrowPanel() {
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState(null);
   const [acting, setActing] = useState(null);
+  const [confirm, setConfirm] = useState(null); // { orderId, action: 'release'|'hold'|'refund' }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -313,6 +341,7 @@ function EscrowPanel() {
       await adminReleaseOrderEscrow(orderId);
       setFlash({ type: 'success', text: 'Escrow released.' });
       load();
+      setConfirm(null);
     } catch { setFlash({ type: 'error', text: 'Release failed.' }); }
     finally { setActing(null); }
   };
@@ -323,8 +352,33 @@ function EscrowPanel() {
       await adminHoldOrderEscrow(orderId);
       setFlash({ type: 'success', text: 'Release extended by 48 hours.' });
       load();
+      setConfirm(null);
     } catch { setFlash({ type: 'error', text: 'Hold failed.' }); }
     finally { setActing(null); }
+  };
+
+  const handleRefund = async (orderId) => {
+    setActing(orderId);
+    try {
+      await adminRefundOrderEscrow(orderId);
+      setFlash({ type: 'success', text: 'Buyer refunded.' });
+      load();
+      setConfirm(null);
+    } catch { setFlash({ type: 'error', text: 'Refund failed.' }); }
+    finally { setActing(null); }
+  };
+
+  const runEscrowAction = () => {
+    if (!confirm) return;
+    if (confirm.action === 'release') handleRelease(confirm.orderId);
+    else if (confirm.action === 'hold') handleHold(confirm.orderId);
+    else if (confirm.action === 'refund') handleRefund(confirm.orderId);
+  };
+
+  const ESCROW_MESSAGES = {
+    release: 'This action will release funds to the seller.',
+    hold: 'Release will be extended by 48 hours. Use this if the order needs more time.',
+    refund: 'Are you sure you want to refund the buyer? Funds will be returned and the seller will not receive payment.',
   };
 
   if (loading) return <p className="text-gray-400 text-sm">Loading…</p>;
@@ -336,6 +390,17 @@ function EscrowPanel() {
   return (
     <>
       <Flash msg={flash} />
+      {confirm && (
+        <ConfirmModal
+          title={confirm.action === 'release' ? 'Release escrow' : confirm.action === 'hold' ? 'Hold escrow' : 'Refund buyer'}
+          message={ESCROW_MESSAGES[confirm.action]}
+          confirmLabel={confirm.action === 'release' ? 'Release' : confirm.action === 'hold' ? 'Hold 48h' : 'Refund buyer'}
+          confirmDanger={confirm.action === 'refund'}
+          onConfirm={runEscrowAction}
+          onCancel={() => setConfirm(null)}
+          loading={acting === confirm.orderId}
+        />
+      )}
       <h2 className="text-base font-semibold text-gray-900 mb-4">Escrow Monitoring</h2>
       <div className="mb-5 grid grid-cols-2 gap-4">
         <div className="rounded-xl border border-gray-200 bg-amber-50/50 p-4">
@@ -376,14 +441,14 @@ function EscrowPanel() {
                       {o.escrow_status === 'pending_release' && (
                         <>
                           <button
-                            onClick={() => handleRelease(o.order_id)}
+                            onClick={() => setConfirm({ orderId: o.order_id, action: 'release' })}
                             disabled={acting === o.order_id}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-60 transition-colors"
                           >
                             {acting === o.order_id ? '…' : 'Release now'}
                           </button>
                           <button
-                            onClick={() => handleHold(o.order_id)}
+                            onClick={() => setConfirm({ orderId: o.order_id, action: 'hold' })}
                             disabled={acting === o.order_id}
                             className="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-60 transition-colors"
                           >
@@ -392,7 +457,7 @@ function EscrowPanel() {
                         </>
                       )}
                       <button
-                        onClick={() => handleRefund(o.order_id)}
+                        onClick={() => setConfirm({ orderId: o.order_id, action: 'refund' })}
                         disabled={acting === o.order_id}
                         className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-colors"
                       >
@@ -425,6 +490,7 @@ function ReportsPanel() {
   const [filter, setFilter] = useState('all');
   const [flash, setFlash] = useState(null);
   const [expanded, setExpanded] = useState(null);
+  const [confirm, setConfirm] = useState(null); // { reportId, action, report }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -445,7 +511,16 @@ function ReportsPanel() {
       setReports((prev) => prev.map((r) => r.id === reportId ? { ...r, status: action === 'ignore' ? 'ignored' : 'resolved', admin_action: action } : r));
       setFlash({ type: 'success', text: `Action "${action}" applied.` });
       setExpanded(null);
+      setConfirm(null);
     } catch { setFlash({ type: 'error', text: 'Action failed.' }); }
+  };
+
+  const MODERATION_MESSAGES = {
+    ignore: 'This report will be marked as ignored with no action taken.',
+    warn: 'The seller will receive a warning.',
+    suspend: 'The seller will be suspended.',
+    ban: 'The seller will be banned from the marketplace.',
+    delete: 'The product listing will be permanently deleted.',
   };
 
   const filtered = reports.filter((r) => {
@@ -462,6 +537,16 @@ function ReportsPanel() {
   return (
     <>
       <Flash msg={flash} />
+      {confirm && (
+        <ConfirmModal
+          title={`Confirm: ${REPORT_ACTIONS.find((a) => a.id === confirm.action)?.label ?? confirm.action}`}
+          message={MODERATION_MESSAGES[confirm.action] ?? `Apply action "${confirm.action}" to this report?`}
+          confirmLabel={REPORT_ACTIONS.find((a) => a.id === confirm.action)?.label ?? 'Confirm'}
+          confirmDanger={['ban', 'delete'].includes(confirm.action)}
+          onConfirm={() => handleAction(confirm.reportId, confirm.action)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <h2 className="text-base font-semibold text-gray-900">Reports</h2>
         <div className="flex flex-wrap gap-1.5">
@@ -545,7 +630,7 @@ function ReportsPanel() {
                         {REPORT_ACTIONS.map((a) => (
                           <button
                             key={a.id}
-                            onClick={() => handleAction(r.id, a.id)}
+                            onClick={() => setConfirm({ reportId: r.id, action: a.id, report: r })}
                             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${a.cls}`}
                           >
                             {a.label}
@@ -569,6 +654,7 @@ function VerificationPanel() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [flash, setFlash] = useState(null);
+  const [confirm, setConfirm] = useState(null); // { id, action }
 
   useEffect(() => {
     let c = false;
@@ -583,6 +669,7 @@ function VerificationPanel() {
       await resolveVerificationRequest(id, action);
       setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: action } : r));
       setFlash({ type: 'success', text: action === 'approved' ? 'Seller verified. Badge will appear on their profile.' : 'Request rejected.' });
+      setConfirm(null);
     } catch { setFlash({ type: 'error', text: 'Action failed.' }); }
   };
 
@@ -591,6 +678,19 @@ function VerificationPanel() {
   return (
     <>
       <Flash msg={flash} />
+      {confirm && (
+        <ConfirmModal
+          title={confirm.action === 'approved' ? 'Approve verification' : 'Reject verification'}
+          message={
+            confirm.action === 'approved'
+              ? 'Are you sure you want to approve this seller verification? The verified badge will appear on their profile.'
+              : 'Are you sure you want to reject this verification request?'
+          }
+          confirmLabel={confirm.action === 'approved' ? 'Approve' : 'Reject'}
+          onConfirm={() => handle(confirm.id, confirm.action)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
       <h2 className="text-base font-semibold text-gray-900 mb-4">Seller verification requests</h2>
       {requests.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center">
@@ -616,13 +716,13 @@ function VerificationPanel() {
                   {isPending && (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handle(req.id, 'approved')}
+                        onClick={() => setConfirm({ id: req.id, action: 'approved' })}
                         className="px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors"
                       >
                         ✅ Approve
                       </button>
                       <button
-                        onClick={() => handle(req.id, 'rejected')}
+                        onClick={() => setConfirm({ id: req.id, action: 'rejected' })}
                         className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
                       >
                         ✗ Reject
@@ -682,6 +782,7 @@ function ServiceRequestsPanel() {
   const [categories, setCategories] = useState([]);
   const [editForm, setEditForm] = useState({ service_name: '', category_id: '', description: '' });
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [confirm, setConfirm] = useState(null); // { action: 'approve'|'delete', id, service_name }
 
   const load = useCallback(() => {
     setLoading(true);
@@ -710,6 +811,7 @@ function ServiceRequestsPanel() {
       await approveServiceRequest(id);
       setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: 'approved' } : r));
       setFlash({ type: 'success', text: 'Request approved. New offer type created.' });
+      setConfirm(null);
     } catch {
       setFlash({ type: 'error', text: 'Approve failed.' });
     }
@@ -757,11 +859,11 @@ function ServiceRequestsPanel() {
   };
 
   const handleDelete = async (req) => {
-    if (!window.confirm(`Delete request "${req.service_name}"?`)) return;
     try {
       await deleteAdminServiceRequest(req.id);
       setRequests((prev) => prev.filter((r) => r.id !== req.id));
       setFlash({ type: 'success', text: 'Request deleted.' });
+      setConfirm(null);
     } catch {
       setFlash({ type: 'error', text: 'Delete failed.' });
     }
@@ -772,6 +874,20 @@ function ServiceRequestsPanel() {
   return (
     <>
       <Flash msg={flash} />
+      {confirm && (
+        <ConfirmModal
+          title={confirm.action === 'approve' ? 'Approve service request' : 'Delete service request'}
+          message={
+            confirm.action === 'approve'
+              ? 'Are you sure you want to approve this service request? A new offer type will be created.'
+              : `Delete service request "${confirm.service_name}"? This action cannot be undone.`
+          }
+          confirmLabel={confirm.action === 'approve' ? 'Approve' : 'Delete'}
+          confirmDanger={confirm.action === 'delete'}
+          onConfirm={() => (confirm.action === 'approve' ? handleApprove(confirm.id) : handleDelete({ id: confirm.id, service_name: confirm.service_name }))}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <h2 className="text-base font-semibold text-gray-900">Service requests</h2>
         <select
@@ -847,10 +963,10 @@ function ServiceRequestsPanel() {
                       </div>
                       {isPending && (
                         <div className="flex flex-wrap gap-2 flex-shrink-0">
-                          <button type="button" onClick={() => handleApprove(req.id)} className="px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors">Approve</button>
+                          <button type="button" onClick={() => setConfirm({ action: 'approve', id: req.id })} className="px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors">Approve</button>
                           <button type="button" onClick={() => openRejectModal(req)} className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors">Reject</button>
                           <button type="button" onClick={() => setEditingRequest(req)} className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors">Edit</button>
-                          <button type="button" onClick={() => handleDelete(req)} className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors">Delete</button>
+                          <button type="button" onClick={() => setConfirm({ action: 'delete', id: req.id, service_name: req.service_name })} className="px-4 py-2 rounded-xl text-sm font-semibold border border-red-200 text-red-600 hover:bg-red-50 transition-colors">Delete</button>
                         </div>
                       )}
                     </div>
@@ -903,6 +1019,7 @@ function ServiceManagementPanel() {
   const [servicesEditingId, setServicesEditingId] = useState(null);
   const [serviceForm, setServiceForm] = useState({ name: '', icon: '' });
   const [serviceCreateOpen, setServiceCreateOpen] = useState(false);
+  const [confirm, setConfirm] = useState(null); // { type: 'offer'|'service', item }
 
   const load = useCallback(() => {
     setLoading(true);
@@ -993,11 +1110,11 @@ function ServiceManagementPanel() {
   };
 
   const handleDelete = async (ot) => {
-    if (!window.confirm(`Delete "${ot.name}"? Products using it may be affected.`)) return;
     try {
       await deleteAdminOfferType(ot.id);
       setOfferTypes((prev) => prev.filter((o) => o.id !== ot.id));
-      setFlash({ type: 'success', text: 'Service deleted.' });
+      setFlash({ type: 'success', text: 'Offer type deleted.' });
+      setConfirm(null);
     } catch (e) {
       setFlash({ type: 'error', text: e?.message || 'Delete failed.' });
     }
@@ -1035,11 +1152,11 @@ function ServiceManagementPanel() {
   };
 
   const handleServiceDelete = async (svc) => {
-    if (!window.confirm(`Delete service "${svc.name}"?`)) return;
     try {
       await deleteAdminService(svc.id);
       setServices((prev) => prev.filter((s) => s.id !== svc.id));
       setFlash({ type: 'success', text: 'Service deleted.' });
+      setConfirm(null);
     } catch {
       setFlash({ type: 'error', text: 'Delete failed.' });
     }
@@ -1048,6 +1165,20 @@ function ServiceManagementPanel() {
   return (
     <>
       <Flash msg={flash} />
+      {confirm && (
+        <ConfirmModal
+          title={confirm.type === 'offer' ? 'Delete offer type' : 'Delete service'}
+          message={
+            confirm.type === 'offer'
+              ? `Delete "${confirm.item.name}"? Products using it may be affected. This action cannot be undone.`
+              : `Delete service "${confirm.item.name}"? This action cannot be undone.`
+          }
+          confirmLabel="Delete"
+          confirmDanger
+          onConfirm={() => (confirm.type === 'offer' ? handleDelete(confirm.item) : handleServiceDelete(confirm.item))}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
 
       {/* Services (Spotify, Netflix, etc.) */}
       <section className="mb-8">
@@ -1079,7 +1210,7 @@ function ServiceManagementPanel() {
                   <span className="font-medium text-gray-900 truncate text-sm">{svc.name}</span>
                   <div className="flex gap-1 flex-shrink-0">
                     <button type="button" onClick={() => { setServicesEditingId(svc.id); setServiceForm({ name: svc.name || '', icon: svc.icon || '' }); }} className="p-1 text-gray-500 hover:bg-gray-100 rounded text-xs">Edit</button>
-                    <button type="button" onClick={() => handleServiceDelete(svc)} className="p-1 text-red-600 hover:bg-red-50 rounded text-xs">Delete</button>
+                    <button type="button" onClick={() => setConfirm({ type: 'service', item: svc })} className="p-1 text-red-600 hover:bg-red-50 rounded text-xs">Delete</button>
                   </div>
                 </>
               )}
@@ -1197,7 +1328,7 @@ function ServiceManagementPanel() {
                       {ot.status === 'active' ? 'Disable' : 'Enable'}
                     </button>
                     <button type="button" onClick={() => openEdit(ot)} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50">Edit</button>
-                    <button type="button" onClick={() => handleDelete(ot)} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50">Delete</button>
+                    <button type="button" onClick={() => setConfirm({ type: 'offer', item: ot })} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200 text-red-600 hover:bg-red-50">Delete</button>
                   </div>
                 </>
               )}
@@ -1829,6 +1960,7 @@ function CouponsPanel() {
   const [maxUses, setMaxUses] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [confirm, setConfirm] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1886,11 +2018,11 @@ function CouponsPanel() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this coupon?')) return;
     try {
       await deleteAdminCoupon(id);
       setCoupons((prev) => prev.filter((c) => c.id !== id));
       setFlash({ type: 'success', text: 'Coupon deleted.' });
+      setConfirm(null);
     } catch (err) {
       setFlash({ type: 'error', text: err.message || 'Failed to delete coupon.' });
     }
@@ -1899,6 +2031,16 @@ function CouponsPanel() {
   return (
     <div>
       <Flash msg={flash} />
+      {confirm && (
+        <ConfirmModal
+          title="Delete coupon"
+          message="Delete this coupon? This action cannot be undone."
+          confirmLabel="Delete"
+          confirmDanger
+          onConfirm={() => handleDelete(confirm.id)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6 items-start">
         {/* Create coupon form */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -1995,7 +2137,7 @@ function CouponsPanel() {
                       <td className="px-4 py-2.5 text-right">
                         <button
                           type="button"
-                          onClick={() => handleDelete(c.id)}
+                          onClick={() => setConfirm({ id: c.id })}
                           className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
                         >
                           Delete
@@ -2023,6 +2165,7 @@ function AnnouncementsPanel() {
   const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [confirm, setConfirm] = useState(null);
 
   const load = useCallback(() => {
     getAdminAnnouncements()
@@ -2076,11 +2219,11 @@ function AnnouncementsPanel() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this announcement?')) return;
     try {
       await deleteAdminAnnouncement(id);
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
       setFlash({ type: 'success', text: 'Announcement deleted.' });
+      setConfirm(null);
     } catch (err) {
       setFlash({ type: 'error', text: err.message || 'Failed to delete.' });
     }
@@ -2089,6 +2232,16 @@ function AnnouncementsPanel() {
   return (
     <div>
       <Flash msg={flash} />
+      {confirm && (
+        <ConfirmModal
+          title="Delete announcement"
+          message="Delete this announcement? This action cannot be undone."
+          confirmLabel="Delete"
+          confirmDanger
+          onConfirm={() => handleDelete(confirm.id)}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-6 items-start">
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-semibold text-gray-900 mb-3">Create announcement</h2>
@@ -2144,7 +2297,7 @@ function AnnouncementsPanel() {
                       <button type="button" onClick={() => setEditing(editing?.id === a.id ? null : { ...a })} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">
                         {editing?.id === a.id ? 'Cancel' : 'Edit'}
                       </button>
-                      <button type="button" onClick={() => handleDelete(a.id)} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">
+                      <button type="button" onClick={() => setConfirm({ id: a.id })} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">
                         Delete
                       </button>
                     </div>

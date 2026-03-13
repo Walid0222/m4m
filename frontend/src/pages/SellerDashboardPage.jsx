@@ -38,6 +38,7 @@ import {
 } from '../services/api';
 import { useRefresh } from '../contexts/RefreshContext';
 import OrderCard from '../components/OrderCard';
+import ConfirmModal from '../components/ConfirmModal';
 import { getOrderStatusStyle, getEscrowBadge } from '../lib/orderStatus';
 
 const SECTIONS = [
@@ -305,9 +306,11 @@ export default function SellerDashboardPage() {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [orderStatusConfirm, setOrderStatusConfirm] = useState(null); // { orderId, status }
+  const [deleteProductConfirm, setDeleteProductConfirm] = useState(null); // product
   const [deliverModal, setDeliverModal] = useState(null);             // { orderId, orderNumber }
   const [deliverContent, setDeliverContent] = useState('');
   const [deliverSubmitting, setDeliverSubmitting] = useState(false);
+  const [deliverConfirmPending, setDeliverConfirmPending] = useState(false);
   const [form, setForm] = useState({
     service_id: '',
     offer_type_id: '',
@@ -511,6 +514,7 @@ export default function SellerDashboardPage() {
 
   const handleDeliverSubmit = async () => {
     if (!deliverModal || !deliverContent.trim()) return;
+    setDeliverConfirmPending(false);
     setDeliverSubmitting(true);
     setFormError('');
     try {
@@ -700,11 +704,11 @@ export default function SellerDashboardPage() {
   };
 
   const handleDeleteProduct = async (product) => {
-    if (!window.confirm(`Delete "${product.name || product.title}"?`)) return;
     try {
       await deleteProduct(product.id);
       await fetchProducts();
       setActionMessage({ type: 'success', text: 'Product deleted.' });
+      setDeleteProductConfirm(null);
     } catch (err) {
       setFormError(err.message || 'Failed to delete product.');
     }
@@ -930,14 +934,14 @@ export default function SellerDashboardPage() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setDeliverModal(null); setDeliverContent(''); setFormError(''); }}
+                onClick={() => { setDeliverModal(null); setDeliverContent(''); setFormError(''); setDeliverConfirmPending(false); }}
                 className="flex-1 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleDeliverSubmit}
+                onClick={() => deliverContent.trim() && setDeliverConfirmPending(true)}
                 disabled={deliverSubmitting || !deliverContent.trim()}
                 className="flex-1 py-2.5 rounded-xl font-semibold bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
               >
@@ -946,6 +950,18 @@ export default function SellerDashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {deliverConfirmPending && deliverModal && (
+        <ConfirmModal
+          title="Confirm delivery"
+          message="You are about to mark this order as delivered. The buyer will be notified and the delivery timer will start."
+          confirmLabel="Confirm delivery"
+          cancelLabel="Cancel"
+          onConfirm={handleDeliverSubmit}
+          onCancel={() => setDeliverConfirmPending(false)}
+          loading={deliverSubmitting}
+        />
       )}
 
       {/* Sidebar */}
@@ -1039,6 +1055,17 @@ export default function SellerDashboardPage() {
           >
             {actionMessage.text}
           </div>
+        )}
+
+        {deleteProductConfirm && (
+          <ConfirmModal
+            title="Delete product"
+            message={`Delete "${deleteProductConfirm.name || deleteProductConfirm.title}"? This action cannot be undone.`}
+            confirmLabel="Delete"
+            confirmDanger
+            onConfirm={() => handleDeleteProduct(deleteProductConfirm)}
+            onCancel={() => setDeleteProductConfirm(null)}
+          />
         )}
 
         {section === 'overview' && (
@@ -2180,7 +2207,7 @@ export default function SellerDashboardPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDeleteProduct(p)}
+                        onClick={() => setDeleteProductConfirm(p)}
                         className="flex-1 min-w-0 px-3 py-2 rounded-lg text-sm font-medium border border-red-200 text-red-600 hover:bg-red-50"
                       >
                         Delete

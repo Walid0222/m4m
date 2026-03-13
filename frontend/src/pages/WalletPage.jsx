@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import ConfirmModal from '../components/ConfirmModal';
 import { useRefresh } from '../contexts/RefreshContext';
 import {
   getWallet,
@@ -109,21 +110,6 @@ function ActivityCard({ item }) {
         {!isApi && item.status && <StatusBadge status={item.status} />}
       </div>
     </li>
-  );
-}
-
-function ConfirmModal({ title, message, onConfirm, onCancel }) {
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50" onClick={onCancel}>
-      <div className="rounded-2xl bg-white shadow-xl max-w-sm w-full p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
-        <p className="text-sm text-gray-600 mb-6">{message}</p>
-        <div className="flex gap-3">
-          <button type="button" onClick={onCancel} className="flex-1 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-          <button type="button" onClick={onConfirm} className="flex-1 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors">Confirm</button>
-        </div>
-      </div>
-    </div>
   );
 }
 
