@@ -136,6 +136,8 @@ export default function WalletPage() {
   const [depositSubmitting, setDepositSubmitting] = useState(false);
   const [depositSuccess, setDepositSuccess] = useState(null);
   const [depositConfirmPending, setDepositConfirmPending] = useState(false);
+  const [depositMethod, setDepositMethod] = useState('bank_transfer'); // 'bank_transfer' | 'orange_recharge'
+  const [depositError, setDepositError] = useState(null);
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -150,7 +152,7 @@ export default function WalletPage() {
   const [depositsVisible, setDepositsVisible] = useState(REQUESTS_PAGE_SIZE);
   const [withdrawalsVisible, setWithdrawalsVisible] = useState(REQUESTS_PAGE_SIZE);
 
-  const bal = Number(balance?.balance ?? 0);
+  const bal = Number(balance?.available_balance ?? balance?.balance ?? 0);
   const isSeller = user?.is_seller === true || user?.is_seller === 1;
 
   const transactionHistory = useMemo(() => {
@@ -195,7 +197,18 @@ export default function WalletPage() {
   const handleDepositSubmitRequest = (e) => {
     e.preventDefault();
     const amount = parseFloat(depositAmount);
-    if (!amount || amount < 1) return;
+
+    if (!amount || amount < 1) {
+      setDepositError('Minimum deposit is 1 MAD.');
+      return;
+    }
+
+    if (depositMethod === 'orange_recharge' && amount < 200) {
+      setDepositError('Minimum Orange Recharge deposit is 200 MAD.');
+      return;
+    }
+
+    setDepositError(null);
     setDepositConfirmPending(true);
   };
 
@@ -206,13 +219,14 @@ export default function WalletPage() {
     setDepositSubmitting(true);
     setDepositSuccess(null);
     try {
-      const data = await createDepositRequest({ amount, currency: CURRENCY });
+      const data = await createDepositRequest({ amount, currency: CURRENCY, payment_method: depositMethod });
       setDepositSuccess(
         data?.reference_code
           ? { reference: data.reference_code, amount: data.amount }
           : { error: 'Request sent. Check deposit requests below.' }
       );
       setDepositAmount('');
+      setDepositError(null);
       await refresh();
     } catch (err) {
       setDepositSuccess({ error: err.message || 'Something went wrong.' });
@@ -246,6 +260,9 @@ export default function WalletPage() {
     setWithdrawError('');
     setWithdrawConfirmPending(true);
   };
+
+  const amountNum = parseFloat(depositAmount || '0');
+  const isInvalidOrange = depositMethod === 'orange_recharge' && amountNum < 200;
 
   const handleWithdrawConfirm = async () => {
     setWithdrawConfirmPending(false);
@@ -318,14 +335,16 @@ export default function WalletPage() {
             {bal.toFixed(2)} <span className="text-2xl font-semibold text-purple-200">{CURRENCY}</span>
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => { setDepositOpen(true); setDepositSuccess(null); setDepositAmount(''); }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-white text-m4m-purple hover:bg-purple-50 transition-colors shadow-sm"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-              Deposit
-            </button>
+            {!isSeller && (
+              <button
+                type="button"
+                onClick={() => { setDepositOpen(true); setDepositSuccess(null); setDepositAmount(''); }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-white text-m4m-purple hover:bg-purple-50 transition-colors shadow-sm"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                Deposit
+              </button>
+            )}
             {isSeller && (
               <button
                 type="button"
@@ -513,7 +532,9 @@ export default function WalletPage() {
           <div className="rounded-2xl bg-white shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-xl font-bold text-gray-900">
-                {depositSuccess?.reference ? 'Bank transfer details' : 'Deposit funds'}
+                {depositSuccess?.reference
+                  ? (depositMethod === 'orange_recharge' ? 'Orange Recharge details' : 'Bank transfer details')
+                  : 'Deposit funds'}
               </h3>
               <button type="button" onClick={() => setDepositOpen(false)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -522,19 +543,55 @@ export default function WalletPage() {
 
             {depositSuccess?.reference ? (
               <div className="space-y-5">
-                <div className="rounded-xl bg-green-50 border border-green-200 p-4">
-                  <p className="text-xs font-semibold text-green-800 uppercase tracking-wide mb-2">Your unique reference code</p>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 text-2xl font-bold font-mono text-gray-900 tracking-widest select-all">{depositSuccess.reference}</code>
-                    <button type="button" onClick={() => navigator.clipboard?.writeText(depositSuccess.reference)} className="px-3 py-1.5 rounded-lg border border-green-300 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors">Copy</button>
-                  </div>
-                  <p className="text-xs text-green-700 mt-2">Include this exact reference in your bank transfer so we can match your payment.</p>
-                </div>
-                <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Amount to send</p>
-                  <p className="text-2xl font-bold text-gray-900">{Number(depositSuccess.amount).toFixed(2)} <span className="text-lg text-gray-500">{CURRENCY}</span></p>
-                </div>
-                <p className="text-xs text-gray-400">Your deposit will show as "Pending" until an admin verifies the payment. This usually takes 1 business day.</p>
+                {depositMethod === 'bank_transfer' && (
+                  <>
+                    <div className="rounded-xl bg-green-50 border border-green-200 p-4">
+                      <p className="text-xs font-semibold text-green-800 uppercase tracking-wide mb-2">Your unique reference code</p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 text-2xl font-bold font-mono text-gray-900 tracking-widest select-all">{depositSuccess.reference}</code>
+                        <button type="button" onClick={() => navigator.clipboard?.writeText(depositSuccess.reference)} className="px-3 py-1.5 rounded-lg border border-green-300 text-xs font-medium text-green-700 hover:bg-green-100 transition-colors">Copy</button>
+                      </div>
+                      <p className="text-xs text-green-700 mt-2">Include this exact reference in your bank transfer so we can match your payment.</p>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Amount to send</p>
+                      <p className="text-2xl font-bold text-gray-900">{Number(depositSuccess.amount).toFixed(2)} <span className="text-lg text-gray-500">{CURRENCY}</span></p>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 space-y-2">
+                      <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Bank accounts</p>
+                      <ul className="text-xs text-gray-600 space-y-1">
+                        <li><span className="font-semibold">Attijari Bank</span> – RIB: xxxxxxxxx</li>
+                        <li><span className="font-semibold">CIH Bank</span> – RIB: xxxxxxxxx</li>
+                        <li><span className="font-semibold">BMCE Bank</span> – RIB: xxxxxxxxx</li>
+                      </ul>
+                      <p className="text-xs text-gray-500">Bank transfers have <span className="font-semibold">0% commission</span>.</p>
+                    </div>
+                  </>
+                )}
+                {depositMethod === 'orange_recharge' && (
+                  <>
+                    <div className="rounded-xl bg-orange-50 border border-orange-200 p-4 space-y-2">
+                      <p className="text-xs font-semibold text-orange-800 uppercase tracking-wide">Orange Recharge instructions</p>
+                      <p className="text-sm text-orange-900">
+                        Send <span className="font-semibold">{Number(depositSuccess.amount).toFixed(2)} {CURRENCY}</span> from your Orange line to:
+                      </p>
+                      <p className="text-lg font-bold text-orange-900">0637976257</p>
+                      <ul className="text-xs text-orange-800 list-disc pl-5 space-y-1 mt-1">
+                        <li>Use normal balance (no *2 or *3 internet code).</li>
+                        <li>Minimum deposit amount: 200 {CURRENCY}.</li>
+                        <li>A <span className="font-semibold">12% commission</span> is applied before crediting your wallet.</li>
+                      </ul>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 border border-gray-200 p-4">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Estimated amount credited</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {(Number(depositSuccess.amount) * 0.88).toFixed(2)} <span className="text-lg text-gray-500">{CURRENCY}</span>
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">Final amount may vary slightly after admin verification.</p>
+                    </div>
+                  </>
+                )}
+                <p className="text-xs text-gray-400">Your deposit will show as "Pending" until an admin verifies the payment.</p>
                 <button type="button" onClick={() => { setDepositOpen(false); setDepositSuccess(null); }} className="w-full py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors">Done</button>
               </div>
             ) : depositSuccess?.error ? (
@@ -544,9 +601,90 @@ export default function WalletPage() {
               </div>
             ) : (
               <form onSubmit={handleDepositSubmitRequest}>
-                <p className="text-sm text-gray-600 mb-5">
-                  Enter the amount you want to deposit. We&apos;ll give you a unique reference code <strong>M4M-XXXXXX</strong> that you must include in your bank transfer.
-                </p>
+                <div className="space-y-3 mb-4">
+                  <p className="text-sm text-gray-600">
+                    Choose a deposit method and enter the amount you want to add to your wallet.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod('bank_transfer')}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-semibold border transition-colors text-left ${
+                        depositMethod === 'bank_transfer'
+                          ? 'bg-m4m-purple text-white border-m4m-purple'
+                          : 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="block">Bank Transfer</span>
+                      <span className="block text-[11px] opacity-80">0% commission</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDepositMethod('orange_recharge')}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-semibold border transition-colors text-left ${
+                        depositMethod === 'orange_recharge'
+                          ? 'bg-orange-500 text-white border-orange-500'
+                          : 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="block">Orange Recharge</span>
+                      <span className="block text-[11px] opacity-80">12% commission</span>
+                    </button>
+                  </div>
+                  {depositMethod === 'bank_transfer' && (
+                    <div className="rounded-xl bg-gray-50 border border-gray-200 p-3 space-y-3">
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Bank accounts</p>
+                        <p className="text-xs text-gray-600">Send a bank transfer to one of the following RIBs, then we&apos;ll approve it manually:</p>
+                        <ul className="text-xs text-gray-600 space-y-1">
+                          <li><span className="font-semibold">Attijari Bank</span> – RIB: xxxxxxxxx</li>
+                          <li><span className="font-semibold">CIH Bank</span> – RIB: xxxxxxxxx</li>
+                          <li><span className="font-semibold">BMCE Bank</span> – RIB: xxxxxxxxx</li>
+                        </ul>
+                        <p className="text-xs text-gray-500">We&apos;ll generate a reference code to help us match your transfer.</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">How to deposit via bank transfer</p>
+                        <div className="relative w-full pt-[56.25%] rounded-xl overflow-hidden border border-gray-200 bg-black/5">
+                          <iframe
+                            title="How to deposit via bank transfer"
+                            className="absolute inset-0 w-full h-full"
+                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                            frameBorder="0"
+                            allowFullScreen
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {depositMethod === 'orange_recharge' && (
+                    <div className="rounded-xl bg-orange-50 border border-orange-200 p-3 space-y-3">
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-orange-800 uppercase tracking-wide">Orange Recharge</p>
+                        <p className="text-xs text-orange-900">
+                          Send money from your phone to <span className="font-semibold">0637976257</span>.
+                        </p>
+                        <ul className="text-xs text-orange-800 list-disc pl-5 space-y-1">
+                          <li>Use normal balance (no *2 or *3 internet code).</li>
+                          <li>Minimum deposit amount: 200 {CURRENCY}.</li>
+                          <li>We apply a <span className="font-semibold">12% commission</span> before crediting your wallet.</li>
+                        </ul>
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold text-orange-800 uppercase tracking-wide">How to deposit via Orange recharge</p>
+                        <div className="relative w-full pt-[56.25%] rounded-xl overflow-hidden border border-orange-200 bg-black/5">
+                          <iframe
+                            title="How to deposit via Orange recharge"
+                            className="absolute inset-0 w-full h-full"
+                            src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                            frameBorder="0"
+                            allowFullScreen
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Amount ({CURRENCY})</label>
                 <input
                   type="number"
@@ -558,9 +696,19 @@ export default function WalletPage() {
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none mb-5"
                   required
                 />
+                {depositMethod === 'orange_recharge' && (
+                  <p className="text-xs text-gray-500 -mt-3 mb-4">
+                    Minimum: 200 {CURRENCY} • Orange commission: 12%
+                  </p>
+                )}
+                {depositError && (
+                  <div className="mt-1 mb-3 text-sm text-red-600">
+                    {depositError}
+                  </div>
+                )}
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setDepositOpen(false)} className="flex-1 py-3 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-                  <button type="submit" disabled={depositSubmitting} className="flex-1 py-3 rounded-xl font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60 transition-colors">
+                  <button type="submit" disabled={depositSubmitting || isInvalidOrange} className="flex-1 py-3 rounded-xl font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60 transition-colors">
                     {depositSubmitting ? 'Processing…' : 'Continue'}
                   </button>
                 </div>

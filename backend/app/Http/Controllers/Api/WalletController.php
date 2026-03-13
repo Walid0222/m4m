@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Order;
+use App\Models\DepositRequest;
+use App\Models\WithdrawRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -48,8 +50,28 @@ class WalletController extends Controller
             }
         }
 
+        // Pending deposit / withdraw balances (under review / processing)
+        $pendingDeposits = (float) DepositRequest::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->sum('amount');
+
+        $pendingWithdrawals = (float) WithdrawRequest::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->sum('amount');
+
+        $walletBalance = (float) $wallet->balance;
+
+        // Available balance = wallet balance minus pending withdrawals (cannot be negative)
+        $available = $walletBalance - $pendingWithdrawals;
+        if ($available < 0) {
+            $available = 0.0;
+        }
+
         return $this->success([
-            'balance' => (float) $wallet->balance,
+            'balance' => $walletBalance,
+            'available_balance' => $available,
+            'processing_balance' => $pendingWithdrawals,
+            'under_review_balance' => $pendingDeposits,
             'currency' => $wallet->currency ?? 'USD',
             'transactions' => $transactions,
             'pending_escrow_balance' => $pendingEscrow,

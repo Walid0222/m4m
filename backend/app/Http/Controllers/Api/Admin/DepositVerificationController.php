@@ -55,12 +55,18 @@ class DepositVerificationController extends Controller
             }
 
             $amount = (float) $depositRequest->amount;
-            $wallet->increment('balance', $amount);
+
+            // Apply commission for Orange Recharge deposits (12%)
+            $credited = $depositRequest->payment_method === 'orange_recharge'
+                ? round($amount * 0.88, 2)
+                : $amount;
+
+            $wallet->increment('balance', $credited);
             $newBalance = (float) $wallet->fresh()->balance;
 
             $wallet->transactions()->create([
                 'type' => 'deposit',
-                'amount' => $amount,
+                'amount' => $credited,
                 'balance_after' => $newBalance,
                 'reference_type' => DepositRequest::class,
                 'reference_id' => $depositRequest->id,

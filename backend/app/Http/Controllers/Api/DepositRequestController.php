@@ -29,17 +29,30 @@ class DepositRequestController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $user = $request->user();
+        // Only buyers (non-sellers) can create deposits
+        if ($user->is_seller) {
+            return $this->error('Only buyers can create deposits.', 403);
+        }
+
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
             'currency' => ['sometimes', 'string', 'size:3'],
             'payment_method' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $method = $validated['payment_method'] ?? 'bank_transfer';
+
+        // Orange Recharge requires a higher minimum
+        if ($method === 'orange_recharge' && (float) $validated['amount'] < 200) {
+            return $this->error('Minimum Orange Recharge amount is 200.', 422);
+        }
+
         $deposit = $request->user()->depositRequests()->create([
             'reference_code' => $this->generateReferenceCode(),
             'amount' => $validated['amount'],
             'currency' => $validated['currency'] ?? 'USD',
-            'payment_method' => $validated['payment_method'] ?? null,
+            'payment_method' => $method,
             'status' => 'pending',
         ]);
 

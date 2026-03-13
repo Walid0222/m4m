@@ -82,14 +82,22 @@ function Flash({ msg }) {
   );
 }
 
-function TabButton({ id, label, active, onClick }) {
+function TabButton({ id, label, active, onClick, badgeCount }) {
+  const showBadge = !active && Number(badgeCount) > 0;
   return (
     <button
       type="button"
       onClick={() => onClick(id)}
       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${active ? 'bg-m4m-purple text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
     >
-      {label}
+      <span className="inline-flex items-center gap-1">
+        <span>{label}</span>
+        {showBadge && (
+          <span className="min-w-[18px] h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        )}
+      </span>
     </button>
   );
 }
@@ -126,14 +134,32 @@ function DepositsPanel() {
         <div className="overflow-x-auto rounded-xl border border-gray-200">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
             <thead className="bg-gray-50">
-              <tr>{['User', 'Amount', 'Reference', 'Status', 'Date', 'Actions'].map((h) => <th key={h} className="px-4 py-3 text-left font-semibold text-gray-600">{h}</th>)}</tr>
+              <tr>{['User', 'Amount', 'Method', 'Reference', 'Status', 'Date', 'Actions'].map((h) => <th key={h} className="px-4 py-3 text-left font-semibold text-gray-600">{h}</th>)}</tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {deposits.map((d) => (
                 <tr key={d.id}>
-                  <td className="px-4 py-3">{d.user?.name ?? d.user?.email ?? '—'}</td>
+                  <td className="px-4 py-3">
+                    {d.user ? (
+                      <div>
+                        <p className="font-medium text-gray-900 text-sm">{d.user.name || d.user.email || '—'}</p>
+                        {d.user.email && (
+                          <p className="text-xs text-gray-500">{d.user.email}</p>
+                        )}
+                      </div>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td className="px-4 py-3 font-medium">{Number(d.amount).toFixed(2)} MAD</td>
-                  <td className="px-4 py-3 font-mono text-xs">{d.reference_code || `#${d.id}`}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700">
+                      {d.payment_method === 'orange_recharge' ? 'Orange Recharge' : 'Bank transfer'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {d.payment_method === 'bank_transfer' ? (d.reference_code || `#${d.id}`) : '—'}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${d.status === 'completed' ? 'bg-green-100 text-green-700' : d.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{d.status ?? 'pending'}</span>
                   </td>
@@ -2187,10 +2213,45 @@ export default function AdminDashboardPage() {
   const [activeTab, setActiveTab] = useState(() => (VALID_ADMIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'overview'));
   const [refreshToken, setRefreshToken] = useState(0);
   const { tick } = useRefresh();
+  const [pendingCounts, setPendingCounts] = useState({
+    deposits: 0,
+    withdrawals: 0,
+    disputes: 0,
+    verification: 0,
+    'service-requests': 0,
+    reports: 0,
+  });
 
   useEffect(() => {
     if (VALID_ADMIN_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
   }, [tabFromUrl]);
+
+  // Auto-refresh pending counts for badges using admin stats + global refresh token
+  useEffect(() => {
+    if (!user?.is_admin) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const stats = await getAdminStats();
+        if (cancelled || !stats) return;
+        const moderation = stats.moderation || {};
+        const orders = stats.orders || {};
+        setPendingCounts({
+          deposits: moderation.pending_deposits ?? 0,
+          withdrawals: moderation.pending_withdraws ?? 0,
+          disputes: orders.disputed ?? 0,
+          verification: moderation.pending_verifications ?? 0,
+          'service-requests': moderation.pending_service_requests ?? 0,
+          reports: moderation.pending_reports ?? 0,
+        });
+      } catch {
+        // silently ignore; badges will not update until next successful fetch
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshToken, user?.is_admin]);
 
   if (!getToken()) {
     return (
@@ -2205,6 +2266,17 @@ export default function AdminDashboardPage() {
     if (!tick) return;
     setRefreshToken((t) => t + 1);
   }, [tick, user?.is_admin]);
+
+  const getBadgeForTab = (id) => {
+    if (!user?.is_admin) return 0;
+    if (id === 'deposits') return pendingCounts.deposits || 0;
+    if (id === 'withdrawals') return pendingCounts.withdrawals || 0;
+    if (id === 'disputes') return pendingCounts.disputes || 0;
+    if (id === 'verification') return pendingCounts.verification || 0;
+    if (id === 'service-requests') return pendingCounts['service-requests'] || 0;
+    if (id === 'reports') return pendingCounts.reports || 0;
+    return 0;
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -2234,7 +2306,13 @@ export default function AdminDashboardPage() {
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 mb-7">
         {TABS.map((t) => (
-          <TabButton key={t.id} {...t} active={activeTab === t.id} onClick={setActiveTab} />
+          <TabButton
+            key={t.id}
+            {...t}
+            active={activeTab === t.id}
+            onClick={setActiveTab}
+            badgeCount={getBadgeForTab(t.id)}
+          />
         ))}
       </div>
 

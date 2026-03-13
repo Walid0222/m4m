@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getOrderStatusStyle, getEscrowBadge } from '../lib/orderStatus';
 import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
 
@@ -42,6 +42,7 @@ function ConfirmDeliveryModal({ onConfirm, onCancel, isLoading }) {
 }
 
 export default function OrderCard({ order, onConfirmDelivery, confirmingOrderId, onChatSeller, chattingSellerId }) {
+  const navigate = useNavigate();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const items = order.order_items ?? order.orderItems ?? [];
@@ -117,7 +118,11 @@ export default function OrderCard({ order, onConfirmDelivery, confirmingOrderId,
           {firstProductId ? (
             <p
               className="font-semibold text-gray-900 line-clamp-1 hover:text-m4m-purple transition-colors"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/product/${firstProductId}`; }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate(`/product/${firstProductId}`);
+              }}
             >
               {productTitle}
             </p>
@@ -134,7 +139,11 @@ export default function OrderCard({ order, onConfirmDelivery, confirmingOrderId,
             {sellerId ? (
               <span
                 className="text-sm font-medium text-m4m-purple cursor-pointer"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/seller/${sellerId}`; }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navigate(`/seller/${sellerId}`);
+                }}
               >
                 {sellerName}
               </span>
