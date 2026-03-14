@@ -79,4 +79,32 @@ class WalletController extends Controller
             'next_release_at' => $nextReleaseAt?->toIso8601String(),
         ]);
     }
+
+    /**
+     * Paginated wallet transaction history.
+     */
+    public function transactions(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $wallet = $user->wallet;
+
+        if (! $wallet) {
+            $wallet = $user->wallet()->create(['balance' => 0]);
+        }
+
+        $paginated = $wallet->transactions()
+            ->latest()
+            ->paginate(20);
+
+        $transactions = $paginated->through(fn ($t) => [
+            'id' => $t->id,
+            'type' => $t->type,
+            'amount' => (float) $t->amount,
+            'balance_after' => $t->balance_after !== null ? (float) $t->balance_after : null,
+            'description' => $t->description,
+            'created_at' => $t->created_at?->toISOString(),
+        ]);
+
+        return $this->success(['transactions' => $transactions]);
+    }
 }

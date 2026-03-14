@@ -27,7 +27,62 @@ class ProductController extends Controller
                 ->orderByDesc('is_pinned');
         }
 
-        $products = $query->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
+        if ($request->filled('category_id')) {
+            $query->whereHas('offerType', function ($q) use ($request) {
+                $q->where('category_id', $request->category_id);
+            });
+        }
+
+        $query->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
+            ->withCount([
+                'orders as completed_orders_count' => function ($q) {
+                    $q->where('status', Order::STATUS_COMPLETED);
+                },
+                'reviews',
+            ])
+            ->withAvg('reviews', 'rating');
+
+        $sort = $request->string('sort')->toString();
+        switch ($sort) {
+            case 'newest':
+                $query->latest();
+                break;
+            case 'lowest_price':
+                $query->orderBy('price', 'asc');
+                break;
+            case 'highest_price':
+                $query->orderBy('price', 'desc');
+                break;
+            case 'best_selling':
+                $query->orderByDesc('completed_orders_count')->orderByDesc('created_at');
+                break;
+            case 'highest_rating':
+                $query->orderByDesc('reviews_avg_rating')->orderByDesc('created_at');
+                break;
+            default:
+                $query->latest();
+                break;
+        }
+
+        $products = $query->paginate($request->integer('per_page', 15));
+
+        $products->getCollection()->transform(fn ($p) => $this->hideAnalyticsFromProduct($p));
+
+        return $this->success($products);
+    }
+
+    /**
+     * GET /products/best-selling
+     *
+     * Return top 8 products ordered by completed orders count.
+     */
+    public function bestSelling(Request $request): JsonResponse
+    {
+        $limit = min($request->integer('limit', 8), 16);
+
+        $products = Product::query()
+            ->where('status', 'active')
+            ->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
                 'orders as completed_orders_count' => function ($q) {
                     $q->where('status', Order::STATUS_COMPLETED);
@@ -35,10 +90,11 @@ class ProductController extends Controller
                 'reviews',
             ])
             ->withAvg('reviews', 'rating')
-            ->latest()
-            ->paginate($request->integer('per_page', 15));
-
-        $products->getCollection()->transform(fn ($p) => $this->hideAnalyticsFromProduct($p));
+            ->orderByDesc('completed_orders_count')
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($p) => $this->hideAnalyticsFromProduct($p));
 
         return $this->success($products);
     }

@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Auth\EmailVerificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\MarketplaceController;
 use App\Http\Controllers\Api\OfferTypeController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\ProductController;
@@ -78,6 +79,9 @@ RateLimiter::for('dispute-evidence', function (Request $request) {
     ];
 });
 
+// Alias for clients calling /api/categories (without v1)
+Route::get('/categories', [CategoryController::class, 'index']);
+
 Route::prefix('v1')->group(function () {
 
     // ─── Public ─────────────────────────────────────────────────────────────
@@ -99,6 +103,7 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/products',                 [ProductController::class, 'index']);
     Route::get('/products/search',          [ProductController::class, 'search']);
+    Route::get('/products/best-selling',   [ProductController::class, 'bestSelling']);
     Route::get('/products/trending',        [ProductController::class, 'trending']);
     Route::get('/products/{product}',       [ProductController::class, 'show']);
     Route::get('/products/{product}/recommended', [ProductController::class, 'recommended']);
@@ -108,6 +113,7 @@ Route::prefix('v1')->group(function () {
 
     // Announcements
     Route::get('/announcements', [AnnouncementController::class, 'index']);
+    Route::get('/marketplace/stats', [MarketplaceController::class, 'stats']);
 
     // ─── Authenticated ───────────────────────────────────────────────────────
     // Public + low-auth email verification for SPA (no redirects)
@@ -135,6 +141,7 @@ Route::prefix('v1')->group(function () {
 
             // Wallet & funds
             Route::get('/wallet',                                        [WalletController::class, 'show']);
+            Route::get('/wallet/transactions',                           [WalletController::class, 'transactions']);
             Route::get('/wallet/settings',                               [WalletSettingsController::class, 'show']);
             Route::post('/deposit-requests',                             [DepositRequestController::class, 'store']);
             Route::get('/deposit-requests',                              [DepositRequestController::class, 'index']);

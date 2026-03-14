@@ -269,34 +269,40 @@ class EscrowService
                         ->exists();
 
                     if ($alreadyPaid) {
-                        \Log::warning('Duplicate seller payout avoided (scheduled)', [
+                        \Log::warning('Escrow payout already processed (scheduled release)', [
                             'order_id'  => $lockedOrder->id,
                             'seller_id' => $seller->id,
                         ]);
+                        $lockedOrder->update([
+                            'escrow_status' => 'released',
+                            'completed_at'  => $lockedOrder->completed_at ?? now(),
+                        ]);
+
+                        return;
+                    }
+
+                    if (! $isBanned) {
+                        $sellerWallet->increment('balance', $sellerAmount);
+                        $sellerWallet->transactions()->create([
+                            'type'           => 'seller_payout',
+                            'status'         => 'completed',
+                            'amount'         => $sellerAmount,
+                            'balance_after'  => (float) $sellerWallet->fresh()->balance,
+                            'reference_type' => Order::class,
+                            'reference_id'   => $lockedOrder->id,
+                            'description'    => "Payout for order #{$lockedOrder->order_number} (after {$commissionPct}% commission)",
+                        ]);
                     } else {
-                        if (! $isBanned) {
-                            $sellerWallet->increment('balance', $sellerAmount);
-                            $sellerWallet->transactions()->create([
-                                'type'           => 'seller_payout',
-                                'status'         => 'completed',
-                                'amount'         => $sellerAmount,
-                                'balance_after'  => (float) $sellerWallet->fresh()->balance,
-                                'reference_type' => Order::class,
-                                'reference_id'   => $lockedOrder->id,
-                                'description'    => "Payout for order #{$lockedOrder->order_number} (after {$commissionPct}% commission)",
-                            ]);
-                        } else {
-                            // Banned seller — payout held, credited to platform instead
-                            $sellerWallet->transactions()->create([
-                                'type'           => 'seller_payout',
-                                'status'         => 'held_banned',
-                                'amount'         => $sellerAmount,
-                                'balance_after'  => (float) $sellerWallet->balance,
-                                'reference_type' => Order::class,
-                                'reference_id'   => $lockedOrder->id,
-                                'description'    => "Payout HELD — seller is banned. Order #{$lockedOrder->order_number}",
-                            ]);
-                        }
+                        // Banned seller — payout held, credited to platform instead
+                        $sellerWallet->transactions()->create([
+                            'type'           => 'seller_payout',
+                            'status'         => 'held_banned',
+                            'amount'         => $sellerAmount,
+                            'balance_after'  => (float) $sellerWallet->balance,
+                            'reference_type' => Order::class,
+                            'reference_id'   => $lockedOrder->id,
+                            'description'    => "Payout HELD — seller is banned. Order #{$lockedOrder->order_number}",
+                        ]);
                     }
 
                     // Always update seller stats regardless of ban
@@ -304,7 +310,7 @@ class EscrowService
                 }
             }
 
-            // Credit platform wallet
+            // Credit platform wallet (only when payout was actually executed above)
             if ($platformFee > 0) {
                 PlatformWallet::singleton()->credit($platformFee);
             }
@@ -346,6 +352,8 @@ class EscrowService
             $sellerId = $lockedOrder->seller_id ?: $lockedOrder->orderItems->first()?->product?->user_id;
             $platformFee = 0.0;
             $sellerAmount = $totalAmount;
+            $alreadyPaid = false;
+            $payoutExecuted = false;
 
             if ($sellerId) {
                 $seller = User::find($sellerId);
@@ -368,11 +376,27 @@ class EscrowService
 
                     $sellerWallet = $this->getOrCreateWallet($seller);
                     $sellerWallet = Wallet::whereKey($sellerWallet->id)->lockForUpdate()->first();
-                    if ($sellerWallet && ! $sellerWallet->transactions()
-                        ->where('type', 'seller_payout')
-                        ->where('reference_type', Order::class)
-                        ->where('reference_id', $lockedOrder->id)
-                        ->exists()) {
+                    if ($sellerWallet) {
+                        $alreadyPaid = $sellerWallet->transactions()
+                            ->where('type', 'seller_payout')
+                            ->where('reference_type', Order::class)
+                            ->where('reference_id', $lockedOrder->id)
+                            ->exists();
+
+                        if ($alreadyPaid) {
+                            \Log::warning('Escrow payout already processed (dispute resolution)', [
+                                'order_id'  => $lockedOrder->id,
+                                'seller_id' => $seller->id,
+                            ]);
+                            $lockedOrder->update([
+                                'escrow_status' => 'released',
+                                'status'        => Order::STATUS_COMPLETED,
+                                'completed_at'  => $lockedOrder->completed_at ?? now(),
+                            ]);
+
+                            return;
+                        }
+
                         if (! $isBanned) {
                             $sellerWallet->increment('balance', $sellerAmount);
                             $sellerWallet->transactions()->create([
@@ -384,13 +408,15 @@ class EscrowService
                                 'reference_id'   => $lockedOrder->id,
                                 'description'    => "Payout for order #{$lockedOrder->order_number} (dispute resolved)",
                             ]);
+                            $payoutExecuted = true;
                         }
                         $this->incrementSellerStats($seller, $sellerAmount, $lockedOrder);
                     }
                 }
             }
 
-            if ($platformFee > 0) {
+            // Credit platform wallet only when seller payout was actually executed
+            if ($payoutExecuted && $platformFee > 0) {
                 PlatformWallet::singleton()->credit($platformFee);
             }
 
