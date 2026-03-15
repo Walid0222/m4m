@@ -3,9 +3,35 @@ import { useParams } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import ReportModal from '../components/ReportModal';
 import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
-import { isSellerOnline } from '../lib/sellerOnline';
 import { getProducts, getSellerProfile, getPublicSellerStats, paginatedItems, submitReport } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+
+function getLastSeenLabel(lastActivityAt) {
+  if (!lastActivityAt) return 'Offline';
+
+  const now = new Date();
+  const last = new Date(lastActivityAt);
+
+  const diffMs = now - last;
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin < 2) return 'Online';
+
+  if (diffMin < 60)
+    return `Last seen ${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+
+  const diffHours = Math.floor(diffMin / 60);
+
+  if (diffHours < 24)
+    return `Last seen ${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays === 1)
+    return 'Last seen yesterday';
+
+  return `Last seen ${diffDays} days ago`;
+}
 
 function StatBadge({ label, value }) {
   return (
@@ -88,7 +114,8 @@ export default function SellerProfilePage() {
     );
   }
 
-  const online = isSellerOnline(seller);
+  const lastSeenLabel = getLastSeenLabel(seller?.last_activity_at);
+  const online = lastSeenLabel === 'Online';
   const sellerRating = seller?.rating != null ? Number(seller.rating) : null;
   const isVerified =
     seller?.is_verified === true ||
@@ -102,18 +129,6 @@ export default function SellerProfilePage() {
     typeof stats?.avg_response_minutes === 'number'
       ? `${stats.avg_response_minutes.toFixed(1)} min`
       : '—';
-  const lastSeenLabel = (() => {
-    const at = seller?.last_activity_at;
-    if (!at) return null;
-    const ts = new Date(at).getTime();
-    if (Number.isNaN(ts)) return null;
-    const diffMs = Date.now() - ts;
-    const diffMin = Math.max(0, Math.round(diffMs / 60000));
-    if (diffMin < 2) return 'Online';
-    if (diffMin < 60) return `Last seen ${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
-    const diffHours = Math.round(diffMin / 60);
-    return `Last seen ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-  })();
 
   const memberSinceLabel =
     seller?.member_since
@@ -187,13 +202,6 @@ export default function SellerProfilePage() {
                   </p>
                 )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {/* Online status */}
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                    online ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-green-500' : 'bg-gray-400'}`} />
-                    {online ? 'Online' : 'Offline'}
-                  </span>
                   {/* Rating */}
                   {sellerRating != null && sellerRating > 0 && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700">

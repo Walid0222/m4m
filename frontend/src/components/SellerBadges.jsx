@@ -1,6 +1,7 @@
 /**
  * Shared badge components used site-wide for seller and buyer trust indicators.
  */
+import { Trophy } from 'lucide-react';
 import { getSellerSalesBadge, getBuyerPurchaseBadge } from '../lib/sellerBadge';
 
 /** Blue checkmark verified badge */
@@ -23,11 +24,13 @@ export function SellerSalesBadge({ completedSales, size = 'sm' }) {
   const badge = getSellerSalesBadge(completedSales);
   if (!badge) return null;
   const cls = size === 'lg'
-    ? 'px-2.5 py-1 text-xs'
-    : 'px-1.5 py-0.5 text-[10px]';
+    ? 'px-2.5 py-1 text-xs gap-1'
+    : 'px-1.5 py-0.5 text-[10px] gap-0.5';
+  const iconCls = size === 'lg' ? 'w-4 h-4 flex-shrink-0' : 'w-3 h-3 flex-shrink-0';
   return (
     <span className={`inline-flex items-center rounded-full font-bold ${badge.color} ${cls}`}>
-      🏅 {badge.label}
+      <Trophy className={iconCls} />
+      {badge.label}
     </span>
   );
 }

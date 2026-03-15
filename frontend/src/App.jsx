@@ -140,12 +140,12 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="help/:slug" element={<HelpPage />} />
+            <Route path="help" element={<Navigate to="/help/faq" replace />} />
+            <Route path="marketplace" element={<HomePage />} />
+            <Route path="auth" element={<AuthPage />} />
+            <Route path="marketplace-rules" element={<MarketplaceRulesPage />} />
               </Route>
-              {/* Help center — public pages */}
-              <Route path="/help/:slug" element={<Layout><HelpPage /></Layout>} />
-              <Route path="/help" element={<Navigate to="/help/faq" replace />} />
-              {/* Marketplace rules standalone page */}
-              <Route path="/marketplace-rules" element={<Layout><MarketplaceRulesPage /></Layout>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>

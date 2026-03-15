@@ -3,12 +3,16 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function AuthPage() {
-  const [isLogin, setIsLogin] = useState(true);
+  const location = useLocation();
+  const fromPath = location.state?.from?.pathname ?? '/';
+  const sellerIntent = location.state?.sellerIntent === true;
+
+  const [isLogin, setIsLogin] = useState(!sellerIntent);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  const [isSeller, setIsSeller] = useState(false);
+  const [isSeller, setIsSeller] = useState(sellerIntent);
   const [error, setError] = useState('');
   const [banInfo, setBanInfo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -17,10 +21,6 @@ export default function AuthPage() {
   const [twoFaCode, setTwoFaCode] = useState('');
   const { login, register, refreshUser } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const fromPath = location.state?.from?.pathname ?? '/';
-
-  // Display ban message if redirected here after a ban 403
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('m4m_ban_info');

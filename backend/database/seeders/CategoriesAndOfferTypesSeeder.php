@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Category;
 use App\Models\OfferType;
+use App\Models\Service;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -50,15 +51,26 @@ class CategoriesAndOfferTypesSeeder extends Seeder
                 ['name' => $cat['name'], 'icon' => $cat['icon'] ?? null]
             );
             foreach ($cat['offer_types'] as $name) {
-                $slug = Str::slug($name);
-                OfferType::firstOrCreate(
-                    ['slug' => $slug],
+                $serviceSlug = Str::slug($name);
+
+                $service = Service::firstOrCreate(
+                    ['slug' => $serviceSlug],
                     [
+                        'name'        => $name,
                         'category_id' => $category->id,
-                        'name' => $name,
+                        'icon'        => null,
+                    ]
+                );
+
+                OfferType::firstOrCreate(
+                    ['slug' => $serviceSlug],
+                    [
+                        'name'        => $name,
+                        'category_id' => $category->id,
+                        'service_id'  => $service->id,
                         'description' => null,
-                        'icon' => null,
-                        'status' => \App\Models\OfferType::STATUS_ACTIVE,
+                        'icon'        => null,
+                        'status'      => OfferType::STATUS_ACTIVE,
                     ]
                 );
             }

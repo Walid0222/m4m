@@ -284,7 +284,7 @@ function VerificationSection({ user }) {
 
 export default function SellerDashboardPage() {
   const { user, refreshUser } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
@@ -295,11 +295,18 @@ export default function SellerDashboardPage() {
     const s = searchParams.get('section');
     return SECTIONS.some((x) => x.id === s && !x.href) ? s : 'overview';
   });
+
+  // Keep section in sync with URL (e.g. browser back/forward)
+  useEffect(() => {
+    const s = searchParams.get('section');
+    if (SECTIONS.some((x) => x.id === s && !x.href)) setSection(s);
+  }, [searchParams]);
   const [sellerStats, setSellerStats] = useState(null);
   const [autoReplyMsg, setAutoReplyMsg] = useState('');
   const [autoReplySaving, setAutoReplySaving] = useState(false);
   const [autoReplySaved, setAutoReplySaved] = useState(false);
   const [addProductOpen, setAddProductOpen] = useState(false);
+  const [addProductStep, setAddProductStep] = useState(1);
   const [editingProduct, setEditingProduct] = useState(null);
   const [pinningProductId, setPinningProductId] = useState(null);
   const [formError, setFormError] = useState('');
@@ -308,10 +315,17 @@ export default function SellerDashboardPage() {
   const [orderStatusConfirm, setOrderStatusConfirm] = useState(null); // { orderId, status }
   const [deleteProductConfirm, setDeleteProductConfirm] = useState(null); // product
   const [deliverModal, setDeliverModal] = useState(null);             // { orderId, orderNumber }
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');  // all | active | delivered | completed | disputed
+  const [orderSortBy, setOrderSortBy] = useState('newest');           // newest | oldest | amount
+  const [ordersCurrentPage, setOrdersCurrentPage] = useState(1);
+  const [ordersLastPage, setOrdersLastPage] = useState(1);
+  const [ordersTotal, setOrdersTotal] = useState(0);
+  const [orderDetailsModal, setOrderDetailsModal] = useState(null);   // order object
   const [deliverContent, setDeliverContent] = useState('');
   const [deliverSubmitting, setDeliverSubmitting] = useState(false);
   const [deliverConfirmPending, setDeliverConfirmPending] = useState(false);
   const [form, setForm] = useState({
+    category_id: '',
     service_id: '',
     offer_type_id: '',
     title: '',
@@ -362,7 +376,7 @@ export default function SellerDashboardPage() {
   }, [fetchProducts]);
 
   useEffect(() => {
-    getCategories().then((d) => setCategories(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setCategories([]));
+    getCategories().then((d) => setCategories(Array.isArray(d) ? d : (d?.categories ?? d?.data ?? []))).catch(() => setCategories([]));
     getServices().then((d) => setServices(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setServices([]));
     getOfferTypes().then((d) => setOfferTypes(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setOfferTypes([]));
   }, []);
@@ -398,23 +412,35 @@ export default function SellerDashboardPage() {
     });
     return bySvc;
   }, [offerTypes]);
+  const getFilteredServices = useCallback((categoryId) => {
+    const list = services || [];
+    if (!categoryId) return list;
+    return list.filter((s) => String(s.category_id) === String(categoryId));
+  }, [services]);
   const filteredOfferTypes = form.service_id ? (offerTypesByService[form.service_id] || []) : offerTypes;
 
-  const fetchOrders = useCallback(async () => {
+  const fetchOrders = useCallback(async (page = 1) => {
     if (!getToken() || !user?.is_seller) return;
     setLoadingOrders(true);
     try {
-      const data = await getSellerOrders({ per_page: 100 });
-      setOrders(paginatedItems(data) ?? []);
+      const data = await getSellerOrders({ page, per_page: 15 });
+      const items = Array.isArray(data?.data) ? data.data : (paginatedItems(data) ?? []);
+      setOrders(items);
+      setOrdersCurrentPage(data?.current_page ?? 1);
+      setOrdersLastPage(data?.last_page ?? 1);
+      setOrdersTotal(data?.total ?? 0);
     } catch {
       setOrders([]);
+      setOrdersCurrentPage(1);
+      setOrdersLastPage(1);
+      setOrdersTotal(0);
     } finally {
       setLoadingOrders(false);
     }
   }, [user?.is_seller]);
 
   useEffect(() => {
-    fetchOrders();
+    fetchOrders(1);
   }, [fetchOrders]);
 
   const fetchWallet = useCallback(async () => {
@@ -473,13 +499,13 @@ export default function SellerDashboardPage() {
     if (!tick) return;
     if (!getToken() || !user?.is_seller) return;
     fetchProducts();
-    fetchOrders();
     fetchEscrow();
-  }, [tick, user?.is_seller, fetchProducts, fetchOrders, fetchEscrow]);
+    fetchOrders(ordersCurrentPage);
+  }, [tick, user?.is_seller, ordersCurrentPage, fetchProducts, fetchOrders, fetchEscrow]);
 
   const handleManualRefresh = () => {
     fetchProducts();
-    fetchOrders();
+    fetchOrders(ordersCurrentPage);
     fetchEscrow();
   };
 
@@ -500,7 +526,7 @@ export default function SellerDashboardPage() {
     setFormError('');
     try {
       await updateSellerOrderStatus(orderId, { status: newStatus });
-      await fetchOrders();
+      await fetchOrders(ordersCurrentPage);
       setActionMessage({ type: 'success', text: 'Order status updated.' });
     } catch (err) {
       setFormError(err.message || 'Failed to update order status.');
@@ -521,7 +547,7 @@ export default function SellerDashboardPage() {
       await deliverOrder(deliverModal.orderId, deliverContent.trim());
       setDeliverModal(null);
       setDeliverContent('');
-      await fetchOrders();
+      await fetchOrders(ordersCurrentPage);
       setActionMessage({ type: 'success', text: 'Delivery sent! Order marked as delivered.' });
     } catch (err) {
       setFormError(err.message || 'Failed to send delivery.');
@@ -561,6 +587,62 @@ export default function SellerDashboardPage() {
     }, 0);
   }, [orders, sellerProductIds]);
 
+  const orderStatusBadgeClasses = {
+    pending: 'bg-amber-100 text-amber-800',
+    paid: 'bg-blue-100 text-blue-800',
+    processing: 'bg-blue-100 text-blue-800',
+    delivered: 'bg-purple-100 text-purple-800',
+    completed: 'bg-emerald-100 text-emerald-800',
+    cancelled: 'bg-gray-100 text-gray-700',
+    dispute: 'bg-red-100 text-red-800',
+    disputed: 'bg-red-100 text-red-800',
+  };
+
+  const filteredAndSortedOrders = useMemo(() => {
+    let list = [...orders];
+    const filter = orderStatusFilter;
+    if (filter === 'active') {
+      list = list.filter((o) => ['paid', 'processing'].includes((o.status || '').toLowerCase()));
+    } else if (filter === 'delivered') {
+      list = list.filter((o) => (o.status || '').toLowerCase() === 'delivered');
+    } else if (filter === 'completed') {
+      list = list.filter((o) => (o.status || '').toLowerCase() === 'completed');
+    } else if (filter === 'disputed') {
+      list = list.filter((o) => ['dispute', 'disputed'].includes((o.status || '').toLowerCase()) || o.dispute?.id);
+    }
+    const sortBy = orderSortBy;
+    list.sort((a, b) => {
+      if (sortBy === 'newest') {
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      }
+      if (sortBy === 'oldest') {
+        return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      }
+      if (sortBy === 'amount') {
+        return Number(b.total_amount ?? 0) - Number(a.total_amount ?? 0);
+      }
+      return 0;
+    });
+    return list;
+  }, [orders, orderStatusFilter, orderSortBy]);
+
+  const handleOrdersPageClick = (page) => {
+    if (page >= 1 && page <= ordersLastPage) fetchOrders(page);
+  };
+
+  const pageNumbers = useMemo(() => {
+    const cur = ordersCurrentPage;
+    const last = ordersLastPage;
+    const delta = 2;
+    const pages = [];
+    for (let p = Math.max(1, cur - delta); p <= Math.min(last, cur + delta); p++) {
+      pages.push(p);
+    }
+    if (pages[0] > 1) pages.unshift(1);
+    if (pages[pages.length - 1] < last) pages.push(last);
+    return [...new Set(pages)];
+  }, [ordersCurrentPage, ordersLastPage]);
+
   const salesHistoryData = useMemo(() => {
     const byDate = new Map();
     const now = new Date();
@@ -587,6 +669,64 @@ export default function SellerDashboardPage() {
   }, [orders, sellerProductIds]);
 
   const updateForm = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+
+  const PRODUCT_DRAFT_KEY = 'seller-product-draft';
+
+  // Auto-save draft to localStorage every 3 seconds when wizard is open
+  useEffect(() => {
+    if (!addProductOpen) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(PRODUCT_DRAFT_KEY, JSON.stringify({ form, addProductStep }));
+      } catch {
+        /* ignore */
+      }
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [addProductOpen, form, addProductStep]);
+
+  const openAddProduct = useCallback(() => {
+    setFormError('');
+    try {
+      const raw = localStorage.getItem(PRODUCT_DRAFT_KEY);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft?.form && typeof draft?.addProductStep === 'number') {
+          setForm((prev) => ({ ...prev, ...draft.form }));
+          setAddProductStep(Math.min(6, Math.max(1, draft.addProductStep)));
+          setAddProductOpen(true);
+          return;
+        }
+      }
+    } catch {
+      /* ignore invalid draft */
+    }
+    setForm({
+      category_id: '',
+      service_id: '',
+      offer_type_id: '',
+      title: '',
+      game: '',
+      description: '',
+      price: '',
+      stock: '',
+      delivery_type: 'manual',
+      delivery_time: '',
+      delivery_content: '',
+      image_urls: '',
+      features: [],
+      seller_reminder: '',
+      is_flash_deal: false,
+      flash_price: '',
+      flash_start: '',
+      flash_end: '',
+      delivery_instructions: '',
+      is_pinned: false,
+      faqs: [],
+    });
+    setAddProductStep(1);
+    setAddProductOpen(true);
+  }, []);
 
   const handleAddProductSubmit = async (e) => {
     e.preventDefault();
@@ -641,6 +781,7 @@ export default function SellerDashboardPage() {
         flash_end: form.is_flash_deal && form.flash_end ? new Date(form.flash_end).toISOString() : null,
       });
       setForm({
+        category_id: '',
         service_id: '',
         offer_type_id: '',
         title: '',
@@ -662,6 +803,11 @@ export default function SellerDashboardPage() {
         flash_start: '',
         flash_end: '',
       });
+      try {
+        localStorage.removeItem(PRODUCT_DRAFT_KEY);
+      } catch {
+        /* ignore */
+      }
       setAddProductOpen(false);
       await fetchProducts();
       setActionMessage({ type: 'success', text: 'Product created.' });
@@ -943,7 +1089,7 @@ export default function SellerDashboardPage() {
                 type="button"
                 onClick={() => deliverContent.trim() && setDeliverConfirmPending(true)}
                 disabled={deliverSubmitting || !deliverContent.trim()}
-                className="flex-1 py-2.5 rounded-xl font-semibold bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60 transition-colors"
+                className="flex-1 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors"
               >
                 {deliverSubmitting ? 'Sending…' : '📤 Send Delivery'}
               </button>
@@ -1023,7 +1169,7 @@ export default function SellerDashboardPage() {
                 {content}
               </Link>
             ) : (
-              <button key={s.id} type="button" onClick={() => setSection(s.id)} className={className}>
+              <button key={s.id} type="button" onClick={() => { setSection(s.id); setSearchParams({ section: s.id }, { replace: true }); }} className={className}>
                 {content}
               </button>
             );
@@ -1500,8 +1646,8 @@ export default function SellerDashboardPage() {
               <h1 className="text-xl font-bold text-m4m-black">Products</h1>
               <button
                 type="button"
-                onClick={() => { setAddProductOpen(true); setFormError(''); }}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover transition-colors shadow-sm"
+                onClick={openAddProduct}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors shadow-sm"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -1511,206 +1657,372 @@ export default function SellerDashboardPage() {
             </div>
 
             {addProductOpen && (
-              <div className="rounded-xl border border-m4m-gray-200 bg-white p-6 shadow-sm mb-6">
-                <h2 className="text-lg font-semibold text-m4m-black mb-4">New product</h2>
+              <div className="flex flex-col lg:flex-row gap-8 mb-6">
+                <div className="flex-1 min-w-0 rounded-2xl border border-m4m-gray-200 bg-white p-8 shadow-lg">
+                <h2 className="text-xl font-bold text-m4m-black mb-2">New product</h2>
+                <p className="text-m4m-gray-600 mb-6 max-w-xl">
+                  Create a product to sell on the marketplace. Follow the steps to define your category, service and offer type.
+                </p>
+
+                {/* Progress bar: Category → Service → Offer Type → Details → Pricing → Publish */}
+                <div className="mb-8">
+                  <p className="text-sm font-medium text-m4m-gray-700 mb-2">Step {addProductStep} of 6</p>
+                  <div className="flex gap-1 mb-2">
+                    {['Category', 'Service', 'Offer Type', 'Details', 'Pricing', 'Publish'].map((label, i) => (
+                      <div
+                        key={label}
+                        className={`flex-1 h-2 rounded-sm transition-colors duration-200 ${
+                          addProductStep > i + 1 ? 'bg-m4m-purple' : addProductStep === i + 1 ? 'bg-m4m-purple' : 'bg-m4m-gray-200'
+                        }`}
+                        title={label}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-xs text-m4m-gray-500 font-medium">
+                    {['Category', 'Service', 'Offer Type', 'Details', 'Pricing', 'Publish'][addProductStep - 1]}
+                  </p>
+                </div>
+
                 {formError && (
-                  <p className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</p>
+                  <p className="mb-6 p-4 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{formError}</p>
                 )}
-                <form onSubmit={handleAddProductSubmit} className="space-y-4 max-w-xl">
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Service *</label>
-                    <select value={form.service_id} onChange={(e) => { updateForm('service_id', e.target.value); updateForm('offer_type_id', ''); }} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white">
-                      <option value="">Select service</option>
-                      {(services || []).map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Offer type *</label>
-                    <select value={form.offer_type_id} onChange={(e) => updateForm('offer_type_id', e.target.value)} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white" disabled={!form.service_id}>
-                      <option value="">Select offer type</option>
-                      {(filteredOfferTypes || []).map((ot) => (
-                        <option key={ot.id} value={ot.id}>{ot.name}</option>
-                      ))}
-                    </select>
-                    <button type="button" onClick={() => setServiceRequestModalOpen(true)} className="mt-1.5 text-sm text-m4m-purple hover:underline">
-                      Can&apos;t find your service? Request new service
-                    </button>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Title *</label>
-                    <input type="text" value={form.title} onChange={(e) => updateForm('title', e.target.value)} placeholder="Product title" maxLength={255} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Game</label>
-                    <input type="text" value={form.game} onChange={(e) => updateForm('game', e.target.value)} placeholder="e.g. Fortnite, Minecraft" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Description</label>
-                    <textarea value={form.description} onChange={(e) => updateForm('description', e.target.value)} placeholder="Product description" rows={3} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Price (MAD) *</label>
-                    <input type="number" min="0" step="0.01" value={form.price} onChange={(e) => updateForm('price', e.target.value)} placeholder="0.00" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
-                  </div>
-
-                  {/* Delivery type */}
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Delivery type</label>
-                    <div className="flex gap-3">
-                      {['manual', 'instant'].map((dt) => (
-                        <button key={dt} type="button" onClick={() => updateForm('delivery_type', dt)} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors capitalize ${form.delivery_type === dt ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
-                          {dt === 'instant' ? '⚡ Instant delivery' : '📦 Manual delivery'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Instant: delivery content */}
-                  {form.delivery_type === 'instant' ? (
-                    <div className="rounded-xl bg-green-50 border border-green-200 p-4">
-                      <label className="block text-sm font-semibold text-green-800 mb-1">
-                        Delivery content <span className="font-normal text-green-600">(one item per line)</span>
-                      </label>
-                      <p className="text-xs text-green-700 mb-2">Each line = 1 unit of stock. e.g.: <code className="bg-green-100 px-1 rounded">email:password</code></p>
-                      <textarea value={form.delivery_content} onChange={(e) => { updateForm('delivery_content', e.target.value); }} placeholder={"email1:password1\nemail2:password2\nemail3:password3"} rows={5} className="w-full px-3 py-2 rounded-lg border border-green-300 text-gray-900 text-sm focus:ring-2 focus:ring-green-500 outline-none resize-y font-mono" />
-                      <p className="text-xs text-green-600 mt-1">
-                        Stock: <strong>{form.delivery_content.split('\n').filter((l) => l.trim()).length} items</strong>
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Stock *</label>
-                      <input type="number" min="0" value={form.stock} onChange={(e) => updateForm('stock', e.target.value)} placeholder="0" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                <form onSubmit={handleAddProductSubmit} className="max-w-xl">
+                  <div key={addProductStep} className="wizard-step-animate">
+                  {/* Step 1 – Category */}
+                  {addProductStep === 1 && (
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-m4m-gray-800 mb-1">Category</label>
+                        <p className="text-sm text-m4m-gray-500 mb-3">
+                          Choose the category that best matches your product. This helps buyers find your offer faster.
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {(categories || []).map((c) => {
+                            const isSelected = String(form.category_id) === String(c.id);
+                            const iconMap = {
+                              gaming: '🎮',
+                              streaming: '📺',
+                              'gift-cards': '🎁',
+                              software: '💻',
+                              'social-media': '📱',
+                              subscriptions: '🔄',
+                              accounts: '👤',
+                              'top-up': '⚡',
+                              marketing: '📈',
+                            };
+                            const icon = c.icon || iconMap[c.slug] || iconMap[c.name?.toLowerCase()] || '📦';
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => { updateForm('category_id', c.id); updateForm('service_id', ''); updateForm('offer_type_id', ''); }}
+                                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all min-h-[80px] ${
+                                  isSelected
+                                    ? 'border-m4m-purple bg-m4m-purple/10 text-m4m-purple'
+                                    : 'border-m4m-gray-200 bg-white hover:border-m4m-purple/50 hover:bg-m4m-gray-50 text-m4m-gray-800'
+                                }`}
+                              >
+                                <span className="text-2xl">{icon}</span>
+                                <span className="text-sm font-medium">{c.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-4 rounded-xl bg-m4m-purple/5 border border-m4m-purple/20 p-4">
+                          <p className="text-xs font-semibold text-m4m-purple mb-1">Seller Tip</p>
+                          <p className="text-sm text-m4m-gray-700">Choose the correct category to improve visibility in search results.</p>
+                        </div>
+                      </div>
                     </div>
                   )}
 
-                  {/* Delivery time */}
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Delivery time</label>
-                    <div className="flex flex-wrap gap-2">
-                      {DELIVERY_TIME_OPTIONS.map((opt) => (
-                        <button key={opt} type="button" onClick={() => updateForm('delivery_time', form.delivery_time === opt ? '' : opt)} className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${form.delivery_time === opt ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
-                          {opt}
+                  {/* Step 2 – Service */}
+                  {addProductStep === 2 && (
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-m4m-gray-800 mb-2">Service *</label>
+                        <select value={form.service_id} onChange={(e) => { updateForm('service_id', e.target.value); updateForm('offer_type_id', ''); }} className="w-full px-4 py-3 rounded-xl border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white">
+                          <option value="">Select service</option>
+                          {getFilteredServices(form.category_id).map((s) => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        <button type="button" onClick={() => setServiceRequestModalOpen(true)} className="mt-3 text-sm font-medium text-m4m-purple hover:underline">
+                          Can&apos;t find your service? Request new service
                         </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Feature icons */}
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Features</label>
-                    <div className="flex flex-wrap gap-2">
-                      {FEATURE_OPTIONS.map((f) => {
-                        const selected = form.features.includes(f.id);
-                        return (
-                          <button key={f.id} type="button" onClick={() => updateForm('features', selected ? form.features.filter((x) => x !== f.id) : [...form.features, f.id])} className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${selected ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
-                            {f.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Image URLs */}
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Image URLs <span className="font-normal text-m4m-gray-400">(one per line)</span></label>
-                    <textarea value={form.image_urls} onChange={(e) => updateForm('image_urls', e.target.value)} placeholder={"https://example.com/image1.jpg\nhttps://example.com/image2.jpg"} rows={3} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none font-mono text-sm" />
-                  </div>
-
-                  {/* Seller reminder */}
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Seller note / reminder <span className="font-normal text-m4m-gray-400">(shown to buyers on product page)</span></label>
-                    <textarea value={form.seller_reminder} onChange={(e) => updateForm('seller_reminder', e.target.value)} placeholder="e.g. Please provide your game username after purchase." rows={2} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
-                  </div>
-
-                  {/* Delivery instructions */}
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">How to use this product <span className="font-normal text-m4m-gray-400">(instructions shown to buyers)</span></label>
-                    <textarea value={form.delivery_instructions} onChange={(e) => updateForm('delivery_instructions', e.target.value)} placeholder="1. Login with provided account\n2. Change password\n3. Enjoy the service" rows={4} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
-                  </div>
-
-                  {/* Featured product (one per seller) */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-m4m-gray-700">
-                      <input type="checkbox" checked={form.is_pinned} onChange={(e) => updateForm('is_pinned', e.target.checked)} className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple" />
-                      Feature this product (one per seller — appears first on your profile)
-                    </label>
-                  </div>
-
-                  {/* Product FAQ */}
-                  <div>
-                    <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Product FAQ</label>
-                    <p className="text-xs text-m4m-gray-500 mb-2">Add common questions and answers for buyers.</p>
-                    {(form.faqs || []).map((faq, idx) => (
-                      <div key={idx} className="flex gap-2 mb-2 items-start">
-                        <div className="flex-1 space-y-1">
-                          <input type="text" value={faq.question} onChange={(e) => updateForm('faqs', form.faqs.map((f, i) => i === idx ? { ...f, question: e.target.value } : f))} placeholder="Question" className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-sm" />
-                          <input type="text" value={faq.answer} onChange={(e) => updateForm('faqs', form.faqs.map((f, i) => i === idx ? { ...f, answer: e.target.value } : f))} placeholder="Answer" className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-sm" />
-                        </div>
-                        <button type="button" onClick={() => updateForm('faqs', form.faqs.filter((_, i) => i !== idx))} className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-sm">×</button>
                       </div>
-                    ))}
-                    <button type="button" onClick={() => updateForm('faqs', [...(form.faqs || []), { question: '', answer: '' }])} className="text-sm font-medium text-m4m-purple hover:underline">+ Add FAQ</button>
-                  </div>
+                    </div>
+                  )}
 
-                  {/* Flash deal */}
-                  <div className="border-t border-m4m-gray-100 pt-4 mt-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-m4m-gray-700 mb-2">
-                      <input
-                        type="checkbox"
-                        checked={form.is_flash_deal}
-                        onChange={(e) => updateForm('is_flash_deal', e.target.checked)}
-                        className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple"
-                      />
-                      Enable Flash Deal
-                    </label>
-                    {form.is_flash_deal && (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                        <div>
-                          <label className="block text-xs font-medium text-m4m-gray-500 mb-1">Flash price (MAD)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={form.flash_price}
-                            onChange={(e) => updateForm('flash_price', e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-m4m-gray-500 mb-1">Start</label>
-                          <input
-                            type="datetime-local"
-                            value={form.flash_start}
-                            onChange={(e) => updateForm('flash_start', e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-m4m-gray-500 mb-1">End</label>
-                          <input
-                            type="datetime-local"
-                            value={form.flash_end}
-                            onChange={(e) => updateForm('flash_end', e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                          />
+                  {/* Step 3 – Offer Type */}
+                  {addProductStep === 3 && (
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-m4m-gray-800 mb-2">Offer type *</label>
+                        <select value={form.offer_type_id} onChange={(e) => updateForm('offer_type_id', e.target.value)} className="w-full px-4 py-3 rounded-xl border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white" disabled={!form.service_id}>
+                          <option value="">Select offer type</option>
+                          {(filteredOfferTypes || []).map((ot) => (
+                            <option key={ot.id} value={ot.id}>{ot.name}</option>
+                          ))}
+                        </select>
+                        <button type="button" onClick={() => setServiceRequestModalOpen(true)} className="mt-3 text-sm font-medium text-m4m-purple hover:underline">
+                          Can&apos;t find your service? Request new service
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 4 – Product Details */}
+                  {addProductStep === 4 && (
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-m4m-gray-800 mb-2">Title *</label>
+                        <input type="text" value={form.title} onChange={(e) => updateForm('title', e.target.value)} placeholder="Fortnite OG Account Season 3" maxLength={255} className="w-full px-4 py-3 rounded-xl border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-m4m-gray-800 mb-2">Game</label>
+                        <input type="text" value={form.game} onChange={(e) => updateForm('game', e.target.value)} placeholder="e.g. Fortnite, Minecraft" className="w-full px-4 py-3 rounded-xl border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-m4m-gray-800 mb-2">Description</label>
+                        <textarea value={form.description} onChange={(e) => updateForm('description', e.target.value)} placeholder="Full access account with rare skins." rows={3} className="w-full px-4 py-3 rounded-xl border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Features</label>
+                        <div className="flex flex-wrap gap-2">
+                          {FEATURE_OPTIONS.map((f) => {
+                            const selected = form.features.includes(f.id);
+                            return (
+                              <button key={f.id} type="button" onClick={() => updateForm('features', selected ? form.features.filter((x) => x !== f.id) : [...form.features, f.id])} className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${selected ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
+                                {f.label}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
-                    {form.is_flash_deal && form.price && form.flash_price && parseFloat(form.flash_price) >= parseFloat(form.price) && (
-                      <p className="mt-2 text-xs text-red-600">Flash price must be lower than the regular price.</p>
-                    )}
+                      <div>
+                        <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Image URLs <span className="font-normal text-m4m-gray-400">(one per line)</span></label>
+                        <textarea value={form.image_urls} onChange={(e) => updateForm('image_urls', e.target.value)} placeholder={"https://example.com/image1.jpg\nhttps://example.com/image2.jpg"} rows={3} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none font-mono text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Seller note / reminder <span className="font-normal text-m4m-gray-400">(shown to buyers on product page)</span></label>
+                        <textarea value={form.seller_reminder} onChange={(e) => updateForm('seller_reminder', e.target.value)} placeholder="e.g. Please provide your game username after purchase." rows={2} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-m4m-gray-700 mb-1">How to use this product <span className="font-normal text-m4m-gray-400">(instructions shown to buyers)</span></label>
+                        <textarea value={form.delivery_instructions} onChange={(e) => updateForm('delivery_instructions', e.target.value)} placeholder="1. Login with provided account\n2. Change password\n3. Enjoy the service" rows={4} className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none resize-none" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 5 – Pricing & Delivery */}
+                  {addProductStep === 5 && (
+                    <div className="space-y-6">
+                      <div>
+                        <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Price (MAD) *</label>
+                        <input type="number" min="0" step="0.01" value={form.price} onChange={(e) => updateForm('price', e.target.value)} placeholder="Example: 9.99" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Delivery type</label>
+                        <div className="flex gap-3">
+                          {['manual', 'instant'].map((dt) => (
+                            <button key={dt} type="button" onClick={() => updateForm('delivery_type', dt)} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors capitalize ${form.delivery_type === dt ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
+                              {dt === 'instant' ? '⚡ Instant delivery' : '📦 Manual delivery'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      {form.delivery_type === 'instant' ? (
+                        <div className="rounded-xl bg-green-50 border border-green-200 p-4">
+                          <label className="block text-sm font-semibold text-green-800 mb-1">
+                            Delivery content <span className="font-normal text-green-600">(one item per line)</span>
+                          </label>
+                          <p className="text-xs text-green-700 mb-2">Each line = 1 unit of stock. e.g.: <code className="bg-green-100 px-1 rounded">email:password</code></p>
+                          <textarea value={form.delivery_content} onChange={(e) => updateForm('delivery_content', e.target.value)} placeholder={"email1:password1\nemail2:password2\nemail3:password3"} rows={5} className="w-full px-3 py-2 rounded-lg border border-green-300 text-gray-900 text-sm focus:ring-2 focus:ring-green-500 outline-none resize-y font-mono" />
+                          <p className="text-xs text-green-600 mt-1">
+                            Stock: <strong>{form.delivery_content.split('\n').filter((l) => l.trim()).length} items</strong>
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Stock *</label>
+                          <input type="number" min="0" value={form.stock} onChange={(e) => updateForm('stock', e.target.value)} placeholder="0" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                        </div>
+                      )}
+                      <div>
+                        <label className="flex items-center gap-1.5 text-sm font-medium text-m4m-gray-700 mb-2">
+                          Delivery time
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-m4m-gray-200 text-m4m-gray-500 text-[10px] font-bold cursor-help" title="Set the expected time to fulfill the order. Buyers see this before purchasing.">?</span>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {DELIVERY_TIME_OPTIONS.map((opt) => (
+                            <button key={opt} type="button" onClick={() => updateForm('delivery_time', form.delivery_time === opt ? '' : opt)} className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${form.delivery_time === opt ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="border-t border-m4m-gray-100 pt-4 mt-2">
+                        <label className="flex items-center gap-2 text-sm font-medium text-m4m-gray-700 mb-2">
+                          <input type="checkbox" checked={form.is_flash_deal} onChange={(e) => updateForm('is_flash_deal', e.target.checked)} className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple" />
+                          Enable Flash Deal
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-m4m-gray-200 text-m4m-gray-500 text-[10px] font-bold cursor-help" title="Flash Deal temporarily highlights your product on the marketplace.">?</span>
+                        </label>
+                        {form.is_flash_deal && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                            <div>
+                              <label className="block text-xs font-medium text-m4m-gray-500 mb-1">Flash price (MAD)</label>
+                              <input type="number" min="0" step="0.01" value={form.flash_price} onChange={(e) => updateForm('flash_price', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-m4m-gray-500 mb-1">Start</label>
+                              <input type="datetime-local" value={form.flash_start} onChange={(e) => updateForm('flash_start', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-m4m-gray-500 mb-1">End</label>
+                              <input type="datetime-local" value={form.flash_end} onChange={(e) => updateForm('flash_end', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                            </div>
+                          </div>
+                        )}
+                        {form.is_flash_deal && form.price && form.flash_price && parseFloat(form.flash_price) >= parseFloat(form.price) && (
+                          <p className="mt-2 text-xs text-red-600">Flash price must be lower than the regular price.</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-2 text-sm font-medium text-m4m-gray-700">
+                          <input type="checkbox" checked={form.is_pinned} onChange={(e) => updateForm('is_pinned', e.target.checked)} className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple" />
+                          Feature this product (one per seller — appears first on your profile)
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-m4m-gray-200 text-m4m-gray-500 text-[10px] font-bold cursor-help" title="Pin this product to the top of your seller profile. Only one product can be featured per seller.">?</span>
+                        </label>
+                      </div>
+                      <div>
+                        <label className="flex items-center gap-1.5 text-sm font-medium text-m4m-gray-700 mb-2">
+                          Product FAQ
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-m4m-gray-200 text-m4m-gray-500 text-[10px] font-bold cursor-help" title="Use FAQ to answer common buyer questions before they contact you. Adds Q&amp;A to your product page.">?</span>
+                        </label>
+                        {(form.faqs || []).map((faq, idx) => (
+                          <div key={idx} className="flex gap-2 mb-2 items-start">
+                            <div className="flex-1 space-y-1">
+                              <input type="text" value={faq.question} onChange={(e) => updateForm('faqs', form.faqs.map((f, i) => i === idx ? { ...f, question: e.target.value } : f))} placeholder="Question" className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-sm" />
+                              <input type="text" value={faq.answer} onChange={(e) => updateForm('faqs', form.faqs.map((f, i) => i === idx ? { ...f, answer: e.target.value } : f))} placeholder="Answer" className="w-full px-3 py-2 rounded-lg border border-m4m-gray-200 text-sm" />
+                            </div>
+                            <button type="button" onClick={() => updateForm('faqs', form.faqs.filter((_, i) => i !== idx))} className="px-2 py-1 text-red-600 hover:bg-red-50 rounded text-sm">×</button>
+                          </div>
+                        ))}
+                        <button type="button" onClick={() => updateForm('faqs', [...(form.faqs || []), { question: '', answer: '' }])} className="text-sm font-medium text-m4m-purple hover:underline">+ Add FAQ</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 6 – Review & Publish */}
+                  {addProductStep === 6 && (
+                    <div className="rounded-xl bg-m4m-gray-50 border border-m4m-gray-200 p-6 space-y-4 text-sm">
+                      <p><span className="font-medium text-m4m-gray-700">Category:</span> {categories?.find((c) => c.id == form.category_id)?.name ?? '—'}</p>
+                      <p><span className="font-medium text-m4m-gray-700">Service:</span> {services?.find((s) => s.id == form.service_id)?.name ?? '—'}</p>
+                      <p><span className="font-medium text-m4m-gray-700">Offer type:</span> {(filteredOfferTypes || []).find((ot) => ot.id == form.offer_type_id)?.name ?? '—'}</p>
+                      <p><span className="font-medium text-m4m-gray-700">Title:</span> {form.title || '—'}</p>
+                      <p><span className="font-medium text-m4m-gray-700">Price:</span> {form.price ? `${form.price} MAD` : '—'}</p>
+                      <p><span className="font-medium text-m4m-gray-700">Delivery:</span> {form.delivery_type === 'instant' ? 'Instant' : 'Manual'} {form.delivery_time ? `· ${form.delivery_time}` : ''}</p>
+                    </div>
+                  )}
                   </div>
 
-                  <div className="flex gap-3 pt-2">
-                    <button type="button" onClick={() => { setAddProductOpen(false); setFormError(''); }} className="px-4 py-2.5 rounded-lg font-medium border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50">Cancel</button>
-                    <button type="submit" disabled={formSubmitting} className="px-4 py-2.5 rounded-lg font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60">
-                      {formSubmitting ? 'Creating…' : 'Create product'}
-                    </button>
+                  <div className="flex items-center justify-between gap-3 pt-6 mt-8 border-t border-m4m-gray-200">
+                    <button type="button" onClick={() => { setAddProductOpen(false); setFormError(''); setAddProductStep(1); }} className="px-5 py-2.5 rounded-xl font-medium border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50">Cancel</button>
+                    <div className="flex gap-3">
+                      <button type="button" onClick={() => setAddProductStep((s) => s - 1)} disabled={addProductStep <= 1} className="px-5 py-2.5 rounded-xl font-medium border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white">
+                        ← Previous
+                      </button>
+                      {addProductStep < 6 ? (
+                        <button type="button" onClick={() => setAddProductStep((s) => s + 1)} className="px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark">
+                          Next →
+                        </button>
+                      ) : (
+                        <button type="submit" disabled={formSubmitting} className="px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60">
+                          {formSubmitting ? 'Creating…' : 'Finish → Create Product'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </form>
+                </div>
+
+                {/* Right sidebar: Product Preview + Seller Guide */}
+                <div className="lg:w-72 shrink-0 space-y-6">
+                  {/* Product Preview */}
+                  <div className="lg:sticky lg:top-6 space-y-4">
+                    <h3 className="text-sm font-bold text-m4m-gray-800">Product Preview</h3>
+                    <div className="rounded-xl border border-m4m-gray-200 bg-white shadow-sm overflow-hidden">
+                      <div className="aspect-[4/3] bg-m4m-gray-100 flex items-center justify-center overflow-hidden">
+                        {(() => {
+                          const urls = (form.image_urls || '').split('\n').map((u) => u.trim()).filter(Boolean);
+                          const firstImg = urls[0];
+                          return firstImg ? (
+                            <img src={firstImg} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="flex flex-col items-center gap-1 text-m4m-gray-300">
+                              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              <span className="text-xs">No image</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div className="p-3.5">
+                        <h4 className="font-semibold text-m4m-gray-900 text-sm line-clamp-2 leading-snug min-h-[2.5rem]">
+                          {form.title || 'Product title'}
+                        </h4>
+                        <p className="mt-1 text-xs text-m4m-gray-500">
+                          {services?.find((s) => s.id == form.service_id)?.name ?? '—'} · {(filteredOfferTypes || []).find((ot) => ot.id == form.offer_type_id)?.name ?? '—'}
+                        </p>
+                        <p className="mt-1 text-[10px] text-m4m-gray-400">
+                          Stock: {form.delivery_type === 'instant'
+                            ? (form.delivery_content || '').split('\n').filter((l) => l.trim()).length
+                            : (form.stock !== '' && form.stock != null ? form.stock : '0')}
+                        </p>
+                        <p className="mt-2 font-bold text-m4m-gray-900 text-base">
+                          {form.price ? `${Number(form.price).toFixed(2)}` : '0.00'} <span className="text-xs font-semibold text-m4m-gray-400">MAD</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seller Guide */}
+                  <div className="rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 p-5">
+                    <h3 className="text-sm font-bold text-m4m-gray-800 mb-4">Seller Guide</h3>
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        <p className="font-semibold text-m4m-gray-700">Step 1</p>
+                        <p className="text-m4m-gray-600">Choose the correct category.</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-m4m-gray-700">Step 2</p>
+                        <p className="text-m4m-gray-600">Select the service.</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-m4m-gray-700">Step 3</p>
+                        <p className="text-m4m-gray-600">Choose the offer type.</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-m4m-gray-700">Step 4</p>
+                        <p className="text-m4m-gray-600">Add product details, images, and instructions.</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-m4m-gray-700">Step 5</p>
+                        <p className="text-m4m-gray-600">Set price and delivery options.</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-m4m-gray-700">Step 6</p>
+                        <p className="text-m4m-gray-600">Review and publish your product.</p>
+                      </div>
+                    </div>
+                    <div className="mt-5 pt-4 border-t border-m4m-gray-200">
+                      <p className="text-xs font-semibold text-m4m-purple mb-1">Tip</p>
+                      <p className="text-sm text-m4m-gray-700">Clear titles increase sales.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1800,6 +2112,19 @@ export default function SellerDashboardPage() {
                 )}
                 <form onSubmit={handleEditSubmit} className="space-y-4 max-w-xl">
                   <div>
+                    <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Category</label>
+                    <select
+                      value={editingProduct.category_id || ''}
+                      onChange={(e) => setEditingProduct((f) => ({ ...f, category_id: e.target.value, service_id: '', offer_type_id: '' }))}
+                      className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white"
+                    >
+                      <option value="">Select category</option>
+                      {(categories || []).map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
                     <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Service *</label>
                     <select
                       value={editingProduct.service_id || ''}
@@ -1807,7 +2132,7 @@ export default function SellerDashboardPage() {
                       className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white"
                     >
                       <option value="">Select service</option>
-                      {(services || []).map((s) => (
+                      {getFilteredServices(editingProduct.category_id).map((s) => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
@@ -2260,175 +2585,286 @@ export default function SellerDashboardPage() {
           <>
             <h1 className="text-xl font-bold text-m4m-black mb-6">Orders received</h1>
             {formError && (
-              <p className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{formError}</p>
+              <p className="mb-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-100">{formError}</p>
             )}
-            {loadingOrders ? (
-              <div className="space-y-3">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-24 rounded-xl bg-white border border-m4m-gray-200 animate-pulse" />
+
+            {/* Filters and sort */}
+            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex flex-wrap gap-2">
+                {['all', 'active', 'delivered', 'completed', 'disputed'].map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setOrderStatusFilter(f)}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                      orderStatusFilter === f
+                        ? 'bg-m4m-purple text-white shadow-sm'
+                        : 'bg-white border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'
+                    }`}
+                  >
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                  </button>
                 ))}
               </div>
-            ) : orders.length === 0 ? (
-              <div className="rounded-xl border border-m4m-gray-200 bg-white p-8 text-center text-m4m-gray-500">
+              <select
+                value={orderSortBy}
+                onChange={(e) => setOrderSortBy(e.target.value)}
+                className="px-3 py-2 rounded-xl border border-m4m-gray-200 text-sm font-medium text-m4m-gray-700 bg-white focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+              >
+                <option value="newest">Sort by newest</option>
+                <option value="oldest">Sort by oldest</option>
+                <option value="amount">Sort by amount</option>
+              </select>
+            </div>
+
+            {loadingOrders ? (
+              <div className="rounded-xl border border-m4m-gray-200 bg-white shadow-sm overflow-hidden">
+                <div className="divide-y divide-m4m-gray-100">
+                  {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+                    <div key={i} className="p-4 flex items-center gap-4">
+                      <div className="h-8 w-24 rounded bg-m4m-gray-100 animate-pulse" />
+                      <div className="h-4 flex-1 rounded bg-m4m-gray-100 animate-pulse" />
+                      <div className="h-4 w-20 rounded bg-m4m-gray-100 animate-pulse" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : filteredAndSortedOrders.length === 0 ? (
+              <div className="rounded-xl border border-m4m-gray-200 bg-white p-12 text-center text-m4m-gray-500 shadow-sm">
                 No orders yet. Orders for your products will appear here.
               </div>
             ) : (
-              <ul className="space-y-4">
-                {orders.map((order) => {
-                  const status = (order.status || '').toLowerCase();
-                  const style = getOrderStatusStyle(order.status);
-                  const canSetProcessing = status === 'pending' || status === 'paid';
-                  const canSetDelivered = status === 'processing';
-                  const items = order.order_items ?? order.orderItems ?? [];
-                  const productTitles = items.map((i) => i.product?.name).filter(Boolean).join(', ') || 'Order';
-                  // Detect if any item is manual delivery
-                  const hasManualItem = items.some((i) => i.product?.delivery_type !== 'instant');
-                  const hasInstantItem = items.some((i) => i.product?.delivery_type === 'instant');
-                  // For manual orders in processing: show "Send Delivery" instead of "Mark as Delivered"
-                  const canSendDelivery = canSetDelivered && hasManualItem;
-                  return (
-                    <li
-                      key={order.id}
-                      className={`rounded-xl border border-m4m-gray-200 border-l-4 ${style.border} bg-white shadow-sm overflow-hidden`}
-                    >
-                      <div className="p-4 md:p-5">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <span className="font-mono font-semibold text-m4m-black">
-                            {order.order_number ?? `M4M-${String(order.id).padStart(6, '0')}`}
-                          </span>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {hasInstantItem && (
-                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">⚡ Instant</span>
-                            )}
-                            {hasManualItem && (
-                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">📦 Manual</span>
-                            )}
-                            {getEscrowBadge(order.escrow_status) && (
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getEscrowBadge(order.escrow_status).className}`}>
-                                {getEscrowBadge(order.escrow_status).label}
-                              </span>
-                            )}
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${style.badge}`}>
-                              {style.label}
-                            </span>
-                            {(order.dispute || status === 'dispute' || status === 'disputed') && order.dispute?.id && (
-                              <Link
-                                to={`/disputes/${order.dispute.id}`}
-                                className="px-3 py-1 rounded-full text-sm font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark"
-                              >
-                                View dispute
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-                        <p className="mt-2 text-m4m-black line-clamp-2">{productTitles}</p>
-                        <p className="mt-1 text-sm text-m4m-gray-600">
-                          Buyer: {order.buyer?.name ?? '—'}
-                        </p>
-                        <p className="mt-1 text-lg font-bold text-m4m-black">
-                          {Number(order.total_amount ?? 0).toFixed(2)} MAD
-                        </p>
-                        <p className="mt-1 text-sm text-m4m-gray-500">
-                          {order.created_at ? new Date(order.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
-                        </p>
-                        {status === 'delivered' && order.release_at && (
-                          (() => {
-                            const target = new Date(order.release_at).getTime();
-                            const now = Date.now();
-                            const diffMs = target - now;
-                            if (diffMs > 0) {
-                              const totalMinutes = Math.floor(diffMs / 60000);
-                              const days = Math.floor(totalMinutes / (60 * 24));
-                              const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-                              const parts = [];
-                              if (days > 0) parts.push(`${days} day${days === 1 ? '' : 's'}`);
-                              parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
-                              return (
-                                <p className="mt-1 text-xs text-m4m-gray-600">
-                                  Release in <span className="font-semibold">{parts.join(' ')}</span>
-                                </p>
-                              );
-                            }
-                            return null;
-                          })()
-                        )}
-                        {(order.dispute || status === 'dispute' || status === 'disputed') && (
-                          <div className={`mt-4 p-4 rounded-xl border ${
-                            order.escrow_status === 'released'
-                              ? 'bg-green-50 border-green-200'
-                              : order.escrow_status === 'refunded'
-                                ? 'bg-amber-50 border-amber-200'
-                                : 'bg-red-50 border-red-200'
-                          } text-sm`}>
-                            <p className="font-semibold text-gray-900">Status: Under dispute</p>
-                            <p className="mt-0.5 text-gray-700">
-                              Escrow amount: {Number(order.escrow_amount ?? order.total_amount ?? 0).toFixed(2)} MAD
-                            </p>
-                            {order.escrow_status === 'disputed' && (
-                              <p className="mt-2 text-gray-700">
-                                This order is currently under dispute. Funds are temporarily locked until the case is reviewed by the M4M administration.
-                              </p>
-                            )}
-                            {order.escrow_status === 'released' && (
-                              <p className="mt-2 text-green-800 font-medium">
-                                Dispute resolved. Funds released to your wallet.
-                              </p>
-                            )}
-                            {order.escrow_status === 'refunded' && (
-                              <p className="mt-2 text-amber-800">
-                                Dispute resolved. Buyer refunded. Funds were returned to the buyer after admin review.
-                              </p>
-                            )}
-                            {order.dispute?.admin_note && (
-                              <p className="mt-2 pt-2 border-t border-gray-200 text-gray-600 italic">
-                                Admin note: {order.dispute.admin_note}
-                              </p>
-                            )}
-                            {order.dispute?.id && (
-                              <Link
-                                to={`/disputes/${order.dispute.id}`}
-                                className="mt-3 inline-block px-4 py-2 rounded-lg text-sm font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark"
-                              >
-                                View dispute
-                              </Link>
-                            )}
-                          </div>
-                        )}
-                        {(canSetProcessing || canSetDelivered) && (
-                          <div className="mt-4 pt-3 border-t border-m4m-gray-100 flex flex-wrap gap-2">
-                            {canSetProcessing && (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateOrderStatus(order.id, 'processing')}
-                                className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700"
-                              >
-                                Mark as Processing
-                              </button>
-                            )}
-                            {canSendDelivery ? (
-                              <button
-                                type="button"
-                                onClick={() => handleDeliverOpen(order)}
-                                className="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700"
-                              >
-                                📤 Send Delivery
-                              </button>
-                            ) : canSetDelivered && (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateOrderStatus(order.id, 'delivered')}
-                                className="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700"
-                              >
-                                Mark as Delivered
-                              </button>
-                            )}
-                          </div>
-                        )}
+              <>
+                <div className="rounded-xl border border-m4m-gray-200 bg-white shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-m4m-gray-200 bg-m4m-gray-50">
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-m4m-gray-600 uppercase tracking-wider">Order ID</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-m4m-gray-600 uppercase tracking-wider">Product</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-m4m-gray-600 uppercase tracking-wider">Buyer</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-m4m-gray-600 uppercase tracking-wider">Amount</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-m4m-gray-600 uppercase tracking-wider hidden md:table-cell">Delivery</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-m4m-gray-600 uppercase tracking-wider">Status</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-m4m-gray-600 uppercase tracking-wider hidden lg:table-cell">Date</th>
+                          <th className="text-right px-4 py-3 text-xs font-semibold text-m4m-gray-600 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-m4m-gray-100">
+                        {filteredAndSortedOrders.map((order) => {
+                          const status = (order.status || '').toLowerCase();
+                          const style = getOrderStatusStyle(order.status);
+                          const canSetProcessing = status === 'pending' || status === 'paid';
+                          const canSetDelivered = status === 'processing';
+                          const items = order.order_items ?? order.orderItems ?? [];
+                          const productTitles = items.map((i) => i.product?.name).filter(Boolean).join(', ') || 'Order';
+                          const hasManualItem = items.some((i) => i.product?.delivery_type !== 'instant');
+                          const hasInstantItem = items.some((i) => i.product?.delivery_type === 'instant');
+                          const canSendDelivery = canSetDelivered && hasManualItem;
+                          const badgeClass = orderStatusBadgeClasses[status] || style.badge;
+                          const deliveryLabel = hasInstantItem && hasManualItem ? 'Mixed' : hasInstantItem ? '⚡ Instant' : '📦 Manual';
+                          return (
+                            <tr key={order.id} className="hover:bg-m4m-gray-50/50 transition-colors">
+                              <td className="px-4 py-3">
+                                <span className="font-mono text-sm font-semibold text-m4m-black">
+                                  {order.order_number ?? `M4M-${String(order.id).padStart(6, '0')}`}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-sm text-m4m-gray-800 line-clamp-2 max-w-[180px] block">{productTitles}</span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-m4m-gray-700">{order.buyer?.name ?? '—'}</td>
+                              <td className="px-4 py-3 font-semibold text-m4m-black">{Number(order.total_amount ?? 0).toFixed(2)} MAD</td>
+                              <td className="px-4 py-3 hidden md:table-cell">
+                                <span className="text-xs text-m4m-gray-600">{deliveryLabel}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-wrap gap-1.5 items-center">
+                                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${badgeClass}`}>
+                                    {style.label}
+                                  </span>
+                                  {(order.dispute || status === 'dispute' || status === 'disputed') && order.dispute?.id && (
+                                    <Link
+                                      to={`/disputes/${order.dispute.id}`}
+                                      className="text-xs font-medium text-m4m-purple hover:underline"
+                                    >
+                                      Dispute
+                                    </Link>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 hidden lg:table-cell text-sm text-m4m-gray-600">
+                                {order.created_at ? new Date(order.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '—'}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex flex-wrap justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setOrderDetailsModal(order)}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
+                                  >
+                                    View details
+                                  </button>
+                                  {canSetProcessing && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateOrderStatus(order.id, 'processing')}
+                                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
+                                    >
+                                      Processing
+                                    </button>
+                                  )}
+                                  {canSendDelivery && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeliverOpen(order)}
+                                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
+                                    >
+                                      Send
+                                    </button>
+                                  )}
+                                  {canSetDelivered && !canSendDelivery && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateOrderStatus(order.id, 'delivered')}
+                                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
+                                    >
+                                      Delivered
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Pagination */}
+                {ordersLastPage > 1 && (
+                  <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <p className="text-sm text-m4m-gray-600">
+                      Page {ordersCurrentPage} of {ordersLastPage} · {ordersTotal} total orders
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOrdersPageClick(ordersCurrentPage - 1)}
+                        disabled={ordersCurrentPage <= 1}
+                        className="px-4 py-2 rounded-xl text-sm font-medium border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        &larr; Prev
+                      </button>
+                      <div className="flex gap-1">
+                        {pageNumbers.map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => handleOrdersPageClick(p)}
+                            className={`min-w-[36px] px-2 py-2 rounded-xl text-sm font-medium transition-colors ${
+                              p === ordersCurrentPage
+                                ? 'bg-m4m-purple text-white'
+                                : 'border border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        ))}
                       </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                      <button
+                        type="button"
+                        onClick={() => handleOrdersPageClick(ordersCurrentPage + 1)}
+                        disabled={ordersCurrentPage >= ordersLastPage}
+                        className="px-4 py-2 rounded-xl text-sm font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next &rarr;
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Order details modal */}
+            {orderDetailsModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setOrderDetailsModal(null)}>
+                <div className="rounded-2xl bg-white shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                  <div className="p-6">
+                    <h3 className="text-lg font-bold text-m4m-black mb-4">
+                      Order {orderDetailsModal.order_number ?? `M4M-${String(orderDetailsModal.id).padStart(6, '0')}`}
+                    </h3>
+                    <div className="space-y-4 text-sm">
+                      <div>
+                        <p className="font-semibold text-m4m-gray-700 mb-1">Timeline</p>
+                        <ul className="space-y-1 text-m4m-gray-600">
+                          <li>Created: {orderDetailsModal.created_at ? new Date(orderDetailsModal.created_at).toLocaleString() : '—'}</li>
+                          {orderDetailsModal.delivered_at && (
+                            <li>Delivered: {new Date(orderDetailsModal.delivered_at).toLocaleString()}</li>
+                          )}
+                          {orderDetailsModal.completed_at && (
+                            <li>Completed: {new Date(orderDetailsModal.completed_at).toLocaleString()}</li>
+                          )}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-m4m-gray-700 mb-1">Escrow</p>
+                        <p className="text-m4m-gray-600">
+                          Amount: {Number(orderDetailsModal.escrow_amount ?? orderDetailsModal.total_amount ?? 0).toFixed(2)} MAD
+                          {orderDetailsModal.escrow_status && (
+                            <span className="ml-2">{getEscrowBadge(orderDetailsModal.escrow_status)?.label ?? orderDetailsModal.escrow_status}</span>
+                          )}
+                        </p>
+                      </div>
+                      {orderDetailsModal.release_at && (
+                        <div>
+                          <p className="font-semibold text-m4m-gray-700 mb-1">Release</p>
+                          <p className="text-m4m-gray-600">
+                            {new Date(orderDetailsModal.release_at) > new Date()
+                              ? `Release in ${Math.ceil((new Date(orderDetailsModal.release_at) - new Date()) / 3600000)} hours`
+                              : 'Released'}
+                          </p>
+                        </div>
+                      )}
+                      {orderDetailsModal.dispute && (
+                        <div className="p-3 rounded-xl bg-m4m-gray-50 border border-m4m-gray-200">
+                          <p className="font-semibold text-m4m-gray-700 mb-1">Dispute</p>
+                          <p className="text-m4m-gray-600 mb-2">Status: {orderDetailsModal.dispute.status ?? '—'}</p>
+                          {orderDetailsModal.dispute.admin_note && (
+                            <p className="text-m4m-gray-600 italic">Admin note: {orderDetailsModal.dispute.admin_note}</p>
+                          )}
+                          {orderDetailsModal.dispute?.id && (
+                            <Link
+                              to={`/disputes/${orderDetailsModal.dispute.id}`}
+                              className="mt-2 inline-block px-3 py-1.5 rounded-lg text-sm font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark"
+                            >
+                              View dispute
+                            </Link>
+                          )}
+                        </div>
+                      )}
+                      {orderDetailsModal.delivery_content && (
+                        <div>
+                          <p className="font-semibold text-m4m-gray-700 mb-1">Delivery content</p>
+                          <pre className="p-3 rounded-xl bg-m4m-gray-50 border border-m4m-gray-200 text-xs font-mono text-m4m-gray-800 whitespace-pre-wrap break-words">
+                            {orderDetailsModal.delivery_content}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-6 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setOrderDetailsModal(null)}
+                        className="px-4 py-2 rounded-xl font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </>
         )}

@@ -127,6 +127,17 @@ function HowToSellContent() {
       <div className="mt-8 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
         <strong>Platform Commission:</strong> M4M takes a 10% commission on each completed order. You receive 90% of the sale price.
       </div>
+      <div className="mt-8 flex justify-center">
+        <Link
+          to={{ pathname: '/auth', state: { sellerIntent: true } }}
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
+        >
+          Start selling
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+          </svg>
+        </Link>
+      </div>
     </article>
   );
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\Controller;
 use App\Models\OfferType;
+use App\Models\Service;
 use App\Models\ServiceRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,7 +39,18 @@ class AdminServiceRequestController extends Controller
             return $this->error('Request is not pending.', 400);
         }
 
-        $baseSlug = Str::slug($service_request->service_name);
+        $serviceSlug = Str::slug($service_request->service_name);
+
+        $service = Service::firstOrCreate(
+            ['slug' => $serviceSlug],
+            [
+                'name'        => $service_request->service_name,
+                'icon'        => null,
+                'category_id' => $service_request->category_id,
+            ]
+        );
+
+        $baseSlug = $serviceSlug;
         $slug = $baseSlug;
         $n = 1;
         while (OfferType::where('slug', $slug)->exists()) {
@@ -47,6 +59,7 @@ class AdminServiceRequestController extends Controller
 
         $offerType = OfferType::create([
             'category_id'  => $service_request->category_id,
+            'service_id'   => $service->id,
             'name'         => $service_request->service_name,
             'slug'         => $slug,
             'description'  => $service_request->description,

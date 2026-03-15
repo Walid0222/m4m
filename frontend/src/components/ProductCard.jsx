@@ -39,7 +39,7 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
   const sellerLevel = typeof seller?.seller_level === 'number' ? seller.seller_level : null;
 
   return (
-    <article className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col group">
+    <article className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 overflow-hidden flex flex-col group">
       {/* Product image + favorite/verified badges */}
       <Link to={`/product/${id}`} className="block flex-shrink-0 relative">
         <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
@@ -89,7 +89,7 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
             <img
               src={product.images[0]}
               alt={name}
-              className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+              className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-300"
             />
           ) : (
             <div className="flex flex-col items-center gap-1 text-gray-300">
@@ -126,72 +126,59 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
           </div>
         )}
 
-        {/* Seller info row: avatar + name */}
-        <div className="mt-2 flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
-            {!sellerAvatarError && sellerAvatarSrc ? (
-              <img
-                src={sellerAvatarSrc}
-                alt="seller avatar"
-                className="w-6 h-6 rounded-full object-cover"
-                onError={() => setSellerAvatarError(true)}
-              />
-            ) : (
-              <span className="text-xs font-semibold text-gray-500">
-                {(sellerName || 'S').charAt(0).toUpperCase()}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 flex-1">
+        {/* Seller info + badges + rating (compact row) */}
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <div className="flex items-center gap-1.5 min-w-0 flex-shrink-0">
+            <div className="w-6 h-6 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
+              {!sellerAvatarError && sellerAvatarSrc ? (
+                <img
+                  src={sellerAvatarSrc}
+                  alt="seller avatar"
+                  className="w-6 h-6 rounded-full object-cover"
+                  onError={() => setSellerAvatarError(true)}
+                />
+              ) : (
+                <span className="text-xs font-semibold text-gray-500">
+                  {(sellerName || 'S').charAt(0).toUpperCase()}
+                </span>
+              )}
+            </div>
             {seller?.id ? (
-              <Link to={`/seller/${seller.id}`} className="text-xs text-gray-600 hover:text-m4m-purple transition-colors font-medium truncate max-w-[100px]">
+              <Link to={`/seller/${seller.id}`} className="text-xs text-gray-600 hover:text-m4m-purple transition-colors font-medium truncate max-w-[80px]">
                 {sellerDisplayName}
               </Link>
             ) : (
-              <span className="text-xs text-gray-600 font-medium truncate">{sellerDisplayName}</span>
+              <span className="text-xs text-gray-600 font-medium truncate max-w-[80px]">{sellerDisplayName}</span>
             )}
-            <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${online ? 'text-green-600' : 'text-gray-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
-              {online ? 'Online' : 'Offline'}
-            </span>
-            {isVerified && <VerifiedBadge />}
           </div>
-        </div>
-
-        {/* Sales badge + Rating */}
-        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium flex-shrink-0 ${online ? 'text-green-600' : 'text-gray-400'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
+            {online ? 'Online' : 'Offline'}
+          </span>
+          {isVerified && <VerifiedBadge />}
           <SellerSalesBadge completedSales={completedSales} />
           {sellerLevel != null && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700">
               Lv {sellerLevel}
             </span>
           )}
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-600">
-            {reviewsCount > 0 ? (
-              <>
-                <span className="text-amber-400">⭐</span>
-                <span>
-                  {displayRating != null ? displayRating.toFixed(1) : 'New'} ({reviewsCount}{' '}
-                  {reviewsCount === 1 ? 'review' : 'reviews'})
-                </span>
-              </>
-            ) : (
-              <span className="text-gray-500">No reviews yet</span>
-            )}
-            {offerSales > 0 && (
-              <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
-                <span>🛒</span>
-                <span>
-                  {offerSales} {offerSales === 1 ? 'sale' : 'sales'}
-                </span>
-              </span>
-            )}
-          </div>
+          {reviewsCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-600">
+              <span className="text-amber-400">⭐</span>
+              {displayRating != null ? displayRating.toFixed(1) : '—'} ({reviewsCount})
+            </span>
+          )}
+          {offerSales > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-500">
+              <span>🛒</span>
+              {offerSales} {offerSales === 1 ? 'sale' : 'sales'}
+            </span>
+          )}
         </div>
 
         {/* Price + BUY */}
         <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-gray-100">
-          <p className="font-bold text-gray-900">
+          <p className="font-bold text-gray-900 text-base">
             {Number(product.price || 0).toFixed(2)} <span className="text-xs font-semibold text-gray-400">MAD</span>
           </p>
           <Link

@@ -5,6 +5,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import { useRefresh } from '../contexts/RefreshContext';
 import {
   getWallet,
+  getWalletTransactions,
   getDepositRequests,
   getWithdrawRequests,
   createDepositRequest,
@@ -141,21 +142,49 @@ export default function WalletPage() {
   const [depositsVisible, setDepositsVisible] = useState(REQUESTS_PAGE_SIZE);
   const [withdrawalsVisible, setWithdrawalsVisible] = useState(REQUESTS_PAGE_SIZE);
 
+  const [extraTransactions, setExtraTransactions] = useState([]);
+  const [transactionsNextPageUrl, setTransactionsNextPageUrl] = useState(null);
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const [transactionsHasFetched, setTransactionsHasFetched] = useState(false);
+  const [loadMoreLoading, setLoadMoreLoading] = useState(false);
+
   const [escrowData, setEscrowData] = useState(null);
   const bal = Number(balance?.available_balance ?? balance?.balance ?? 0);
   const isSeller = user?.is_seller === true || user?.is_seller === 1;
 
   const transactionHistory = useMemo(() => {
+    const baseFromApi = [];
     const apiTx = balance?.transactions;
-    if (Array.isArray(apiTx) && apiTx.length >= 0) {
-      return apiTx.map((t) => ({
-        id: `tx-${t.id}`,
-        type: t.type,
-        amount: Number(t.amount),
-        description: t.description ?? t.type,
-        created_at: t.created_at,
-        _fromApi: true,
-      }));
+    if (Array.isArray(apiTx)) {
+      apiTx.forEach((t) => {
+        baseFromApi.push({
+          id: `tx-${t.id}`,
+          type: t.type,
+          amount: Number(t.amount),
+          description: t.description ?? t.type,
+          created_at: t.created_at,
+          _fromApi: true,
+        });
+      });
+    }
+    const extra = extraTransactions.map((t) => ({
+      id: `tx-${t.id}`,
+      type: t.type,
+      amount: Number(t.amount),
+      description: t.description ?? t.type,
+      created_at: t.created_at,
+      _fromApi: true,
+    }));
+    const seen = new Set(baseFromApi.map((i) => i.id));
+    extra.forEach((item) => {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        baseFromApi.push(item);
+      }
+    });
+    if (baseFromApi.length > 0) {
+      baseFromApi.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      return baseFromApi;
     }
     const list = [
       ...deposits.map((d) => ({ id: `d-${d.id}`, type: 'deposit', amount: Number(d.amount), status: d.status, reference: d.reference_code, created_at: d.created_at, _fromApi: false })),
@@ -163,7 +192,37 @@ export default function WalletPage() {
     ];
     list.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     return list;
-  }, [balance?.transactions, deposits, withdrawals]);
+  }, [balance?.transactions, extraTransactions, deposits, withdrawals]);
+
+  // Reset paginated transactions when wallet is refreshed
+  useEffect(() => {
+    setExtraTransactions([]);
+    setTransactionsNextPageUrl(null);
+    setTransactionsPage(1);
+    setTransactionsHasFetched(false);
+  }, [tick]);
+
+  const handleLoadMoreTransactions = async () => {
+    setLoadMoreLoading(true);
+    try {
+      const res = await getWalletTransactions(transactionsPage);
+      const paginated = res?.transactions;
+      const data = Array.isArray(paginated?.data) ? paginated.data : [];
+      const nextUrl = paginated?.next_page_url ?? null;
+      setExtraTransactions((prev) => [...prev, ...data]);
+      setTransactionsNextPageUrl(nextUrl);
+      setTransactionsPage((p) => p + 1);
+      setTransactionsHasFetched(true);
+    } catch {
+      // Silent fail
+    } finally {
+      setLoadMoreLoading(false);
+    }
+  };
+
+  const showLoadMoreTransactions =
+    (!transactionsHasFetched && Array.isArray(balance?.transactions) && balance.transactions.length >= 20) ||
+    (transactionsHasFetched && transactionsNextPageUrl !== null);
 
   // Auto-refresh wallet data (balance, deposit/withdraw requests) on global refresh tick
   useEffect(() => {
@@ -581,11 +640,23 @@ export default function WalletPage() {
             <p className="text-gray-400 text-sm">No transactions yet.</p>
           </div>
         ) : (
-          <ul className="space-y-3">
-            {transactionHistory.map((item) => (
-              <ActivityCard key={item.id} item={item} />
-            ))}
-          </ul>
+          <>
+            <ul className="space-y-3">
+              {transactionHistory.map((item) => (
+                <ActivityCard key={item.id} item={item} />
+              ))}
+            </ul>
+            {showLoadMoreTransactions && (
+              <button
+                type="button"
+                onClick={handleLoadMoreTransactions}
+                disabled={loadMoreLoading}
+                className="mt-3 w-full py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loadMoreLoading ? 'Loading…' : 'Load more'}
+              </button>
+            )}
+          </>
         )}
       </section>
 

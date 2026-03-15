@@ -178,6 +178,10 @@ export function getTrendingProducts(params = {}) {
   return api.get('/products/trending', { params }).then(unwrap);
 }
 
+export function getBestSellingProducts(params = {}) {
+  return api.get('/products/best-selling', { params }).then(unwrap);
+}
+
 export function getProduct(id, params = {}) {
   return api.get(`/products/${id}`, { params }).then(unwrap);
 }
@@ -308,6 +312,10 @@ export function submitSellerVerification(body) {
 
 export function getWallet() {
   return api.get('/wallet').then(unwrap);
+}
+
+export function getWalletTransactions(page = 1) {
+  return api.get(`/wallet/transactions?page=${page}`).then(unwrap);
 }
 
 export function getDepositRequests(params = {}) {
@@ -492,6 +500,10 @@ export function getBuyerStats() {
 
 export function getCategories(params = {}) {
   return api.get('/categories', { params }).then(unwrap);
+}
+
+export function getMarketplaceStats() {
+  return api.get('/marketplace/stats').then(unwrap);
 }
 
 export function getServices(params = {}) {

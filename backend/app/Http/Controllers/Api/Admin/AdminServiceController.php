@@ -28,6 +28,7 @@ class AdminServiceController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'icon' => ['nullable', 'string', 'max:50'],
+            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
         ]);
 
         $slug = Str::slug($validated['name']);
@@ -41,6 +42,7 @@ class AdminServiceController extends Controller
             'name' => $validated['name'],
             'slug' => $slug,
             'icon' => $validated['icon'] ?? null,
+            'category_id' => $validated['category_id'] ?? null,
         ]);
 
         return $this->success($service, 'Service created.', 201);
@@ -53,9 +55,14 @@ class AdminServiceController extends Controller
     {
         $service = Service::findOrFail($id);
 
+        if ($request->has('category_id') && $request->input('category_id') === '') {
+            $request->merge(['category_id' => null]);
+        }
+
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'icon' => ['nullable', 'string', 'max:50'],
+            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
         ]);
 
         if (isset($validated['name'])) {
