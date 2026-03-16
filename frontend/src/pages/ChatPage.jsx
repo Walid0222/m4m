@@ -28,7 +28,7 @@ const SUPPORT_CONV = {
 const SYSTEM_WELCOME = {
   id: '__system_welcome__',
   _system: true,
-  body: 'Welcome to M4M support. Our team will respond as soon as possible.',
+  body: '🔒 Safety Reminder\n\nFor your safety, keep all communication and payments within M4M. Buy only from verified sellers whenever possible. Never share sensitive information such as passwords or recovery codes. Transactions completed outside M4M are not protected by our support team.',
   created_at: null,
 };
 
@@ -541,7 +541,7 @@ export default function ChatPage() {
   if (loading && conversations.length === 0) {
     return (
       <div className="min-h-screen flex flex-col">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 flex items-center justify-center">
+        <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 flex items-center justify-center">
           <div className="animate-pulse flex gap-4">
             <div className="w-80 h-[500px] rounded-xl bg-gray-100" />
             <div className="flex-1 h-[500px] rounded-xl bg-gray-100" />
@@ -553,9 +553,7 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1 flex flex-col min-h-0">
-        <h1 className="text-2xl font-bold text-gray-900 mb-5">Messages</h1>
-
+      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1 flex flex-col min-h-0">
         {!user ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
             <p className="text-gray-500 mb-4">Sign in to use chat.</p>

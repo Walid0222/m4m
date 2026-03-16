@@ -22,7 +22,7 @@ class ConversationController extends Controller
             ->where(function ($q) use ($userId) {
                 $q->where('user_one_id', $userId)->orWhere('user_two_id', $userId);
             })
-            ->with(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id,status', 'product:id,name'])
+            ->with(['userOne:id,name,last_activity_at,avatar', 'userTwo:id,name,last_activity_at,avatar', 'order:id,status', 'product:id,name'])
             ->withCount(['messages'])
             ->latest('updated_at')
             ->paginate($request->integer('per_page', 15));
@@ -87,7 +87,7 @@ class ConversationController extends Controller
             return $this->error('Forbidden.', 403);
         }
 
-        $conversation->load(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id,status', 'product:id,name']);
+        $conversation->load(['userOne:id,name,last_activity_at,avatar', 'userTwo:id,name,last_activity_at,avatar', 'order:id,status', 'product:id,name']);
         $conversation->other_user = $conversation->user_one_id === $userId ? $conversation->userTwo : $conversation->userOne;
 
         // Mark incoming messages as read for the current user (regular conversations only)
@@ -99,7 +99,7 @@ class ConversationController extends Controller
         }
 
         $messages = $conversation->messages()
-            ->with('sender:id,name')
+            ->with('sender:id,name,avatar')
             ->latest()
             ->paginate($request->integer('per_page', 20));
 
@@ -156,7 +156,7 @@ class ConversationController extends Controller
             'status'  => 'sent',
         ]);
 
-        $message->load('sender:id,name');
+        $message->load('sender:id,name,avatar');
 
         $conversation->touch();
 
