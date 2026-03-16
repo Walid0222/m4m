@@ -18,6 +18,7 @@ export default function ServiceCard({ service }) {
       <img
         src={baseSrc}
         alt={service.name}
+        loading="lazy"
         className="service-icon w-10 h-10 object-contain mb-1"
         onError={handleError}
       />

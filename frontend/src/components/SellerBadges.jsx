@@ -1,7 +1,7 @@
 /**
  * Shared badge components used site-wide for seller and buyer trust indicators.
  */
-import { Trophy } from 'lucide-react';
+import { Trophy, ShoppingCart } from 'lucide-react';
 import { getSellerSalesBadge, getBuyerPurchaseBadge } from '../lib/sellerBadge';
 
 /** Blue checkmark verified badge */
@@ -44,7 +44,8 @@ export function BuyerPurchaseBadge({ completedPurchases, size = 'sm' }) {
     : 'px-1.5 py-0.5 text-[10px]';
   return (
     <span className={`inline-flex items-center rounded-full font-bold ${badge.color} ${cls}`}>
-      🛒 {badge.label}
+      <ShoppingCart className="w-3 h-3 mr-1" />
+      {badge.label}
     </span>
   );
 }

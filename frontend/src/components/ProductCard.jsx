@@ -1,18 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { Zap, Star, ShoppingCart, AlertCircle } from 'lucide-react';
 import { isSellerOnline } from '../lib/sellerOnline';
 import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
 
 /**
- * Product card used on HomePage, seller profile, favorites, etc.
+ * Single source of truth for product cards across the site.
+ * Use this component for all product listings: homepage, flash deals, recommended,
+ * recently viewed, seller profile, marketplace, favorites, and offer-type pages.
  *
- * Optional favorites props:
- * - isFavorited: boolean
- * - onToggleFavorite: () => void
+ * Layout: image (aspect-[4/3]), badges overlay (Instant delivery, Low stock), favorite overlay,
+ * title (line-clamp-2), seller info (seller, online, level), price + MAD, Buy button.
+ * When sold out: price hidden, grey "Sold out" button only.
+ *
+ * Props:
+ * - product: Product data
+ * - isFavorited?: boolean
+ * - onToggleFavorite?: () => void
+ * - compact?: boolean — smaller layout for horizontal carousels on mobile only
  */
-export default function ProductCard({ product, isFavorited = false, onToggleFavorite }) {
+export default function ProductCard({ product, isFavorited = false, onToggleFavorite, compact = false }) {
   const { id, name, price, seller, stock, is_pinned } = product;
   const [sellerAvatarError, setSellerAvatarError] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [product?.id, product?.images?.[0]]);
+
   const isOutOfStock = Number(stock ?? 0) <= 0;
   const sellerName = seller?.name ?? 'Seller';
   const sellerDisplayName = seller?.username ?? seller?.name ?? 'Seller';
@@ -38,22 +53,155 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
     seller?.is_verified_seller === 1;
   const sellerLevel = typeof seller?.seller_level === 'number' ? seller.seller_level : null;
 
-  return (
-    <article className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5 overflow-hidden flex flex-col group">
-      {/* Product image + favorite/verified badges */}
-      <Link to={`/product/${id}`} className="block flex-shrink-0 relative">
-        <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
-          {is_pinned && (
-            <span className="px-2 py-0.5 rounded-lg bg-amber-400/95 text-amber-900 text-[10px] font-semibold uppercase tracking-wide w-fit">
-              ⭐ Featured
+  // Compact marketplace-style card for horizontal carousels
+  if (compact) {
+    return (
+      <article className="w-[160px] h-[220px] flex flex-col border border-gray-200 rounded-xl bg-white p-2 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
+        <Link to={`/product/${id}`} className="relative block">
+          {/* Badges overlay (featured / stock / instant / low stock) */}
+          <div className="absolute inset-x-1 top-1 z-10 flex justify-between items-start text-[10px] font-semibold">
+            <div className="flex flex-col gap-1">
+              {is_pinned && (
+                <span className="px-1.5 py-0.5 rounded bg-amber-400/95 text-amber-900 uppercase tracking-wide">
+                  Featured
+                </span>
+              )}
+              {isInstant && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                  <Zap className="w-3 h-3" />
+                  <span>Instant</span>
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-1 items-end">
+              {isOutOfStock && (
+                <span className="px-1.5 py-0.5 rounded bg-red-500/90 text-white uppercase tracking-wide">
+                  Out of stock
+                </span>
+              )}
+              {isLowStock && !isOutOfStock && (
+                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                  Low stock
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Image */}
+          <div className="w-full h-24 bg-gray-100 flex items-center justify-center overflow-hidden rounded-md">
+            {product.images?.[0] && typeof product.images[0] === 'string' && product.images[0].trim() && !imageError ? (
+              <img
+                src={product.images[0]}
+                alt={name}
+                loading="lazy"
+                onError={() => setImageError(true)}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-1 text-gray-300">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-[11px]">No image</span>
+              </div>
+            )}
+          </div>
+        </Link>
+
+        {/* Title */}
+        <h3 className="mt-1 text-sm font-medium text-gray-900 line-clamp-2 flex-grow">
+          <Link to={`/product/${id}`} className="hover:text-m4m-purple transition-colors">
+            {name}
+          </Link>
+        </h3>
+
+        {/* Seller line: sellername • Online Seller Level 2 */}
+        <div className="mt-1 flex items-center gap-1 text-[11px] text-gray-500">
+          {seller?.id ? (
+            <Link
+              to={`/seller/${seller.id}`}
+              className="truncate max-w-[70px] hover:text-m4m-purple transition-colors"
+              title={sellerDisplayName}
+            >
+              {sellerDisplayName}
+            </Link>
+          ) : (
+            <span className="truncate max-w-[70px]" title={sellerDisplayName}>
+              {sellerDisplayName}
             </span>
           )}
-          {isOutOfStock && (
-            <span className="px-2 py-0.5 rounded-lg bg-red-500/90 text-white text-[10px] font-semibold uppercase tracking-wide w-fit">
-              Out of stock
+          <span>•</span>
+          <span className={online ? 'text-green-600' : 'text-gray-400'}>
+            {online ? 'Online' : 'Offline'}
+          </span>
+          {sellerLevel != null && (
+            <span className="ml-1 inline-flex items-center px-1 rounded bg-purple-100 text-purple-600 text-[10px]">
+              Seller Level {sellerLevel}
             </span>
           )}
         </div>
+
+        {/* Bottom row: price + button (hide price when sold out) */}
+        <div className={`mt-auto pt-1 flex items-center ${isOutOfStock ? 'justify-end' : 'justify-between'}`}>
+          {!isOutOfStock && (
+            <p className="flex items-baseline gap-1 text-base font-semibold text-m4m-purple">
+              {Math.round(Number(product.price || 0))} <span className="text-xs text-gray-500">MAD</span>
+            </p>
+          )}
+          {isOutOfStock ? (
+            <span className="px-2 py-1 rounded text-xs font-semibold bg-gray-100 text-gray-400 cursor-not-allowed select-none" aria-disabled="true">
+              Sold out
+            </span>
+          ) : (
+            <Link
+              to={`/product/${id}`}
+              className="px-2 py-1 rounded text-xs font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
+            >
+              Buy
+            </Link>
+          )}
+        </div>
+      </article>
+    );
+  }
+
+  // Default (non-compact) full card
+  const cardPaddingClass = 'p-3';
+  const titleTextClass = 'text-sm';
+  const priceTextClass = 'text-base';
+  const buyButtonTextClass = 'text-sm';
+  const imageWrapperClass = 'relative aspect-[4/3] w-full overflow-hidden rounded-t-xl bg-gray-100 flex items-center justify-center flex-shrink-0';
+
+  return (
+    <article className="h-full bg-white rounded-xl border border-gray-200 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-1 overflow-hidden flex flex-col group">
+      {/* Product image + overlay badges + favorite/verified badges */}
+      <Link to={`/product/${id}`} className="block flex-shrink-0">
+        <div className={imageWrapperClass}>
+          {/* Top-left badges: featured / stock / instant / low stock */}
+          <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+            {is_pinned && (
+              <span className="px-2 py-0.5 rounded-lg bg-amber-400/95 text-amber-900 text-[10px] font-semibold uppercase tracking-wide w-fit">
+                Featured
+              </span>
+            )}
+            {isOutOfStock && (
+              <span className="px-2 py-0.5 rounded-lg bg-red-500/90 text-white text-[10px] font-semibold uppercase tracking-wide w-fit">
+                Out of stock
+              </span>
+            )}
+            {!isOutOfStock && isInstant && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
+                <Zap className="w-3 h-3" />
+                <span>Instant</span>
+              </span>
+            )}
+            {!isOutOfStock && isLowStock && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800">
+                <AlertCircle className="w-3 h-3" />
+                <span>Low stock</span>
+              </span>
+            )}
+          </div>
         {isVerified && (
           <span className="absolute top-2 right-2 z-10">
             <VerifiedBadge />
@@ -84,16 +232,17 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
             </svg>
           </button>
         )}
-        <div className="aspect-[4/3] bg-gray-100 flex items-center justify-center overflow-hidden">
-          {product.images?.[0] ? (
+          {product.images?.[0] && typeof product.images[0] === 'string' && product.images[0].trim() && !imageError ? (
             <img
               src={product.images[0]}
               alt={name}
-              className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-300"
+              loading="lazy"
+              onError={() => setImageError(true)}
+              className="w-full h-full object-cover group-hover:scale-[1.05] transition-transform duration-300 min-h-0"
             />
           ) : (
-            <div className="flex flex-col items-center gap-1 text-gray-300">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex flex-col items-center justify-center gap-1 text-gray-300 w-full h-full">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               <span className="text-xs">No image</span>
@@ -102,31 +251,15 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
         </div>
       </Link>
 
-      <div className="p-3.5 flex flex-col flex-1">
+      <div className={`${cardPaddingClass} flex flex-col flex-1 min-h-0`}>
         {/* Product title */}
-        <h3 className="font-semibold text-gray-900 line-clamp-2 leading-snug text-sm">
+        <h3 className={`font-semibold text-gray-900 line-clamp-2 leading-snug ${titleTextClass}`}>
           <Link to={`/product/${id}`} className="hover:text-m4m-purple transition-colors">
             {name}
           </Link>
         </h3>
 
-        {/* Dynamic badges: Instant delivery / Low stock */}
-        {(isInstant || isLowStock) && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {isInstant && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-100 text-green-700">
-                ⚡ Instant Delivery
-              </span>
-            )}
-            {isLowStock && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800">
-                🟢 Low Stock
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Seller info + badges + rating (compact row) */}
+        {/* Seller info (online status, level) under title */}
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
           <div className="flex items-center gap-1.5 min-w-0 flex-shrink-0">
             <div className="w-6 h-6 rounded-full bg-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
@@ -159,38 +292,45 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
           <SellerSalesBadge completedSales={completedSales} />
           {sellerLevel != null && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700">
-              Lv {sellerLevel}
+              Seller Level {sellerLevel}
             </span>
           )}
           {reviewsCount > 0 && (
             <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-600">
-              <span className="text-amber-400">⭐</span>
+              <Star className="w-3 h-3" />
               {displayRating != null ? displayRating.toFixed(1) : '—'} ({reviewsCount})
             </span>
           )}
           {offerSales > 0 && (
             <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-500">
-              <span>🛒</span>
+              <ShoppingCart className="w-3 h-3" />
               {offerSales} {offerSales === 1 ? 'sale' : 'sales'}
             </span>
           )}
         </div>
 
-        {/* Price + BUY */}
-        <div className="mt-3 flex items-center justify-between gap-2 pt-3 border-t border-gray-100">
-          <p className="font-bold text-gray-900 text-base">
-            {Number(product.price || 0).toFixed(2)} <span className="text-xs font-semibold text-gray-400">MAD</span>
-          </p>
-          <Link
-            to={`/product/${id}`}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-lg font-semibold text-xs transition-colors ${
-              isOutOfStock
-                ? 'bg-gray-100 text-gray-400 cursor-default'
-                : 'bg-m4m-purple text-white hover:bg-m4m-purple-dark hover:text-white active:bg-m4m-purple-dark active:text-white'
-            }`}
-          >
-            {isOutOfStock ? 'Sold out' : 'Buy now'}
-          </Link>
+        {/* Price and Buy button: same line when available; sold out shows only grey button */}
+        <div className={`mt-auto pt-3 flex items-center gap-2 border-t border-gray-100 ${isOutOfStock ? 'justify-end' : 'justify-between'}`}>
+          {!isOutOfStock && (
+            <p className={`flex items-baseline gap-1 text-m4m-purple ${priceTextClass} font-semibold`}>
+              {Math.round(Number(product.price || 0))} <span className="text-xs text-gray-500">MAD</span>
+            </p>
+          )}
+          {isOutOfStock ? (
+            <span
+              className="flex-shrink-0 px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-400 cursor-not-allowed select-none"
+              aria-disabled="true"
+            >
+              Sold out
+            </span>
+          ) : (
+            <Link
+              to={`/product/${id}`}
+              className={`flex-shrink-0 px-4 py-2 rounded-lg font-semibold ${buyButtonTextClass} bg-m4m-purple text-white hover:bg-m4m-purple-dark active:bg-m4m-purple-dark transition-colors`}
+            >
+              Buy
+            </Link>
+          )}
         </div>
       </div>
     </article>

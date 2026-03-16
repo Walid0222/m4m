@@ -1343,7 +1343,16 @@ function ServiceManagementPanel() {
               ) : (
                 <>
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-900">{ot.name}</p>
+                    <div className="flex items-center gap-2">
+                      {ot.service?.name && (
+                        <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded">
+                          {ot.service.name}
+                        </span>
+                      )}
+                      <span className="font-medium text-gray-900">
+                        {ot.name}
+                      </span>
+                    </div>
                     <p className="text-xs text-gray-500">{ot.category?.name} · {ot.status}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">

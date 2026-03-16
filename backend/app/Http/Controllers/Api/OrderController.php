@@ -129,6 +129,14 @@ class OrderController extends Controller
         $productIds = array_column($items, 'product_id');
         $products   = Product::whereIn('id', $productIds)->where('status', 'active')->get()->keyBy('id');
 
+        // Prevent users from purchasing their own products
+        $buyer = $request->user();
+        foreach ($products as $product) {
+            if ($product && (int) $product->user_id === (int) $buyer->id) {
+                return $this->error('You cannot purchase your own product.', 422);
+            }
+        }
+
         $orderLineItems = [];
         $subtotal       = 0.0;
 

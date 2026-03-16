@@ -18,6 +18,26 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { getWallet, getNotifications, markNotificationRead, searchOfferTypes, getToken, getSellerWarnings, toggleVacationMode } from '../services/api';
 import { useRefresh } from '../contexts/RefreshContext';
+import { getCategoryColor } from '../lib/categoryColor';
+
+function highlightSearchInName(name, searchQuery) {
+  const q = (searchQuery || '').trim();
+  if (!q || !name) return name;
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  try {
+    const parts = name.split(new RegExp(`(${escaped})`, 'gi'));
+    if (parts.length === 1) return name;
+    return parts.map((part, i) =>
+      i % 2 === 1 ? (
+        <span key={i} className="font-semibold bg-m4m-purple/20 text-m4m-purple rounded px-0.5">{part}</span>
+      ) : (
+        part
+      )
+    );
+  } catch {
+    return name;
+  }
+}
 
 export default function Navbar() {
   const { user, logout, avatar, refreshUser } = useAuth();
@@ -386,8 +406,14 @@ export default function Navbar() {
                         {ot.icon || '📦'}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{ot.name}</p>
-                        <p className="text-xs text-gray-400">{ot.category?.name || 'Service'}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {highlightSearchInName(ot.service?.name ? `${ot.service.name} ${ot.name}` : ot.name, searchQuery)}
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getCategoryColor(ot.category?.slug)}`}>
+                            {ot.category?.name || 'Service'}
+                          </span>
+                        </div>
                       </div>
                     </button>
                   ))}

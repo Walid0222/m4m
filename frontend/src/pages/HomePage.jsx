@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
-import { Lock, BadgeCheck, ShieldCheck, Zap } from 'lucide-react';
+import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import ServiceCard from '../components/ServiceCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,7 +8,6 @@ import {
   getProducts,
   getProduct,
   getTrendingProducts,
-  getBestSellingProducts,
   getServices,
   getCategories,
   getMarketplaceStats,
@@ -120,7 +119,6 @@ export default function HomePage() {
   const [fetchError, setFetchError] = useState(false);
   const [retryTrigger, setRetryTrigger] = useState(0);
   const [trending, setTrending] = useState([]);
-  const [bestSelling, setBestSelling] = useState([]);
   const [services, setServices] = useState([]);
   const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [search, setSearch] = useState(searchFromUrl);
@@ -165,24 +163,20 @@ export default function HomePage() {
   useEffect(() => {
     if (isMarketplaceOnly) return;
     let cancelled = false;
+    setTrendingLoading(true);
     (async () => {
       try {
-        const [trendingData, bestSellingData] = await Promise.all([
-          getTrendingProducts({ limit: 8 }),
-          getBestSellingProducts({ limit: 8 }),
-        ]);
+        const trendingData = await getTrendingProducts({ limit: 8 });
         const norm = (p) => ({ ...p, is_online: p.is_online ?? p.isOnline ?? true });
         if (!cancelled && Array.isArray(trendingData)) {
           setTrending(trendingData.map(norm));
         }
-        if (!cancelled && Array.isArray(bestSellingData)) {
-          setBestSelling(bestSellingData.map(norm));
-        }
       } catch {
         if (!cancelled) {
           setTrending([]);
-          setBestSelling([]);
         }
+      } finally {
+        if (!cancelled) setTrendingLoading(false);
       }
     })();
     return () => {
@@ -209,10 +203,14 @@ export default function HomePage() {
     let cancelled = false;
     (async () => {
       try {
+        setRecentlyViewedLoading(true);
         const STORAGE_KEY = 'recently_viewed_products';
         const raw = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
         if (!raw) {
-          if (!cancelled) setRecentlyViewed([]);
+          if (!cancelled) {
+            setRecentlyViewed([]);
+            setRecentlyViewedLoading(false);
+          }
           return;
         }
         let parsed;
@@ -223,7 +221,10 @@ export default function HomePage() {
         }
         const ids = Array.isArray(parsed) ? parsed : [];
         if (!ids.length) {
-          if (!cancelled) setRecentlyViewed([]);
+          if (!cancelled) {
+            setRecentlyViewed([]);
+            setRecentlyViewedLoading(false);
+          }
           return;
         }
 
@@ -238,7 +239,10 @@ export default function HomePage() {
         });
 
         if (!normalizedIds.length) {
-          if (!cancelled) setRecentlyViewed([]);
+          if (!cancelled) {
+            setRecentlyViewed([]);
+            setRecentlyViewedLoading(false);
+          }
           return;
         }
 
@@ -262,6 +266,8 @@ export default function HomePage() {
         setRecentlyViewed(products);
       } catch {
         if (!cancelled) setRecentlyViewed([]);
+      } finally {
+        if (!cancelled) setRecentlyViewedLoading(false);
       }
     })();
 
@@ -319,6 +325,9 @@ export default function HomePage() {
   const [sellerId, setSellerId] = useState(searchParams.get('seller_id') ?? '');
   const [categoryId, setCategoryId] = useState(searchParams.get('category_id') ?? '');
   const [sort, setSort] = useState(searchParams.get('sort') || 'best_selling');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [trendingLoading, setTrendingLoading] = useState(false);
+  const [recentlyViewedLoading, setRecentlyViewedLoading] = useState(false);
 
   // Pagination: page from URL
   const [page, setPage] = useState(() => Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1));
@@ -590,39 +599,87 @@ export default function HomePage() {
                 {marketplaceStats.total_sellers?.toLocaleString() ?? 0} Sellers
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 text-sm font-medium">
-                ⭐ {marketplaceStats.average_rating ?? '—'} Rating
+                <Star className="w-4 h-4 text-amber-500" />
+                {marketplaceStats.average_rating ?? '—'} Rating
               </span>
             </div>
           )}
         </div>
         {isMarketplaceOnly && categories.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button
-              type="button"
-              onClick={() => handleCategoryChange('')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                !categoryId ? 'bg-m4m-purple text-white' : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'
-              }`}
-            >
-              All{totalProducts != null ? ` (${totalProducts})` : ''}
-            </button>
-            {categories.map((cat) => (
+          <>
+            {/* Mobile: horizontal scroll categories, hide zero-product categories */}
+            <div className="mb-3 -mx-4 px-4 overflow-x-auto md:hidden">
+              <div className="flex items-center gap-2 pb-1">
+                <button
+                  type="button"
+                  onClick={() => handleCategoryChange('')}
+                  className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border ${
+                    !categoryId
+                      ? 'bg-m4m-purple text-white border-m4m-purple'
+                      : 'bg-white text-m4m-gray-700 border-m4m-gray-200'
+                  }`}
+                >
+                  All{totalProducts != null ? ` (${totalProducts})` : ''}
+                </button>
+                {categories
+                  .filter((cat) => (cat.products_count ?? 0) > 0)
+                  .map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => handleCategoryChange(String(cat.id))}
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border ${
+                        categoryId === String(cat.id)
+                          ? 'bg-m4m-purple text-white border-m4m-purple'
+                          : 'bg-white text-m4m-gray-700 border-m4m-gray-200'
+                      }`}
+                    >
+                      {cat.name}
+                      {cat.products_count != null && (
+                        <span className="ml-1 opacity-70">({cat.products_count})</span>
+                      )}
+                    </button>
+                  ))}
+              </div>
+            </div>
+
+            {/* Desktop: existing pill categories */}
+            <div className="hidden md:flex flex-wrap gap-2 mb-4">
               <button
-                key={cat.id}
                 type="button"
-                onClick={() => handleCategoryChange(String(cat.id))}
+                onClick={() => handleCategoryChange('')}
                 className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  categoryId === String(cat.id) ? 'bg-m4m-purple text-white' : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'
+                  !categoryId
+                    ? 'bg-m4m-purple text-white'
+                    : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'
                 }`}
               >
-                {cat.icon && <span className="mr-1.5">{cat.icon}</span>}
-                {cat.name}
-                {cat.products_count != null && <span className="ml-1.5 opacity-80">({cat.products_count})</span>}
+                All{totalProducts != null ? ` (${totalProducts})` : ''}
               </button>
-            ))}
-          </div>
+              {categories
+                .filter((cat) => (cat.products_count ?? 0) > 0)
+                .map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => handleCategoryChange(String(cat.id))}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                      categoryId === String(cat.id)
+                        ? 'bg-m4m-purple text-white'
+                        : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'
+                    }`}
+                  >
+                    {cat.icon && <span className="mr-1.5">{cat.icon}</span>}
+                    {cat.name}
+                    {cat.products_count != null && (
+                      <span className="ml-1.5 opacity-80">({cat.products_count})</span>
+                    )}
+                  </button>
+                ))}
+            </div>
+          </>
         )}
-        <div className="rounded-2xl border border-m4m-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-m4m-gray-200 bg-white shadow-sm overflow-hidden hidden md:block">
           <div className="p-4 md:p-5 space-y-4 md:space-y-0 md:flex md:flex-wrap md:items-end md:gap-4">
             <form onSubmit={handleSearchSubmit} className="flex-1 min-w-0 md:min-w-[280px] md:max-w-md">
               <label htmlFor="marketplace-search" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">Search</label>
@@ -674,19 +731,46 @@ export default function HomePage() {
         </div>
       </section>
       <section>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sticky top-14 z-40 bg-white px-4 py-2 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-m4m-black">
-            Products {!loading && <span className="ml-2 text-m4m-gray-500 font-normal">{total > 0 ? `${from}–${to} of ${total}` : '(0)'}</span>}
+            Products
+            {!loading && (
+              <span className="ml-2 text-m4m-gray-500 font-normal">
+                {total > 0 ? `${from}–${to} of ${total}` : '(0)'}
+              </span>
+            )}
           </h2>
           <div className="flex items-center gap-2">
-            <label htmlFor="filter-sort" className="text-sm font-medium text-m4m-gray-600 whitespace-nowrap">Sort by:</label>
-            <select id="filter-sort" value={sort} onChange={(e) => handleSortChange(e.target.value)} className="px-3 py-2 rounded-xl border border-m4m-gray-200 bg-white text-m4m-black text-sm font-medium focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none transition-colors">
-              {SORT_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+            <label
+              htmlFor="filter-sort"
+              className="hidden sm:inline-block text-sm font-medium text-m4m-gray-600 whitespace-nowrap"
+            >
+              Sort by:
+            </label>
+            <select
+              id="filter-sort"
+              value={sort}
+              onChange={(e) => handleSortChange(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-m4m-gray-200 bg-white text-m4m-black text-sm font-medium focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none transition-colors"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
+            {/* Mobile Filter button opens slide-in drawer */}
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-m4m-gray-200 bg-white text-sm font-medium text-m4m-gray-700 hover:bg-m4m-gray-50 md:hidden"
+            >
+              Filter
+            </button>
           </div>
         </div>
         {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => <div key={i} className="rounded-xl border border-m4m-gray-200 bg-white aspect-[3/4] animate-pulse shadow-sm" aria-hidden />)}
           </div>
         ) : fetchError ? (
@@ -702,24 +786,199 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {filteredProducts.map((product) => (
-                <ProductCard key={product.id} product={product} isFavorited={favoriteIds.includes(Number(product.id))} onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  isFavorited={favoriteIds.includes(Number(product.id))}
+                  onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
+                />
               ))}
             </div>
             {lastPage > 1 && (
               <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
-                <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={!canPrev} className="px-4 py-2.5 rounded-xl font-medium border border-m4m-gray-200 bg-white text-m4m-gray-700 hover:bg-m4m-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Previous</button>
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={!canPrev}
+                  className="px-4 py-2.5 rounded-xl font-medium border border-m4m-gray-200 bg-white text-m4m-gray-700 hover:bg-m4m-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
                 <div className="flex items-center gap-1">
                   {paginationPages.map((p) => (
-                    <button key={p} type="button" onClick={() => goToPage(p)} className={`min-w-[2.5rem] px-2 py-2 rounded-xl font-medium border transition-colors ${p === currentPage ? 'bg-m4m-purple text-white border-m4m-purple' : 'border-m4m-gray-200 bg-white text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>{p}</button>
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => goToPage(p)}
+                      className={`min-w-[2.5rem] px-2 py-2 rounded-xl font-medium border transition-colors ${
+                        p === currentPage
+                          ? 'bg-m4m-purple text-white border-m4m-purple'
+                          : 'border-m4m-gray-200 bg-white text-m4m-gray-700 hover:bg-m4m-gray-50'
+                      }`}
+                    >
+                      {p}
+                    </button>
                   ))}
                 </div>
-                <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={!canNext} className="px-4 py-2.5 rounded-xl font-medium border border-m4m-gray-200 bg-white text-m4m-gray-700 hover:bg-m4m-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Next</button>
-                <span className="text-sm text-m4m-gray-500 order-last w-full sm:w-auto text-center sm:text-left">Page {currentPage} of {lastPage}</span>
+                <button
+                  type="button"
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={!canNext}
+                  className="px-4 py-2.5 rounded-xl font-medium border border-m4m-gray-200 bg-white text-m4m-gray-700 hover:bg-m4m-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+                <span className="text-sm text-m4m-gray-500 order-last w-full sm:w-auto text-center sm:text-left">
+                  Page {currentPage} of {lastPage}
+                </span>
               </div>
             )}
           </>
+        )}
+
+        {/* Mobile filter drawer */}
+        {isMarketplaceOnly && (
+          <div
+            className={`fixed inset-0 z-40 md:hidden transition-opacity ${
+              mobileFiltersOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
+          >
+            {/* Backdrop */}
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setMobileFiltersOpen(false)}
+              aria-label="Close filters"
+            />
+            {/* Drawer */}
+            <div
+              className={`absolute inset-y-0 right-0 w-full max-w-xs bg-white shadow-xl transform transition-transform ${
+                mobileFiltersOpen ? 'translate-x-0' : 'translate-x-full'
+              }`}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-m4m-gray-200">
+                <h3 className="text-sm font-semibold text-m4m-black">Filters</h3>
+                <button
+                  type="button"
+                  className="text-sm text-m4m-gray-500"
+                  onClick={() => setMobileFiltersOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="p-4 space-y-4 text-sm">
+                {/* Seller filter */}
+                <div>
+                  <label
+                    htmlFor="mobile-filter-seller"
+                    className="block text-xs font-medium text-m4m-gray-500 mb-1.5"
+                  >
+                    Seller
+                  </label>
+                  <select
+                    id="mobile-filter-seller"
+                    value={sellerId}
+                    onChange={(e) => handleSellerChange(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors"
+                  >
+                    <option value="">All sellers</option>
+                    {uniqueSellers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Price range */}
+                <div>
+                  <span className="block text-xs font-medium text-m4m-gray-500 mb-1.5">
+                    Price range
+                  </span>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Min"
+                      value={priceMin}
+                      onChange={(e) => handlePriceMinChange(e.target.value)}
+                      className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none"
+                    />
+                    <span className="text-m4m-gray-400 font-medium">–</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Max"
+                      value={priceMax}
+                      onChange={(e) => handlePriceMaxChange(e.target.value)}
+                      className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PRICE_PRESETS.slice(1).map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => handlePricePreset(preset)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          priceMin === preset.min && priceMax === preset.max
+                            ? 'bg-m4m-purple text-white'
+                            : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Rating */}
+                <div>
+                  <label
+                    htmlFor="mobile-filter-rating"
+                    className="block text-xs font-medium text-m4m-gray-500 mb-1.5"
+                  >
+                    Rating
+                  </label>
+                  <select
+                    id="mobile-filter-rating"
+                    value={minRating}
+                    onChange={(e) => handleRatingChange(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors"
+                  >
+                    {RATING_OPTIONS.map((opt) => (
+                      <option key={opt.value || 'any'} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="w-full px-3 py-2 rounded-xl text-sm font-medium text-m4m-purple hover:bg-m4m-purple/10 transition-colors border border-m4m-purple/30"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              <div className="border-t border-m4m-gray-200 p-4">
+                <button
+                  type="button"
+                  onClick={() => setMobileFiltersOpen(false)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark transition-colors"
+                >
+                  Apply filters
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </section>
     </>
@@ -824,17 +1083,35 @@ export default function HomePage() {
       </div>
 
       <div id="marketplace" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-        {/* Browse by service - homepage only */}
+        {/* Categories / services - homepage only */}
         {!isMarketplaceOnly && services.length > 0 && (
-          <section className="mb-8 md:mb-10">
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <h2 className="text-lg font-semibold text-m4m-black">Browse by service</h2>
-              <p className="text-xs text-m4m-gray-500 hidden sm:block">
-                Jump straight into your favorite platforms
-              </p>
+          <section className="mb-6 md:mb-8">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div>
+                <h2 className="text-lg font-semibold text-m4m-black">Categories</h2>
+                <p className="text-sm text-m4m-gray-500">
+                  Browse by game or service
+                </p>
+              </div>
+              <Link
+                to="/marketplace"
+                className="text-sm font-medium text-m4m-purple hover:underline"
+              >
+                See all
+              </Link>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+            {/* Mobile: compact 4-column grid */}
+            <div className="grid grid-cols-4 gap-3 sm:hidden">
+              {(services || []).slice(0, 8).map((svc) => (
+                <Link key={svc.id} to={`/service/${svc.slug}`} className="flex justify-center">
+                  <ServiceCard service={svc} />
+                </Link>
+              ))}
+            </div>
+
+            {/* Tablet / desktop: keep grouped layout */}
+            <div className="hidden sm:grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {Object.entries(groupedServices).map(([groupName, items]) => {
                 if (!items || items.length === 0) return null;
                 return (
@@ -850,18 +1127,7 @@ export default function HomePage() {
                         {groupName === 'Services' ? 'Show all services →' : 'Show all games →'}
                       </button>
                     </div>
-
-                    {/* Mobile: horizontal scroll */}
-                    <div className="md:hidden flex gap-3 overflow-x-auto pb-1">
-                      {items.map((svc) => (
-                        <Link key={svc.id} to={`/service/${svc.slug}`} className="min-w-[90px]">
-                          <ServiceCard service={svc} />
-                        </Link>
-                      ))}
-                    </div>
-
-                    {/* Tablet / Desktop: compact 7-column grid */}
-                    <div className="hidden md:grid grid-cols-7 gap-3">
+                    <div className="grid grid-cols-4 lg:grid-cols-7 gap-3">
                       {items.map((svc) => (
                         <Link key={svc.id} to={`/service/${svc.slug}`} className="flex justify-center">
                           <ServiceCard service={svc} />
@@ -876,375 +1142,86 @@ export default function HomePage() {
         )}
 
         {/* Flash Deals - homepage only */}
-        {!isMarketplaceOnly && trending.length > 0 && (
+        {!isMarketplaceOnly && (trendingLoading || trending.length > 0) && (
           <section className="mb-6 md:mb-8">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <h2 className="text-lg font-semibold text-m4m-black">🔥 Flash Deals</h2>
-              <p className="text-xs text-m4m-gray-500">
-                Limited-time discounts on popular products
-              </p>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-m4m-black">
+                  <Flame className="w-4 h-4 text-m4m-purple" />
+                  Flash Deals
+                </h2>
+                <p className="text-sm text-m4m-gray-500">
+                  Limited-time discounts on popular products
+                </p>
+              </div>
+              <Link
+                to="/marketplace?sort=trending"
+                className="text-sm font-medium text-m4m-purple hover:underline"
+              >
+                See all
+              </Link>
             </div>
-            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-4 md:p-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-                {trending.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    isFavorited={favoriteIds.includes(Number(product.id))}
-                    onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
-                  />
-                ))}
+            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-3 md:p-5">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
+                {trendingLoading
+                  ? [1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className="h-full min-h-[320px] rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 animate-pulse"
+                      />
+                    ))
+                  : trending.map((product) => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        isFavorited={favoriteIds.includes(Number(product.id))}
+                        onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
+                      />
+                    ))}
               </div>
             </div>
           </section>
         )}
 
         {/* Recently Viewed - homepage only */}
-        {!isMarketplaceOnly && recentlyViewed.length > 0 && (
+        {!isMarketplaceOnly && (recentlyViewedLoading || recentlyViewed.length > 0) && (
           <section className="mb-6 md:mb-8">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <h2 className="text-lg font-semibold text-m4m-black">Recently Viewed</h2>
-              <p className="text-xs text-m4m-gray-500">
-                Products you opened recently on M4M
-              </p>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div>
+                <h2 className="text-lg font-semibold text-m4m-black">Recently Viewed</h2>
+                <p className="text-sm text-m4m-gray-500">
+                  Products you opened recently on M4M
+                </p>
+              </div>
+              <Link
+                to="/recently-viewed"
+                className="text-sm font-medium text-m4m-purple hover:underline"
+              >
+                See all
+              </Link>
             </div>
-            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-4 md:p-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-                {recentlyViewed.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    isFavorited={favoriteIds.includes(Number(product.id))}
-                    onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
-                  />
-                ))}
+            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-3 md:p-5">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
+                {recentlyViewedLoading
+                  ? [1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className="h-full min-h-[320px] rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 animate-pulse"
+                      />
+                    ))
+                  : recentlyViewed.map((product) => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        isFavorited={favoriteIds.includes(Number(product.id))}
+                        onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
+                      />
+                    ))}
               </div>
             </div>
           </section>
         )}
-
-        {/* Z2U-style top section: search + filters in one card */}
-        <section className="mb-6 md:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-3 mb-3">
-            <div>
-              <h1 className="text-xl md:text-2xl font-bold text-m4m-black">M4M Marketplace</h1>
-              <p className="text-sm text-m4m-gray-500 mt-0.5">Products update as you filter</p>
-            </div>
-            {isMarketplaceOnly && marketplaceStats && (
-              <div className="flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-m4m-purple/10 text-m4m-purple text-sm font-medium">
-                  {marketplaceStats.total_products?.toLocaleString() ?? 0} Products
-                </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-m4m-purple/10 text-m4m-purple text-sm font-medium">
-                  {marketplaceStats.total_sellers?.toLocaleString() ?? 0} Sellers
-                </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 text-sm font-medium">
-                  ⭐ {marketplaceStats.average_rating ?? '—'} Rating
-                </span>
-              </div>
-            )}
-          </div>
-          {isMarketplaceOnly && categories.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-4">
-              <button
-                type="button"
-                onClick={() => handleCategoryChange('')}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                  !categoryId ? 'bg-m4m-purple text-white' : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'
-                }`}
-              >
-                All{totalProducts != null ? ` (${totalProducts})` : ''}
-              </button>
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => handleCategoryChange(String(cat.id))}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                    categoryId === String(cat.id) ? 'bg-m4m-purple text-white' : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'
-                  }`}
-                >
-                  {cat.icon && <span className="mr-1.5">{cat.icon}</span>}
-                  {cat.name}
-                  {cat.products_count != null && <span className="ml-1.5 opacity-80">({cat.products_count})</span>}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="rounded-2xl border border-m4m-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="p-4 md:p-5 space-y-4 md:space-y-0 md:flex md:flex-wrap md:items-end md:gap-4">
-              {/* Search bar */}
-              <form onSubmit={handleSearchSubmit} className="flex-1 min-w-0 md:min-w-[280px] md:max-w-md">
-                <label htmlFor="marketplace-search" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">
-                  Search
-                </label>
-                <div className="relative">
-                  <input
-                    id="marketplace-search"
-                    type="search"
-                    placeholder="Search products..."
-                    value={searchInput}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    className="w-full px-4 py-2.5 pr-10 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black placeholder-m4m-gray-400 focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors"
-                    aria-label="Search products"
-                  />
-                  <button
-                    type="submit"
-                    aria-label="Search"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-m4m-gray-400 hover:text-m4m-purple hover:bg-m4m-gray-100 transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </button>
-                </div>
-              </form>
-
-              {/* Seller filter */}
-              <div className="w-full sm:w-auto min-w-0">
-                <label htmlFor="filter-seller" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">
-                  Seller
-                </label>
-                <select
-                  id="filter-seller"
-                  value={sellerId}
-                  onChange={(e) => handleSellerChange(e.target.value)}
-                  className="w-full sm:w-[180px] px-3 py-2.5 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors"
-                >
-                  <option value="">All sellers</option>
-                  {uniqueSellers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Price range filter */}
-              <div className="w-full sm:w-auto">
-                <span className="block text-xs font-medium text-m4m-gray-500 mb-1.5">Price range</span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="Min"
-                      value={priceMin}
-                      onChange={(e) => handlePriceMinChange(e.target.value)}
-                      className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none"
-                    />
-                    <span className="text-m4m-gray-400 font-medium">–</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="Max"
-                      value={priceMax}
-                      onChange={(e) => handlePriceMaxChange(e.target.value)}
-                      className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none"
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRICE_PRESETS.slice(1).map((preset) => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => handlePricePreset(preset)}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          priceMin === preset.min && priceMax === preset.max
-                            ? 'bg-m4m-purple text-white'
-                            : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Rating filter */}
-              <div className="w-full sm:w-auto">
-                <label htmlFor="filter-rating" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">
-                  Rating
-                </label>
-                <select
-                  id="filter-rating"
-                  value={minRating}
-                  onChange={(e) => handleRatingChange(e.target.value)}
-                  className="w-full sm:w-[130px] px-3 py-2.5 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors"
-                >
-                  {RATING_OPTIONS.map((opt) => (
-                    <option key={opt.value || 'any'} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Clear filters */}
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="px-3 py-2 rounded-xl text-sm font-medium text-m4m-purple hover:bg-m4m-purple/10 transition-colors border border-m4m-purple/30"
-                >
-                  Clear all
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Best selling - homepage only */}
-        {!isMarketplaceOnly && bestSelling.length > 0 && (
-          <section className="mb-6 md:mb-8">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <h2 className="text-lg font-semibold text-m4m-black">Best selling products</h2>
-              <p className="text-xs text-m4m-gray-500">
-                Most purchased on M4M
-              </p>
-            </div>
-            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-4 md:p-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-                {bestSelling.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    isFavorited={favoriteIds.includes(Number(product.id))}
-                    onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
-                  />
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Product grid */}
-        <section>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <h2 className="text-lg font-semibold text-m4m-black">
-              Products
-              {!loading && (
-                <span className="ml-2 text-m4m-gray-500 font-normal">
-                  {total > 0 ? `${from}–${to} of ${total}` : `(0)`}
-                </span>
-              )}
-            </h2>
-            <div className="flex items-center gap-2">
-              <label htmlFor="filter-sort" className="text-sm font-medium text-m4m-gray-600 whitespace-nowrap">
-                Sort by:
-              </label>
-              <select
-                id="filter-sort"
-                value={sort}
-                onChange={(e) => handleSortChange(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-m4m-gray-200 bg-white text-m4m-black text-sm font-medium focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none transition-colors"
-              >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div
-                  key={i}
-                  className="rounded-xl border border-m4m-gray-200 bg-white aspect-[3/4] animate-pulse shadow-sm"
-                  aria-hidden
-                />
-              ))}
-            </div>
-          ) : fetchError ? (
-            <div className="rounded-2xl border border-m4m-gray-200 bg-white py-16 px-6 text-center shadow-sm">
-              <p className="text-m4m-gray-600 font-medium">Something went wrong</p>
-              <p className="text-sm text-m4m-gray-500 mt-1">We couldn’t load products. Try again.</p>
-              <button
-                type="button"
-                onClick={() => setRetryTrigger((t) => t + 1)}
-                className="mt-4 px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-light transition-colors"
-              >
-                Try again
-              </button>
-            </div>
-          ) : filteredProducts.length === 0 ? (
-            <div className="rounded-2xl border border-m4m-gray-200 bg-white py-16 text-center shadow-sm">
-              <p className="text-m4m-gray-500">No products match your filters.</p>
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-4 text-m4m-purple font-medium hover:underline"
-              >
-                Clear filters
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-              {filteredProducts.map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    isFavorited={favoriteIds.includes(Number(product.id))}
-                    onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
-                  />
-                ))}
-              </div>
-              {lastPage > 1 && (
-                <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
-                  <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={!canPrev} className="px-4 py-2.5 rounded-xl font-medium border border-m4m-gray-200 bg-white text-m4m-gray-700 hover:bg-m4m-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Previous</button>
-                  <div className="flex items-center gap-1">
-                    {paginationPages.map((p) => (
-                      <button key={p} type="button" onClick={() => goToPage(p)} className={`min-w-[2.5rem] px-2 py-2 rounded-xl font-medium border transition-colors ${p === currentPage ? 'bg-m4m-purple text-white border-m4m-purple' : 'border-m4m-gray-200 bg-white text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>{p}</button>
-                    ))}
-                  </div>
-                  <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={!canNext} className="px-4 py-2.5 rounded-xl font-medium border border-m4m-gray-200 bg-white text-m4m-gray-700 hover:bg-m4m-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Next</button>
-                  <span className="text-sm text-m4m-gray-500 order-last w-full sm:w-auto text-center sm:text-left">Page {currentPage} of {lastPage}</span>
-                </div>
-              )}
-            </>
-          )}
-        </section>
       </div>
-
-      {/* Community Reviews */}
-      <section id="reviews" className="bg-white border-t border-gray-100 py-14 md:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-10">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">What our community says</h2>
-            <p className="mt-2 text-gray-500">Real reviews from real buyers around the world</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {TESTIMONIALS.map((t) => (
-              <div key={t.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-6 flex flex-col gap-4">
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <svg key={i} className={`w-4 h-4 ${i < t.rating ? 'text-yellow-400' : 'text-gray-200'}`} fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  ))}
-                </div>
-                <p className="text-gray-700 text-sm leading-relaxed flex-1">&ldquo;{t.comment}&rdquo;</p>
-                <div className="flex items-center gap-3 pt-2 border-t border-gray-200">
-                  <span className="w-9 h-9 rounded-full bg-m4m-purple text-white flex items-center justify-center font-bold text-sm shrink-0">
-                    {t.avatar}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900">{t.flag} {t.name}</p>
-                    <p className="text-xs text-gray-400">{t.date}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
     </>
     )}
     </div>

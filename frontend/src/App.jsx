@@ -20,11 +20,13 @@ import AdminDashboardPage from './pages/AdminDashboardPage';
 import UserProfilePage from './pages/UserProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import FavoritesPage from './pages/FavoritesPage';
+import RecentlyViewedPage from './pages/RecentlyViewedPage';
 import DisputesPage from './pages/DisputesPage';
 import SellerDisputesPage from './pages/SellerDisputesPage';
 import DisputeDetailPage from './pages/DisputeDetailPage';
 import HelpPage from './pages/HelpPage';
 import MarketplaceRulesPage from './pages/MarketplaceRulesPage';
+import ReviewReminderPopup from './components/ReviewReminderPopup';
 
 export default function App() {
   return (
@@ -32,6 +34,7 @@ export default function App() {
       <MarketplaceSettingsProvider>
         <RefreshProvider>
           <BrowserRouter>
+            <ReviewReminderPopup />
             <Routes>
               <Route path="/" element={<Layout />}>
             <Route index element={<HomePage />} />
@@ -143,6 +146,7 @@ export default function App() {
             <Route path="help/:slug" element={<HelpPage />} />
             <Route path="help" element={<Navigate to="/help/faq" replace />} />
             <Route path="marketplace" element={<HomePage />} />
+            <Route path="recently-viewed" element={<RecentlyViewedPage />} />
             <Route path="auth" element={<AuthPage />} />
             <Route path="marketplace-rules" element={<MarketplaceRulesPage />} />
               </Route>

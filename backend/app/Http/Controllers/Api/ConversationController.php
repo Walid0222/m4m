@@ -87,6 +87,14 @@ class ConversationController extends Controller
         $conversation->load(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id,status', 'product:id,name']);
         $conversation->other_user = $conversation->user_one_id === $userId ? $conversation->userTwo : $conversation->userOne;
 
+        // Mark incoming messages as read for the current user (regular conversations only)
+        if (! $isSupportConvo) {
+            $conversation->messages()
+                ->where('user_id', '!=', $userId)
+                ->whereNull('read_at')
+                ->update(['read_at' => now()]);
+        }
+
         $messages = $conversation->messages()
             ->with('sender:id,name')
             ->latest()

@@ -87,7 +87,11 @@ export default function FavoritesPage() {
             if (!product) return null;
             return (
               <div key={fav.id} className="relative group">
-                <ProductCard product={product} />
+                <ProductCard
+                  product={product}
+                  isFavorited
+                  onToggleFavorite={() => handleRemove(product.id)}
+                />
                 <button
                   onClick={() => handleRemove(product.id)}
                   disabled={removing === product.id}

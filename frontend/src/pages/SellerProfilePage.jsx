@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import ReportModal from '../components/ReportModal';
 import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
-import { getProducts, getSellerProfile, getPublicSellerStats, paginatedItems, submitReport } from '../services/api';
+import { getProducts, getSellerProfile, getPublicSellerStats, paginatedItems, submitReport, getFavoriteIds, toggleFavorite, getToken } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 function getLastSeenLabel(lastActivityAt) {
@@ -50,6 +50,34 @@ export default function SellerProfilePage() {
   const [loading, setLoading] = useState(true);
   const [showReport, setShowReport] = useState(false);
   const [stats, setStats] = useState(null);
+  const [favoriteIds, setFavoriteIds] = useState([]);
+
+  useEffect(() => {
+    if (!getToken() || !user) {
+      setFavoriteIds([]);
+      return;
+    }
+    let cancelled = false;
+    getFavoriteIds()
+      .then((ids) => {
+        if (!cancelled && Array.isArray(ids)) setFavoriteIds(ids.map((v) => Number(v)));
+      })
+      .catch(() => { if (!cancelled) setFavoriteIds([]); });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  const handleToggleFavorite = useCallback(async (productId) => {
+    if (!getToken()) return;
+    setFavoriteIds((prev) => {
+      if (prev.includes(Number(productId))) return prev.filter((i) => i !== Number(productId));
+      return [...prev, Number(productId)];
+    });
+    try {
+      await toggleFavorite(productId);
+    } catch {
+      setFavoriteIds((prev) => prev.filter((i) => i !== Number(productId)));
+    }
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -286,6 +314,8 @@ export default function SellerProfilePage() {
                         name: seller?.name ?? pinned.seller?.name,
                       },
                     }}
+                    isFavorited={favoriteIds.includes(Number(pinned.id))}
+                    onToggleFavorite={user ? () => handleToggleFavorite(pinned.id) : undefined}
                   />
                 </div>
               </section>
@@ -312,6 +342,8 @@ export default function SellerProfilePage() {
                       name: seller?.name ?? p.seller?.name,
                     },
                   }}
+                  isFavorited={favoriteIds.includes(Number(p.id))}
+                  onToggleFavorite={user ? () => handleToggleFavorite(p.id) : undefined}
                 />
               ))}
             </div>

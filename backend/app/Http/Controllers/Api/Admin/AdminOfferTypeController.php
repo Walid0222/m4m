@@ -16,7 +16,10 @@ class AdminOfferTypeController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = OfferType::query()->with('category:id,name,slug');
+        $query = OfferType::query()->with([
+            'category:id,name,slug',
+            'service:id,name,slug',
+        ]);
 
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);

@@ -84,6 +84,7 @@ export default function ChatPage() {
   const [mobileView, setMobileView] = useState('list'); // 'list' | 'chat'
 
   const selectedIdRef = useRef(null);
+  const urlConversationLoadedRef = useRef(null);
   const channelsRef = useRef({});
   selectedIdRef.current = selected?.id;
 
@@ -142,14 +143,40 @@ export default function ChatPage() {
   // ── Auto-select conversation from URL ────────────────────────────────────
   const convIdFromUrl = searchParams.get('conversation');
   useEffect(() => {
-    if (!convIdFromUrl || conversations.length === 0) return;
+    if (!convIdFromUrl) return;
     const id = Number(convIdFromUrl);
+    if (!Number.isFinite(id)) return;
+
+    // If already selected, nothing to do
+    if (selected?.id === id) return;
+
+    // Try to find in the already loaded conversations list first
     const conv = conversations.find((c) => c.id === id);
     if (conv) {
       setSelected((s) => (s?.id === id ? s : conv));
       setMobileView('chat');
+      urlConversationLoadedRef.current = id;
+      return;
     }
-  }, [convIdFromUrl, conversations]);
+
+    // Fallback: fetch the conversation directly if we haven't already tried
+    if (!getToken()) return;
+    if (urlConversationLoadedRef.current === id) return;
+    urlConversationLoadedRef.current = id;
+
+    (async () => {
+      try {
+        const data = await getConversation(id);
+        const convData = data?.conversation || data;
+        if (convData && convIdFromUrl === String(id)) {
+          setSelected(convData);
+          setMobileView('chat');
+        }
+      } catch {
+        // ignore: invalid or inaccessible conversation id
+      }
+    })();
+  }, [convIdFromUrl, conversations, selected?.id]);
 
   // ── Select conversation ──────────────────────────────────────────────────
   const handleSelectConversation = useCallback((conv) => {
@@ -271,7 +298,11 @@ export default function ChatPage() {
 
   // ── Send message ─────────────────────────────────────────────────────────
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selected?.id || sending) return;
+    if (!newMessage.trim() || sending) return;
+    if (!selected?.id) {
+      // No active conversation selected – do not attempt to send
+      return;
+    }
 
     // M4M Support chat — send to backend, fallback to localStorage
     if (selected.id === 'support') {
@@ -485,6 +516,7 @@ export default function ChatPage() {
               isTyping={isTyping}
               isSupport={selected?._isSupport}
               onBack={() => setMobileView('list')}
+              inputDisabled={!selected?.id}
             />
           </div>
         </div>

@@ -1560,7 +1560,7 @@ export default function SellerDashboardPage() {
                         <div>
                           <p className="text-xs text-m4m-gray-500">Seller Level</p>
                           <p className="mt-0.5 text-lg font-semibold text-m4m-black">{sellerLevel}</p>
-                          <p className="text-[11px] text-m4m-gray-400">Level = completed orders ÷ 2</p>
+                          <p className="text-[11px] text-m4m-gray-400">Seller Level = completed orders ÷ 2</p>
                         </div>
                         <div>
                           <p className="text-xs text-m4m-gray-500">Completed orders</p>
@@ -1820,7 +1820,7 @@ export default function SellerDashboardPage() {
                     <div className="space-y-6">
                       <div>
                         <label className="block text-sm font-medium text-m4m-gray-700 mb-1">Price (MAD) *</label>
-                        <input type="number" min="0" step="0.01" value={form.price} onChange={(e) => updateForm('price', e.target.value)} placeholder="Example: 9.99" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
+                        <input type="number" min="0" step="1" value={form.price} onChange={(e) => updateForm('price', e.target.value)} placeholder="Example: 10" className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Delivery type</label>
@@ -1982,7 +1982,7 @@ export default function SellerDashboardPage() {
                             : (form.stock !== '' && form.stock != null ? form.stock : '0')}
                         </p>
                         <p className="mt-2 font-bold text-m4m-gray-900 text-base">
-                          {form.price ? `${Number(form.price).toFixed(2)}` : '0.00'} <span className="text-xs font-semibold text-m4m-gray-400">MAD</span>
+                          {form.price ? Math.round(Number(form.price)) : '0'} <span className="text-xs font-semibold text-m4m-gray-400">MAD</span>
                         </p>
                       </div>
                     </div>
@@ -2176,9 +2176,10 @@ export default function SellerDashboardPage() {
                       <input
                         type="number"
                         min="0"
-                        step="0.01"
+                        step="1"
                         value={editingProduct.price}
                         onChange={(e) => setEditingProduct((f) => ({ ...f, price: e.target.value }))}
+                        placeholder="Example: 10"
                         className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
                       />
                     </div>
@@ -2496,7 +2497,7 @@ export default function SellerDashboardPage() {
                         <span className="shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">⭐ Featured Product</span>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-lg font-bold text-m4m-black">{Number(p.price).toFixed(2)} MAD</p>
+                    <p className="mt-1 text-lg font-bold text-m4m-black">{Math.round(Number(p.price || 0))} MAD</p>
                     <p className="text-sm text-m4m-gray-600">Stock: {Number(p.stock ?? 0)}</p>
                     <div className="text-xs text-m4m-gray-500 mt-1 space-y-0.5">
                       <p>Views: {Number(p.views ?? 0)}</p>

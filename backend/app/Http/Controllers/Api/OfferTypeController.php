@@ -41,16 +41,28 @@ class OfferTypeController extends Controller
 
         $query = OfferType::query()
             ->where('status', OfferType::STATUS_ACTIVE)
-            ->with('category:id,name,slug');
+            ->with([
+                'category:id,name,slug',
+                'service:id,name,slug',
+            ]);
 
         if ($q !== '') {
             $terms = preg_split('/\s+/', strtolower($q));
             $query->where(function ($qb) use ($q, $terms) {
                 $qb->where('name', 'like', "%{$q}%")
-                    ->orWhere('slug', 'like', "%{$q}%");
+                    ->orWhere('slug', 'like', "%{$q}%")
+                    ->orWhereHas('service', function ($serviceQuery) use ($q) {
+                        $serviceQuery->where('name', 'like', "%{$q}%")
+                            ->orWhere('slug', 'like', "%{$q}%");
+                    });
+
                 foreach ($terms as $term) {
                     $qb->orWhere('name', 'like', "%{$term}%")
-                        ->orWhere('slug', 'like', "%{$term}%");
+                        ->orWhere('slug', 'like', "%{$term}%")
+                        ->orWhereHas('service', function ($serviceQuery) use ($term) {
+                            $serviceQuery->where('name', 'like', "%{$term}%")
+                                ->orWhere('slug', 'like', "%{$term}%");
+                        });
                 }
             });
         }

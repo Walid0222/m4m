@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getOfferTypeBySlug } from '../services/api';
+import { getOfferTypeBySlug, getFavoriteIds, toggleFavorite, getToken, paginatedItems } from '../services/api';
 import ProductCard from '../components/ProductCard';
-import { paginatedItems } from '../services/api';
 import OfferTypeTabs from '../components/OfferTypeTabs';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function OfferTypePage() {
   const { slug } = useParams();
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,7 +15,35 @@ export default function OfferTypePage() {
   const [sortOrder, setSortOrder] = useState('desc');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [favoriteIds, setFavoriteIds] = useState([]);
   const itemsPerPage = 12;
+
+  useEffect(() => {
+    if (!getToken() || !user) {
+      setFavoriteIds([]);
+      return;
+    }
+    let cancelled = false;
+    getFavoriteIds()
+      .then((ids) => {
+        if (!cancelled && Array.isArray(ids)) setFavoriteIds(ids.map((v) => Number(v)));
+      })
+      .catch(() => { if (!cancelled) setFavoriteIds([]); });
+    return () => { cancelled = true; };
+  }, [user]);
+
+  const handleToggleFavorite = useCallback(async (productId) => {
+    if (!getToken()) return;
+    setFavoriteIds((prev) => {
+      if (prev.includes(Number(productId))) return prev.filter((id) => id !== Number(productId));
+      return [...prev, Number(productId)];
+    });
+    try {
+      await toggleFavorite(productId);
+    } catch {
+      setFavoriteIds((prev) => prev.filter((id) => id !== Number(productId)));
+    }
+  }, []);
 
   useEffect(() => {
     if (!slug) return;
@@ -184,7 +213,12 @@ export default function OfferTypePage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {paginatedOffers.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard
+                key={p.id}
+                product={p}
+                isFavorited={favoriteIds.includes(Number(p.id))}
+                onToggleFavorite={user ? () => handleToggleFavorite(p.id) : undefined}
+              />
             ))}
           </div>
 

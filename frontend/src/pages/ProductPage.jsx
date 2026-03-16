@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { AlertCircle, Star, Zap, CheckCircle2, Lock, ShieldCheck, Flame, Info, BadgeCheck, Umbrella, Sun, X } from 'lucide-react';
 import {
   getProduct,
   getProducts,
@@ -94,15 +95,31 @@ function PurchaseConfirmModal({
         </div>
         {/* Seller trust info */}
         <div className="rounded-xl bg-blue-50 border border-blue-100 p-3 mb-4 flex items-start gap-2">
-          <svg className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-blue-700 space-y-1">
-            {isVerified && <p>✅ <strong>Verified seller</strong> — identity confirmed by M4M team.</p>}
-            {salesBadge && <p>🏅 <strong>{salesBadge.label}</strong> — seller has a strong track record.</p>}
+            {isVerified && (
+              <p className="flex items-center gap-1.5">
+                <BadgeCheck className="w-3.5 h-3.5 text-blue-600" />
+                <span><strong>Verified seller</strong> — identity confirmed by M4M team.</span>
+              </p>
+            )}
+            {salesBadge && (
+              <p className="flex items-center gap-1.5">
+                <Flame className="w-3.5 h-3.5 text-amber-600" />
+                <span><strong>{salesBadge.label}</strong> — seller has a strong track record.</span>
+              </p>
+            )}
             {seller.seller_level != null && (
-              <p>🎯 <strong>Seller Level:</strong> {seller.seller_level}</p>
+              <p className="flex items-center gap-1.5">
+                <Star className="w-3.5 h-3.5 text-purple-600" />
+                <span><strong>Seller Level:</strong> {seller.seller_level}</span>
+              </p>
             )}
             {!isVerified && !salesBadge && seller.seller_level == null && (
-              <p>ℹ️ Check seller reviews before purchasing. Sellers with badges and higher levels have proven track records.</p>
+              <p className="flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-blue-500" />
+                <span>Check seller reviews before purchasing. Sellers with badges and higher levels have proven track records.</span>
+              </p>
             )}
           </div>
         </div>
@@ -117,7 +134,7 @@ function PurchaseConfirmModal({
           </div>
           <div className="flex justify-between text-xs text-gray-600 border-t border-gray-200 pt-2 mt-2">
             <span>Subtotal</span>
-            <span className="font-medium text-gray-900">{Number(subtotal || 0).toFixed(2)} MAD</span>
+            <span className="font-medium text-gray-900">{Math.round(Number(subtotal || 0))} MAD</span>
           </div>
           <div className="flex items-center justify-between gap-2 text-xs">
             <div className="flex flex-col">
@@ -150,12 +167,12 @@ function PurchaseConfirmModal({
           {discountAmount > 0 && (
             <div className="flex justify-between text-xs text-green-700 mt-1">
               <span>Coupon discount</span>
-              <span>-{Number(discountAmount || 0).toFixed(2)} MAD</span>
+              <span>-{Math.round(Number(discountAmount || 0))} MAD</span>
             </div>
           )}
           <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
             <span className="font-semibold text-gray-900">Final total</span>
-            <span className="font-bold text-gray-900">{Number(finalTotal || 0).toFixed(2)} MAD</span>
+            <span className="font-bold text-gray-900">{Math.round(Number(finalTotal || 0))} MAD</span>
           </div>
           {onBuyerNoteChange && (
             <div className="mt-3 pt-3 border-t border-gray-200">
@@ -207,6 +224,7 @@ export default function ProductPage() {
   const [viewers, setViewers] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState([]);
   const [favToggling, setFavToggling] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [couponInfo, setCouponInfo] = useState(null);
@@ -235,26 +253,46 @@ export default function ProductPage() {
     return () => { cancelled = true; };
   }, [id]);
 
-  // Check if product is in favorites
+  // Load favorite IDs (for current product and recommended cards)
   useEffect(() => {
-    if (!id || !getToken()) return;
+    if (!getToken() || !user) {
+      setFavoriteIds([]);
+      return;
+    }
     let cancelled = false;
     getFavoriteIds().then((ids) => {
       if (!cancelled && Array.isArray(ids)) {
-        setIsFavorited(ids.includes(Number(id)) || ids.includes(String(id)));
+        const numIds = ids.map((v) => Number(v));
+        setFavoriteIds(numIds);
+        setIsFavorited(numIds.includes(Number(id)) || ids.includes(String(id)));
       }
-    }).catch(() => {});
+    }).catch(() => { if (!cancelled) setFavoriteIds([]); });
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, user]);
 
   const handleToggleFavorite = async () => {
     if (!getToken() || favToggling) return;
     setFavToggling(true);
     try {
       const result = await toggleFavorite(id);
-      setIsFavorited(result?.favorited ?? !isFavorited);
+      const next = result?.favorited ?? !isFavorited;
+      setIsFavorited(next);
+      setFavoriteIds((prev) => next ? [...prev, Number(id)] : prev.filter((i) => i !== Number(id)));
     } catch { /* ignore */ } finally {
       setFavToggling(false);
+    }
+  };
+
+  const handleToggleFavoriteForCard = async (productId) => {
+    if (!getToken()) return;
+    setFavoriteIds((prev) => {
+      if (prev.includes(Number(productId))) return prev.filter((i) => i !== Number(productId));
+      return [...prev, Number(productId)];
+    });
+    try {
+      await toggleFavorite(productId);
+    } catch {
+      setFavoriteIds((prev) => prev.filter((i) => i !== Number(productId)));
     }
   };
 
@@ -367,8 +405,8 @@ export default function ProductPage() {
     if (!settings?.showViewingIndicator) return null;
     if (viewers === 0) return null;
     const threshold = settings?.exactViewerThreshold ?? 5;
-    if (viewers < threshold) return settings?.lowViewerText ?? '👀 Several people are viewing this item';
-    return `👀 ${viewers} people viewing this item`;
+    if (viewers < threshold) return settings?.lowViewerText ?? 'Several people are viewing this item';
+    return `${viewers} people are viewing this item`;
   }, [viewers, settings?.showViewingIndicator, settings?.exactViewerThreshold, settings?.lowViewerText]);
 
   const handleSubmitReview = async (e) => {
@@ -550,7 +588,7 @@ export default function ProductPage() {
   const sellerCompletedOrders = Number(seller.completed_sales ?? seller.completedSales ?? 0);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-8 pb-24 lg:pb-10">
       {/* Confirm modal */}
       {showConfirmModal && (
         <PurchaseConfirmModal
@@ -614,7 +652,7 @@ export default function ProductPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8 lg:gap-12">
-        {/* Left: image + reviews */}
+        {/* Left: gallery + content */}
         <div className="space-y-6">
           {/* Product image — max 400px, not full-screen */}
           <div className="space-y-3">
@@ -639,6 +677,268 @@ export default function ProductPage() {
             )}
           </div>
 
+          {/* Mobile: primary product info, seller, purchase */}
+          <div className="lg:hidden space-y-5">
+            {/* Product header: title + actions + stats */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">{product.name}</h1>
+                <div className="flex items-center gap-2 shrink-0">
+                  {getToken() && (
+                    <button
+                      type="button"
+                      onClick={handleToggleFavorite}
+                      disabled={favToggling}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${isFavorited ? 'text-pink-600 border-pink-200 bg-pink-50 hover:bg-pink-100' : 'text-gray-400 border-gray-200 hover:border-pink-300 hover:text-pink-500'}`}
+                      title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                    >
+                      <svg className="w-4 h-4" fill={isFavorited ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                      {isFavorited ? 'Saved' : 'Save'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setReportOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-gray-400 border border-gray-200 hover:border-red-300 hover:text-red-500 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" /></svg>
+                    Report
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 mt-1">
+                <span className="inline-flex items-center gap-1">
+                  <Star className="w-4 h-4 text-amber-400" />
+                  <span>
+                    {displayRating != null ? displayRating.toFixed(1) : '—'} · {reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'}
+                  </span>
+                </span>
+                {isSellerVerified && (
+                  <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Verified
+                  </span>
+                )}
+                {(Number(product.completed_orders_count ?? product.sales ?? 0) > 0) && (
+                  <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-medium">
+                    <Flame className="w-3.5 h-3.5" />
+                    {product.completed_orders_count ?? product.sales ?? 0} sold
+                  </span>
+                )}
+              </div>
+              {(() => {
+                const stockNum = Number(product.stock ?? 0);
+                const isLowStock = stockNum > 0 && stockNum <= 5;
+                if (!isLowStock) return null;
+              return (
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-800">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    Low stock
+                  </span>
+                </div>
+              );
+              })()}
+            </div>
+
+            {/* Price + stock */}
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                {isFlashActive ? (
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-xl font-semibold text-gray-400 line-through">
+                        {Math.round(Number(product.price || 0))} MAD
+                      </p>
+                      <p className="text-3xl font-extrabold text-red-600">
+                        {Math.round(Number(product.effective_price ?? product.price ?? 0))}{' '}
+                        <span className="text-xl font-semibold text-red-500">MAD</span>
+                      </p>
+                    </div>
+                    <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">
+                      Limited-time flash deal
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-3xl font-bold text-gray-900">
+                    {Math.round(Number(product.price || 0))} <span className="text-xl font-semibold text-gray-500">MAD</span>
+                  </p>
+                )}
+                {isBestPrice && (
+                  <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-medium">
+                    <Star className="w-3.5 h-3.5" />
+                    Best price
+                  </span>
+                )}
+              </div>
+              {settings?.showViewingIndicator && viewerText && (
+                <span className="text-xs text-gray-500 mt-1">
+                  {viewerText}
+                </span>
+              )}
+              <div className="flex items-center gap-2 mt-1">
+                <span
+                  className={`text-sm font-medium ${
+                    isOutOfStock ? 'text-red-600' : 'text-green-600'
+                  }`}
+                >
+                  {isOutOfStock ? '✕ Out of stock' : `✓ ${stock} in stock`}
+                </span>
+                {deliveryTime && (
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                    {deliveryTime}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Feature icons */}
+            {features.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {features.map((f) => {
+                  const feat = FEATURE_ICONS[f];
+                  if (!feat) return null;
+                  return (
+                    <span key={f} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-m4m-purple text-xs font-medium">
+                      {feat.icon}
+                      {feat.label}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Vacation / instant / seller note */}
+            {seller.vacation_mode && (
+              <div className="rounded-xl bg-amber-100 border border-amber-300 p-4 flex gap-3">
+                <Umbrella className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-900">Seller temporarily unavailable</p>
+                  <p className="text-xs text-amber-800 mt-0.5">This seller is currently in vacation mode and cannot accept new orders.</p>
+                </div>
+              </div>
+            )}
+            {isInstantDelivery && (
+              <div className="rounded-xl bg-green-50 border border-green-200 p-4 flex gap-3">
+                <Zap className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-green-800">Instant Delivery</p>
+                  <p className="text-xs text-green-700 mt-0.5">This product uses Instant Delivery. Account credentials will appear automatically after purchase.</p>
+                </div>
+              </div>
+            )}
+            {sellerReminder && (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 flex gap-3">
+                <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Seller note</p>
+                  <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">{sellerReminder}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Seller card (mobile) */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-4">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <Link to={`/seller/${seller.id}`} className="flex items-center gap-3 group">
+                  <span className="w-10 h-10 rounded-full bg-m4m-purple text-white flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden">
+                    {seller?.avatar ? (
+                      <img
+                        src={`${seller.avatar}?v=${seller.updated_at || Date.now()}`}
+                        alt="seller avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      (seller.name?.charAt(0)?.toUpperCase() || 'S')
+                    )}
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-semibold text-gray-900 text-sm group-hover:text-m4m-purple transition-colors">{seller.name || 'Seller'}</p>
+                      {isSellerVerified && <VerifiedBadge />}
+                    </div>
+                    <div className="mt-0.5">
+                      <SellerSalesBadge completedSales={seller.completed_sales ?? seller.completedSales ?? 0} />
+                    </div>
+                    {sellerMemberSinceLabel && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Member since:{' '}
+                        <span className="font-medium text-gray-900">{sellerMemberSinceLabel}</span>
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-0.5">View seller profile</p>
+                  </div>
+                </Link>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${sellerOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${sellerOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
+                  {lastSeenLabel || (sellerOnline ? 'Online' : 'Last seen recently')}
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 mt-2 space-y-1">
+                {sellerLevel != null && <div>Seller Level {sellerLevel}</div>}
+                {sellerSuccessRate != null && <div>{Number(sellerSuccessRate).toFixed(0)}% success rate</div>}
+                {sellerCompletedOrders > 0 && <div>{sellerCompletedOrders} orders completed</div>}
+              </div>
+              <button
+                type="button"
+                onClick={handleChatSeller}
+                disabled={chatting || !seller?.id}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-medium border border-gray-200 text-gray-700 hover:border-m4m-purple hover:text-m4m-purple transition-colors text-sm disabled:opacity-60 mt-3"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                {chatting ? 'Opening chat…' : 'Chat with seller'}
+              </button>
+            </div>
+
+            {/* Purchase box (mobile) */}
+            <div className="rounded-2xl border border-gray-200 bg-white p-5">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+              <input
+                type="number"
+                min={1}
+                max={stock || 1}
+                value={quantity}
+                disabled={isOutOfStock}
+                onChange={(e) => setQuantity(Math.max(1, Math.min(stock, parseInt(e.target.value, 10) || 1)))}
+                className="w-24 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none disabled:bg-gray-50 disabled:text-gray-400 mb-4"
+              />
+              <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
+                <span>Total</span>
+                <span className="font-bold text-gray-900 text-base">{Math.round(Number(price || 0) * Number(quantity || 1))} MAD</span>
+              </div>
+              {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+              <button
+                type="button"
+                onClick={handleBuyClick}
+                disabled={buying || isOutOfStock || seller.vacation_mode}
+                className="w-full py-3.5 rounded-xl font-bold text-base bg-green-600 text-white hover:bg-green-700 hover:text-white active:bg-green-700 active:text-white disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
+              >
+                {buying ? 'Processing…' : isOutOfStock ? 'Out of stock' : seller.vacation_mode ? 'Seller on vacation' : 'BUY NOW'}
+              </button>
+              {!user && (
+                <p className="text-xs text-gray-400 text-center mt-2">
+                  You need to <Link to="/login" className="text-m4m-purple font-medium hover:underline">sign in</Link> to purchase
+                </p>
+              )}
+            <div className="mt-4 text-sm text-gray-600 space-y-1">
+              <p className="flex items-center gap-1.5">
+                <Lock className="w-4 h-4" />
+                <span>Secure payment</span>
+              </p>
+              <p className="flex items-center gap-1.5">
+                <Zap className="w-4 h-4" />
+                <span>{product.delivery_type === 'instant' ? 'Instant delivery' : 'Delivery as described'}</span>
+              </p>
+              <p className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Buyer protection</span>
+              </p>
+            </div>
+            </div>
+          </div>
+
           {/* Description */}
           {product.description && (
             <div className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
@@ -648,10 +948,19 @@ export default function ProductPage() {
           )}
 
           {/* Warranty */}
-          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
-            <div>✔ Account warranty</div>
-            <div>✔ Instant replacement if invalid</div>
-            <div>✔ Seller support included</div>
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700 space-y-1">
+            <p className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Account warranty</span>
+            </p>
+            <p className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Instant replacement if invalid</span>
+            </p>
+            <p className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Seller support included</span>
+            </p>
           </div>
 
           <div className="border-t border-gray-200 my-6" />
@@ -767,7 +1076,10 @@ export default function ProductPage() {
                           <span className="text-gray-300 text-sm">{'★'.repeat(5 - Math.min(5, Math.max(0, Math.round(review.rating || 0))))}</span>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
-                          <span className="text-green-600">✔ Verified purchase</span>
+                          <span className="inline-flex items-center gap-1 text-green-600">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Verified purchase</span>
+                          </span>
                           {review.created_at && (
                             <span>{new Date(review.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}</span>
                           )}
@@ -786,8 +1098,8 @@ export default function ProductPage() {
           </section>
         </div>
 
-        {/* Right: product info + purchase */}
-        <div className="space-y-5">
+        {/* Right: product info + purchase (desktop only) */}
+        <div className="space-y-5 hidden lg:block">
           {/* Title + actions */}
           <div className="flex flex-col gap-3">
             <div className="flex items-start justify-between gap-3">
@@ -825,11 +1137,15 @@ export default function ProductPage() {
               </span>
               <span>({reviewsCount} {reviewsCount === 1 ? 'review' : 'reviews'})</span>
               {isSellerVerified && (
-                <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">✔ Verified</span>
+                <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Verified
+                </span>
               )}
               {(Number(product.completed_orders_count ?? product.sales ?? 0) > 0) && (
-                <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-medium">
-                  🔥 {product.completed_orders_count ?? product.sales ?? 0} sold
+                <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-medium">
+                  <Flame className="w-3.5 h-3.5" />
+                  {product.completed_orders_count ?? product.sales ?? 0} sold
                 </span>
               )}
             </div>
@@ -840,8 +1156,9 @@ export default function ProductPage() {
               if (!isLowStock) return null;
               return (
                 <div className="flex flex-wrap gap-2">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-800">
-                    🟢 Low Stock
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 text-green-800">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    Low stock
                   </span>
                 </div>
               );
@@ -855,10 +1172,10 @@ export default function ProductPage() {
                 <div className="space-y-1">
                   <div className="flex items-baseline gap-2">
                     <p className="text-xl font-semibold text-gray-400 line-through">
-                      {Number(product.price || 0).toFixed(2)} MAD
+                      {Math.round(Number(product.price || 0))} MAD
                     </p>
                     <p className="text-3xl font-extrabold text-red-600">
-                      {Number(product.effective_price ?? product.price ?? 0).toFixed(2)}{' '}
+                      {Math.round(Number(product.effective_price ?? product.price ?? 0))}{' '}
                       <span className="text-xl font-semibold text-red-500">MAD</span>
                     </p>
                   </div>
@@ -868,12 +1185,13 @@ export default function ProductPage() {
                 </div>
               ) : (
                 <p className="text-3xl font-bold text-gray-900">
-                  {Number(product.price || 0).toFixed(2)} <span className="text-xl font-semibold text-gray-500">MAD</span>
+                  {Math.round(Number(product.price || 0))} <span className="text-xl font-semibold text-gray-500">MAD</span>
                 </p>
               )}
               {isBestPrice && (
-                <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-medium">
-                  ⭐ Best price
+                <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-700 px-2 py-1 rounded text-xs font-medium">
+                  <Star className="w-3.5 h-3.5 fill-current" />
+                  Best price
                 </span>
               )}
             </div>
@@ -884,11 +1202,21 @@ export default function ProductPage() {
             )}
             <div className="flex items-center gap-2 mt-1">
               <span
-                className={`text-sm font-medium ${
+                className={`inline-flex items-center gap-1 text-sm font-medium ${
                   isOutOfStock ? 'text-red-600' : 'text-green-600'
                 }`}
               >
-                {isOutOfStock ? '✕ Out of stock' : `✓ ${stock} in stock`}
+                {isOutOfStock ? (
+                  <>
+                    <X className="w-4 h-4 shrink-0" aria-hidden />
+                    Out of stock
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden />
+                    {stock} in stock
+                  </>
+                )}
               </span>
               {deliveryTime && (
                 <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
@@ -896,6 +1224,11 @@ export default function ProductPage() {
                 </span>
               )}
             </div>
+            {product.created_at && (
+              <p className="text-xs text-gray-500 mt-1">
+                Listed {new Date(product.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            )}
           </div>
 
           {/* Feature icons */}
@@ -917,7 +1250,7 @@ export default function ProductPage() {
           {/* Vacation mode banner */}
           {seller.vacation_mode && (
             <div className="rounded-xl bg-amber-100 border border-amber-300 p-4 flex gap-3">
-              <span className="text-xl shrink-0">🏖️</span>
+              <Sun className="w-6 h-6 text-amber-700 shrink-0" aria-hidden />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-amber-900">Seller temporarily unavailable</p>
                 <p className="text-xs text-amber-800 mt-0.5">This seller is currently in vacation mode and cannot accept new orders.</p>
@@ -985,7 +1318,7 @@ export default function ProductPage() {
               </span>
             </div>
             <div className="text-xs text-gray-500 mt-2 space-y-1">
-              {sellerLevel != null && <div>Level {sellerLevel} seller</div>}
+              {sellerLevel != null && <div>Seller Level {sellerLevel}</div>}
               {sellerSuccessRate != null && <div>{Number(sellerSuccessRate).toFixed(0)}% success rate</div>}
               {sellerCompletedOrders > 0 && <div>{sellerCompletedOrders} orders completed</div>}
             </div>
@@ -1009,7 +1342,7 @@ export default function ProductPage() {
             />
             <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
               <span>Total</span>
-              <span className="font-bold text-gray-900 text-base">{(Number(price || 0) * Number(quantity || 1)).toFixed(2)} MAD</span>
+              <span className="font-bold text-gray-900 text-base">{Math.round(Number(price || 0) * Number(quantity || 1))} MAD</span>
             </div>
             {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
             <button
@@ -1026,23 +1359,35 @@ export default function ProductPage() {
 
             {/* Trust badges */}
             <div className="mt-4 text-sm text-gray-600 space-y-1">
-              <div>🔒 Secure payment</div>
-              <div>⚡ {product.delivery_type === 'instant' ? 'Instant delivery' : 'Delivery as described'}</div>
-              <div>🛡 Buyer protection</div>
+              <p className="flex items-center gap-1.5">
+                <Lock className="w-4 h-4" />
+                <span>Secure payment</span>
+              </p>
+              <p className="flex items-center gap-1.5">
+                <Zap className="w-4 h-4" />
+                <span>{product.delivery_type === 'instant' ? 'Instant delivery' : 'Delivery as described'}</span>
+              </p>
+              <p className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Buyer protection</span>
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Similar products */}
+      {/* Similar products / More from this seller */}
       {similarProducts.length > 0 && (
         <section className="mt-12 pt-10 border-t border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-5">More from this seller</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {similarProducts.map((p) => (
-              <div key={p.id} className="transition transform duration-200 hover:scale-105 hover:shadow-xl rounded-xl">
-                <ProductCard product={p} />
-              </div>
+              <ProductCard
+                key={p.id}
+                product={p}
+                isFavorited={favoriteIds.includes(Number(p.id))}
+                onToggleFavorite={user ? () => handleToggleFavoriteForCard(p.id) : undefined}
+              />
             ))}
           </div>
         </section>
@@ -1052,15 +1397,40 @@ export default function ProductPage() {
       {recommendedProducts.length > 0 && (
         <section className="mt-10">
           <h2 className="text-xl font-semibold text-gray-900 mb-5">Recommended for you</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {recommendedProducts.map((p) => (
-              <div key={p.id} className="transition transform duration-200 hover:scale-105 hover:shadow-xl rounded-xl">
-                <ProductCard product={p} />
-              </div>
+              <ProductCard
+                key={p.id}
+                product={p}
+                isFavorited={favoriteIds.includes(Number(p.id))}
+                onToggleFavorite={user ? () => handleToggleFavoriteForCard(p.id) : undefined}
+              />
             ))}
           </div>
         </section>
       )}
+      {/* Mobile bottom bar: primary actions */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 bg-white border-t border-gray-200 px-4 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+        <div className="max-w-7xl mx-auto flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleChatSeller}
+            disabled={chatting || !seller?.id}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+            {chatting ? 'Opening…' : 'Chat'}
+          </button>
+          <button
+            type="button"
+            onClick={handleBuyClick}
+            disabled={buying || isOutOfStock || seller.vacation_mode}
+            className="flex-[1.3] py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold shadow-sm hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {buying ? 'Processing…' : isOutOfStock ? 'Out of stock' : seller.vacation_mode ? 'On vacation' : 'Buy now'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

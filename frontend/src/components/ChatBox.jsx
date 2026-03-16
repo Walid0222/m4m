@@ -16,6 +16,7 @@ export default function ChatBox({
   isTyping = false,
   isSupport = false,
   onBack,
+  inputDisabled = false,
 }) {
   const { avatar } = useAuth();
   const messagesEndRef = useRef(null);
@@ -113,7 +114,7 @@ export default function ChatBox({
                   />
                   {typeof otherUser.seller_level === 'number' && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700">
-                      Lv {otherUser.seller_level}
+                      Seller Level {otherUser.seller_level}
                     </span>
                   )}
                 </>
@@ -254,14 +255,19 @@ export default function ChatBox({
             placeholder="Type a message..."
             value={newMessage}
             onChange={(e) => onNewMessageChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!inputDisabled) onSend();
+              }
+            }}
             className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors text-sm"
-            disabled={sending}
+            disabled={sending || inputDisabled}
           />
           <button
             type="button"
             onClick={onSend}
-            disabled={sending || !newMessage.trim()}
+            disabled={sending || inputDisabled || !newMessage.trim()}
             className="p-2.5 rounded-xl bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 flex items-center justify-center"
             aria-label="Send message"
           >
