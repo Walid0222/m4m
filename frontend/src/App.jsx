@@ -3,6 +3,7 @@ import { AuthProvider, ProtectedRoute, SellerRoute, AdminRoute } from './context
 import { MarketplaceSettingsProvider } from './contexts/MarketplaceSettingsContext';
 import { RefreshProvider } from './contexts/RefreshContext';
 import Layout from './components/Layout';
+import ChatLayout from './layouts/ChatLayout';
 import HomePage from './pages/HomePage';
 import ProductPage from './pages/ProductPage';
 import ServicePage from './pages/ServicePage';
@@ -37,119 +38,123 @@ export default function App() {
             <ReviewReminderPopup />
             <Routes>
               <Route path="/" element={<Layout />}>
-            <Route index element={<HomePage />} />
-            <Route path="service/:slug" element={<ServicePage />} />
-            <Route path="offer-type/:slug" element={<OfferTypePage />} />
-            <Route path="product/:id" element={<ProductPage />} />
-            <Route path="seller/:id" element={<SellerProfilePage />} />
-            <Route path="login" element={<AuthPage />} />
-            <Route path="forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="reset-password" element={<ResetPasswordPage />} />
+                <Route index element={<HomePage />} />
+                <Route path="service/:slug" element={<ServicePage />} />
+                <Route path="offer-type/:slug" element={<OfferTypePage />} />
+                <Route path="product/:id" element={<ProductPage />} />
+                <Route path="seller/:id" element={<SellerProfilePage />} />
+                <Route path="login" element={<AuthPage />} />
+                <Route path="forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="reset-password" element={<ResetPasswordPage />} />
 
-            {/* Protected routes: require login */}
-            <Route
-              path="profile"
-              element={
-                <ProtectedRoute>
-                  <UserProfilePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="settings"
-              element={
-                <ProtectedRoute>
-                  <SettingsPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="wallet"
-              element={
-                <ProtectedRoute>
-                  <WalletPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="orders"
-              element={
-                <ProtectedRoute>
-                  <OrdersPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="orders/:id"
-              element={
-                <ProtectedRoute>
-                  <OrderDetailPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="chat"
-              element={
-                <ProtectedRoute>
-                  <ChatPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="seller-dashboard"
-              element={
-                <SellerRoute>
-                  <SellerDashboardPage />
-                </SellerRoute>
-              }
-            />
-            <Route
-              path="seller-disputes"
-              element={
-                <SellerRoute>
-                  <SellerDisputesPage />
-                </SellerRoute>
-              }
-            />
-            <Route
-              path="admin"
-              element={
-                <AdminRoute>
-                  <AdminDashboardPage />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="favorites"
-              element={
-                <ProtectedRoute>
-                  <FavoritesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="disputes"
-              element={
-                <ProtectedRoute>
-                  <DisputesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="disputes/:id"
-              element={
-                <ProtectedRoute>
-                  <DisputeDetailPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="help/:slug" element={<HelpPage />} />
-            <Route path="help" element={<Navigate to="/help/faq" replace />} />
-            <Route path="marketplace" element={<HomePage />} />
-            <Route path="recently-viewed" element={<RecentlyViewedPage />} />
-            <Route path="auth" element={<AuthPage />} />
-            <Route path="marketplace-rules" element={<MarketplaceRulesPage />} />
+                {/* Protected routes: require login */}
+                <Route
+                  path="profile"
+                  element={
+                    <ProtectedRoute>
+                      <UserProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="settings"
+                  element={
+                    <ProtectedRoute>
+                      <SettingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="wallet"
+                  element={
+                    <ProtectedRoute>
+                      <WalletPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="orders"
+                  element={
+                    <ProtectedRoute>
+                      <OrdersPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="orders/:id"
+                  element={
+                    <ProtectedRoute>
+                      <OrderDetailPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="seller-dashboard"
+                  element={
+                    <SellerRoute>
+                      <SellerDashboardPage />
+                    </SellerRoute>
+                  }
+                />
+                <Route
+                  path="seller-disputes"
+                  element={
+                    <SellerRoute>
+                      <SellerDisputesPage />
+                    </SellerRoute>
+                  }
+                />
+                <Route
+                  path="admin"
+                  element={
+                    <AdminRoute>
+                      <AdminDashboardPage />
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="favorites"
+                  element={
+                    <ProtectedRoute>
+                      <FavoritesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="disputes"
+                  element={
+                    <ProtectedRoute>
+                      <DisputesPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="disputes/:id"
+                  element={
+                    <ProtectedRoute>
+                      <DisputeDetailPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="help/:slug" element={<HelpPage />} />
+                <Route path="help" element={<Navigate to="/help/faq" replace />} />
+                <Route path="marketplace" element={<HomePage />} />
+                <Route path="recently-viewed" element={<RecentlyViewedPage />} />
+                <Route path="auth" element={<AuthPage />} />
+                <Route path="marketplace-rules" element={<MarketplaceRulesPage />} />
               </Route>
+
+              <Route
+                path="/chat"
+                element={
+                  <ProtectedRoute>
+                    <ChatLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<ChatPage />} />
+              </Route>
+
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>

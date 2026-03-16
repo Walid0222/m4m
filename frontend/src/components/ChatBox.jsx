@@ -46,6 +46,10 @@ export default function ChatBox({
   }
 
   const online = isSellerOnline(otherUser);
+  const hasSellerLevel = typeof otherUser?.seller_level === 'number' && otherUser.seller_level > 0;
+  const roleLabel = hasSellerLevel
+    ? `Seller Level ${otherUser.seller_level}`
+    : 'Buyer';
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-white">
@@ -94,11 +98,9 @@ export default function ChatBox({
                   <SellerSalesBadge
                     completedSales={otherUser.completed_sales ?? otherUser.completedSales ?? 0}
                   />
-                  {typeof otherUser.seller_level === 'number' && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700">
-                      Seller Level {otherUser.seller_level}
-                    </span>
-                  )}
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700">
+                    {roleLabel}
+                  </span>
                 </>
               )}
             </div>

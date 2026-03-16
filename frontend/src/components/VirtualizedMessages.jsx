@@ -75,7 +75,7 @@ export default function VirtualizedMessages({
 
     // Date groups and messages
     groupedMessages.forEach(({ date, msgs }, groupIdx) => {
-      const headerKey = `date-${date}-${groupIdx}`;
+      const headerKey = `date-${date}`;
       items.push({
         type: 'date',
         key: headerKey,
@@ -83,7 +83,9 @@ export default function VirtualizedMessages({
       });
 
       msgs.forEach((m, idx) => {
-        const messageKey = `msg-${m.id ?? m._tempId ?? `${groupIdx}-${idx}`}`;
+        const baseId = m.id ?? m._tempId;
+        const messageKey =
+          baseId != null ? `msg-${baseId}` : `msg-${groupIdx}-${idx}`;
         items.push({
           type: 'message',
           key: messageKey,
@@ -124,6 +126,7 @@ export default function VirtualizedMessages({
 
     const lastMessage = rows[lastMessageIndex].message;
     const lastId = lastMessage ? lastMessage.id ?? lastMessage._tempId : null;
+    if (!lastId) return;
     const prevLastId = lastMessageKeyRef.current;
     const isNew = lastId && lastId !== prevLastId;
     lastMessageKeyRef.current = lastId;
@@ -134,15 +137,12 @@ export default function VirtualizedMessages({
       lastMessage.user_id === currentUserId ||
       lastMessage.sender?.id === currentUserId;
 
-    // If the user is at bottom or this is my outgoing message, scroll to bottom
-    if (isMine || isAtBottomRef.current) {
-      if (virtuosoRef.current) {
-        virtuosoRef.current.scrollToIndex({
-          index: lastMessageIndex,
-          align: 'end',
-          behavior: 'smooth',
-        });
-      }
+    if (isMine || (isAtBottomRef.current && lastMessageIndex !== rows.length - 1)) {
+      virtuosoRef.current?.scrollToIndex({
+        index: lastMessageIndex,
+        align: 'end',
+        behavior: 'auto',
+      });
     }
   }, [rows, currentUserId]);
 
@@ -152,21 +152,6 @@ export default function VirtualizedMessages({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-gray-50/50">
-      {hasMoreMessages && onLoadPrevious && (
-        <div className="flex justify-center mb-2">
-          <button
-            type="button"
-            onClick={onLoadPrevious}
-            disabled={loadingOlderMessages}
-            className="text-xs text-m4m-purple hover:underline disabled:opacity-50"
-          >
-            {loadingOlderMessages
-              ? 'Loading previous messages…'
-              : 'Show previous messages'}
-          </button>
-        </div>
-      )}
-
       {/* System welcome messages — always shown at top, outside virtualization */}
       {systemMsgs.map((m) => (
         <div key={m.id} className="flex justify-center mb-4">
@@ -215,8 +200,24 @@ export default function VirtualizedMessages({
           ref={virtuosoRef}
           className="flex-1"
           data={rows}
-          overscan={200}
+          followOutput="auto"
+          overscan={60}
           components={{
+            Header: () =>
+              hasMoreMessages && onLoadPrevious ? (
+                <div className="flex justify-center py-2">
+                  <button
+                    type="button"
+                    onClick={onLoadPrevious}
+                    disabled={loadingOlderMessages}
+                    className="text-xs text-m4m-purple hover:underline disabled:opacity-50"
+                  >
+                    {loadingOlderMessages
+                      ? 'Loading previous messages…'
+                      : 'Show previous messages'}
+                  </button>
+                </div>
+              ) : null,
             List: React.forwardRef((props, ref) => (
               // eslint-disable-next-line react/jsx-props-no-spreading
               <div {...props} ref={ref} className="px-4 py-4" />
@@ -383,6 +384,10 @@ export default function VirtualizedMessages({
           }}
           atBottomStateChange={(atBottom) => {
             isAtBottomRef.current = atBottom;
+          }}
+          rangeChanged={(range) => {
+            const nearBottom = range.endIndex >= rows.length - 2;
+            isAtBottomRef.current = nearBottom;
           }}
           computeItemKey={(_, row) => row.key}
         />
