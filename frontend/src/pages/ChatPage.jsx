@@ -600,14 +600,23 @@ export default function ChatPage() {
                     }`}
                   >
                     <span className="relative shrink-0">
-                      <span className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold overflow-hidden ${
                         isSelected ? 'bg-white/20 text-white' : isSupport ? 'bg-blue-100 text-blue-600' : 'bg-m4m-purple/10 text-m4m-purple'
                       }`}>
-                        {isSupport
-                          ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                          : other?.name?.charAt(0)?.toUpperCase() || '?'
-                        }
-                      </span>
+                        {isSupport ? (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
+                          </svg>
+                        ) : other?.avatar ? (
+                          <img
+                            src={other.avatar}
+                            alt={other.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          other?.name?.charAt(0)?.toUpperCase() || '?'
+                        )}
+                      </div>
                       {isOnline && (
                         <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 ${
                           isSelected ? 'bg-green-400 border-white' : 'bg-green-500 border-white'
