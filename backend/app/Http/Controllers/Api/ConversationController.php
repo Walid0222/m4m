@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Events\MessageSent;
+use App\Events\UserTyping;
+use App\Events\MessageDelivered;
+use App\Events\MessageSeen;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Notifications\NewMessageNotification;
@@ -98,7 +101,36 @@ class ConversationController extends Controller
         $messages = $conversation->messages()
             ->with('sender:id,name')
             ->latest()
-            ->paginate($request->integer('per_page', 50));
+            ->paginate($request->integer('per_page', 20));
+
+        // Mark as delivered: any messages from the other user that are still in 'sent' status
+        if (! $isSupportConvo) {
+            $deliveredIds = $conversation->messages()
+                ->where('user_id', '!=', $userId)
+                ->where('status', 'sent')
+                ->pluck('id')
+                ->all();
+
+            if (! empty($deliveredIds)) {
+                $conversation->messages()
+                    ->whereIn('id', $deliveredIds)
+                    ->update(['status' => 'delivered']);
+
+                foreach ($deliveredIds as $mid) {
+                    \Log::info('MessageDelivered broadcast', [
+                        'message_id'      => $mid,
+                        'conversation_id' => $conversation->id,
+                        'delivered_to'    => $userId,
+                    ]);
+
+                    broadcast(new MessageDelivered(
+                        messageId: $mid,
+                        conversationId: $conversation->id,
+                        userId: $userId,
+                    ))->toOthers();
+                }
+            }
+        }
 
         return $this->success([
             'conversation' => $conversation,
@@ -120,7 +152,8 @@ class ConversationController extends Controller
 
         $message = $conversation->messages()->create([
             'user_id' => $userId,
-            'body' => $validated['body'],
+            'body'    => $validated['body'],
+            'status'  => 'sent',
         ]);
 
         $message->load('sender:id,name');
@@ -136,5 +169,70 @@ class ConversationController extends Controller
         broadcast(new MessageSent($message))->toOthers();
 
         return $this->success($message->toArray(), 'Message sent.', 201);
+    }
+
+    public function typing(Request $request, Conversation $conversation): JsonResponse
+    {
+        $userId = $request->user()->id;
+        $isSupportConvo = $conversation->type === 'support' && $conversation->user_one_id === $userId;
+        if (! $isSupportConvo && $conversation->user_one_id !== $userId && $conversation->user_two_id !== $userId) {
+            return $this->error('Forbidden.', 403);
+        }
+
+        \Log::info('Typing event fired', [
+            'conversation_id' => $conversation->id,
+            'user_id' => $userId,
+        ]);
+
+        broadcast(new UserTyping($conversation->id, $userId))->toOthers();
+
+        return $this->success(null, 'Typing event dispatched.');
+    }
+
+    public function seen(Request $request, Conversation $conversation): JsonResponse
+    {
+        $userId = $request->user()->id;
+        $isSupportConvo = $conversation->type === 'support' && $conversation->user_one_id === $userId;
+        if (! $isSupportConvo && $conversation->user_one_id !== $userId && $conversation->user_two_id !== $userId) {
+            return $this->error('Forbidden.', 403);
+        }
+
+        \Log::info('SEEN endpoint reached', [
+            'conversation' => $conversation->id,
+            'user'         => $userId,
+        ]);
+
+        $ids = $conversation->messages()
+            ->where('user_id', '!=', $userId)
+            // TEMP: remove read_at filter for debugging
+            // ->whereNull('read_at')
+            ->pluck('id')
+            ->all();
+
+        \Log::info('SEEN messageIds', $ids);
+
+        if (! empty($ids)) {
+            $now = now();
+            $conversation->messages()
+                ->whereIn('id', $ids)
+                ->update([
+                    'read_at' => $now,
+                    'status'  => 'seen',
+                ]);
+
+            \Log::info('Broadcasting MessageSeen event', [
+                'message_ids'     => $ids,
+                'conversation_id' => $conversation->id,
+                'seen_by'         => $userId,
+            ]);
+
+            broadcast(new MessageSeen(
+                messageIds: $ids,
+                conversationId: $conversation->id,
+                userId: $userId,
+            ))->toOthers();
+        }
+
+        return $this->success(null, 'Messages marked as seen.');
     }
 }

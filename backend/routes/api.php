@@ -229,6 +229,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/conversations',                                 [ConversationController::class, 'store']);
             Route::get('/conversations/{conversation}',                   [ConversationController::class, 'show']);
             Route::post('/conversations/{conversation}/messages',         [ConversationController::class, 'storeMessage']);
+            Route::post('/conversations/{conversation}/typing',           [ConversationController::class, 'typing']);
+            Route::post('/conversations/{conversation}/seen',             [ConversationController::class, 'seen']);
 
             // Support chat (user-facing)
             Route::get('/support/conversation',  [SupportController::class, 'getOrCreate']);

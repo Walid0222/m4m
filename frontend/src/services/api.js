@@ -640,6 +640,14 @@ export function sendMessage(conversationId, body) {
   return api.post(`/conversations/${conversationId}/messages`, { body }).then(unwrap);
 }
 
+export function sendTyping(conversationId) {
+  return api.post(`/conversations/${conversationId}/typing`).then(() => {});
+}
+
+export function markConversationSeen(conversationId) {
+  return api.post(`/conversations/${conversationId}/seen`);
+}
+
 // --- Notifications ---
 
 export function getNotifications() {

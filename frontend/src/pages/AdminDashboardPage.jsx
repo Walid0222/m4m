@@ -1688,7 +1688,7 @@ function SupportChatPanel({ adminUser }) {
                         {m.body}
                       </div>
                       <span className={`text-[10px] text-gray-400 mt-0.5 ${isAdminMsg ? 'text-right' : 'text-left'}`}>
-                        {isAdminMsg ? (adminUser?.name || 'M4M Support') : (selectedThread?.userName || 'User')}
+                        {isAdminMsg ? (m.sender?.name || adminUser?.name || 'M4M Support') : (selectedThread?.userName || m.sender?.name || 'User')}
                         {m.created_at && ` · ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                       </span>
                     </div>

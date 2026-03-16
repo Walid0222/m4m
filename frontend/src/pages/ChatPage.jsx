@@ -11,6 +11,8 @@ import {
   sendSupportMessage,
   paginatedItems,
   getToken,
+  sendTyping as apiSendTyping,
+  markConversationSeen,
 } from '../services/api';
 import { isSellerOnline } from '../lib/sellerOnline';
 import ChatBox from '../components/ChatBox';
@@ -73,6 +75,9 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   // Support messages are loaded once user is known (see useEffect below)
   const [supportMessages, setSupportMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -84,6 +89,7 @@ export default function ChatPage() {
   const [mobileView, setMobileView] = useState('list'); // 'list' | 'chat'
 
   const selectedIdRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
   const urlConversationLoadedRef = useRef(null);
   const channelsRef = useRef({});
   selectedIdRef.current = selected?.id;
@@ -193,13 +199,37 @@ export default function ChatPage() {
   // ── Load messages for selected conversation ──────────────────────────────
   useEffect(() => {
     if (!selected?.id || selected.id === 'support' || !getToken()) return;
+    setPage(1);
+    setHasMoreMessages(true);
     setUnread((prev) => ({ ...prev, [selected.id]: 0 }));
     let cancelled = false;
     (async () => {
       try {
         const data = await getConversation(selected.id);
-        const list = data?.messages ? paginatedItems(data.messages) : [];
-        if (!cancelled) setMessages(Array.isArray(list) ? [...list].reverse() : []);
+        const paginator = data?.messages;
+        const list = paginator ? paginatedItems(paginator) : [];
+        if (!cancelled && Array.isArray(list)) {
+          const reversed = [...list].reverse();
+          setMessages((prev) => {
+            const serverIds = new Set(reversed.map((m) => m.id));
+            const pendingOnly = prev.filter((m) => m._pending && !serverIds.has(m.id));
+            return [...reversed, ...pendingOnly];
+          });
+
+          const currentPage = paginator?.current_page ?? 1;
+          const lastPage = paginator?.last_page ?? 1;
+          setPage(currentPage);
+          setHasMoreMessages(currentPage < lastPage);
+
+          // Mark conversation as seen (read receipts)
+          console.log('Conversation opened:', selected.id);
+          console.log('Calling seen API for conversation:', selected.id);
+          markConversationSeen(selected.id)
+            .then(() => console.log('Seen API success'))
+            .catch((e) => console.error('Seen API error', e));
+        } else if (!cancelled && !Array.isArray(list)) {
+          setMessages([]);
+        }
       } catch {
         if (!cancelled) setMessages([]);
       }
@@ -238,52 +268,87 @@ export default function ChatPage() {
     }
     const current = channelsRef.current;
 
-    conversations.forEach((c) => {
+        conversations.forEach((c) => {
       const key = `conversation.${c.id}`;
       if (current[key]) return;
       try {
-        const channel = echoInstance.private(key);
+            // TEMP: debug joining channels
+            // eslint-disable-next-line no-console
+            console.log('Joining conversation channel', key);
+
+            const channel = echoInstance.private(key);
         current[key] = channel;
 
         channel.listen('.message.sent', (payload) => {
           const msg = payload.message;
           if (!msg) return;
-          const isFromMe = msg.user_id === user.id;
 
-          if (c.id === selectedIdRef.current) {
-            if (isFromMe) {
-              // Replace pending optimistic message or add
-              setMessages((prev) => {
-                const withoutPending = prev.filter((m) => !m._pending);
-                if (withoutPending.some((m) => m.id === msg.id)) return withoutPending;
-                return [...withoutPending, msg];
-              });
-            } else {
-              // Show typing briefly then add
-              setIsTyping(true);
-              setTimeout(() => {
-                setIsTyping(false);
-                setMessages((prev) => {
-                  if (prev.some((m) => m.id === msg.id)) return prev;
-                  return [...prev, msg];
-                });
-              }, 500);
-            }
-          } else if (!isFromMe) {
+          const isForSelected = c.id === selectedIdRef.current;
+
+          if (isForSelected) {
+            // Incoming message in the currently open conversation: append immediately if not already present
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === msg.id)) return prev;
+              return [...prev, msg];
+            });
+          } else {
+            // Incoming message in another conversation: bump unread count and refresh the list
             setUnread((prev) => ({ ...prev, [c.id]: (prev[c.id] || 0) + 1 }));
             refreshConversations();
           }
+
+          // Let the navbar know to refresh notifications so the chat badge updates promptly
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('notifications:refresh'));
+          }
         });
 
-        // Mark seen when recipient reads
-        channel.listen('.message.seen', (payload) => {
-          if (c.id === selectedIdRef.current && payload.user_id !== user.id) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.user_id === user.id && !m.seen_at ? { ...m, seen_at: payload.seen_at || new Date().toISOString() } : m
-              )
-            );
+        channel.listen('.message.delivered', (event) => {
+          // eslint-disable-next-line no-console
+          console.log('[Echo] message.delivered received', event);
+          const { messageId, conversationId } = event || {};
+          if (!messageId || conversationId !== c.id) return;
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId && m.user_id === user?.id && m.status !== 'seen'
+                ? { ...m, status: 'delivered' }
+                : m
+            )
+          );
+        });
+
+        channel.listen('.message.seen', (event) => {
+          // eslint-disable-next-line no-console
+          console.log('[Echo] message.seen received', event);
+          const { messageIds, conversationId } = event || {};
+          if (!Array.isArray(messageIds) || conversationId !== c.id) return;
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              messageIds.includes(m.id) && m.user_id === user?.id
+                ? { ...m, status: 'seen', read_at: m.read_at ?? new Date().toISOString() }
+                : m
+            )
+          );
+        });
+
+        channel.listen('.user.typing', (event) => {
+          // TEMP: debug typing events
+          // eslint-disable-next-line no-console
+          console.log('[Echo] user.typing received', event, 'for conversation', c.id, 'selected', selectedIdRef.current);
+
+          const { userId, conversationId } = event || {};
+          if (!userId || userId === user.id) return;
+          if (conversationId !== c.id || c.id !== selectedIdRef.current) return;
+
+          setIsTyping(true);
+          if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
           }
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsTyping(false);
+          }, 2000);
         });
       } catch {}
     });
@@ -339,12 +404,17 @@ export default function ChatPage() {
     // Optimistic: show message immediately as pending
     const tempId = `temp_${Date.now()}`;
     const optimisticMsg = {
+      id: tempId,
       _tempId: tempId,
       _pending: true,
       body: newMessage.trim(),
       user_id: user?.id,
+      sender: user ? { id: user.id, name: user.name } : undefined,
       created_at: new Date().toISOString(),
     };
+    // TEMP: debug optimistic insert
+    // eslint-disable-next-line no-console
+    console.log('[ChatPage] sendMessage optimistic insert', optimisticMsg);
     setMessages((prev) => [...prev, optimisticMsg]);
     setNewMessage('');
     setSending(true);
@@ -352,20 +422,38 @@ export default function ChatPage() {
     try {
       const message = await apiSendMessage(selected.id, optimisticMsg.body);
       if (message) {
-        setMessages((prev) =>
-          prev.map((m) => (m._tempId === tempId ? { ...message } : m))
-        );
+        // Replace the optimistic message with the server-saved one.
+        // If the optimistic message is no longer present (e.g. race with another refresh),
+        // append the server message if it's not already in the list.
+        setMessages((prev) => {
+          let replaced = false;
+          let next = prev.map((m) => {
+            if (m._tempId === tempId) {
+              replaced = true;
+              return { ...message };
+            }
+            return m;
+          });
+          if (!replaced && message.id != null && !next.some((m) => m.id === message.id)) {
+            next = [...next, message];
+          }
+          return next;
+        });
       } else {
         // Remove pending if failed
         setMessages((prev) => prev.filter((m) => m._tempId !== tempId));
       }
-      // Immediately refresh the full conversation to ensure we have the latest state
+      // Lightly refresh the conversation from the server and merge with any remaining pending messages
       try {
         const data = await getConversation(selected.id);
         const list = data?.messages ? paginatedItems(data.messages) : [];
         if (Array.isArray(list)) {
           const reversed = [...list].reverse();
-          setMessages(reversed);
+          setMessages((prev) => {
+            const serverIds = new Set(reversed.map((m) => m.id));
+            const pendingOnly = prev.filter((m) => m._pending && !serverIds.has(m.id));
+            return [...reversed, ...pendingOnly];
+          });
         }
       } catch {
         // ignore; Echo and fallback polling will still update messages
@@ -378,7 +466,65 @@ export default function ChatPage() {
     }
   };
 
+  const handleTyping = useCallback(() => {
+    if (!selected?.id || selected.id === 'support' || !getToken()) return;
+    // TEMP: debug typing trigger
+    // eslint-disable-next-line no-console
+    console.log('[ChatPage] sending typing for conversation', selected.id);
+    apiSendTyping(selected.id).catch(() => {});
+  }, [selected?.id]);
+
+  const loadPreviousMessages = useCallback(async () => {
+    if (!selected?.id || selected.id === 'support' || !getToken()) return;
+    if (loadingOlderMessages || !hasMoreMessages) return;
+
+    setLoadingOlderMessages(true);
+    try {
+      const nextPage = page + 1;
+      const data = await getConversation(selected.id, { page: nextPage });
+      const paginator = data?.messages;
+      const olderList = paginator ? paginatedItems(paginator) : [];
+      if (!Array.isArray(olderList) || olderList.length === 0) {
+        setHasMoreMessages(false);
+        return;
+      }
+      const olderReversed = [...olderList].reverse();
+
+      setMessages((prev) => {
+        const merged = [...olderReversed, ...prev];
+        const map = new Map();
+        for (const m of merged) {
+          const key = m.id ?? m._tempId;
+          if (!key || !map.has(key)) {
+            map.set(key, m);
+          }
+        }
+        const deduped = Array.from(map.values());
+        // Ensure chronological order by created_at
+        deduped.sort((a, b) => {
+          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return ta - tb;
+        });
+        return deduped;
+      });
+
+      const currentPage = paginator?.current_page ?? nextPage;
+      const lastPage = paginator?.last_page ?? currentPage;
+      setPage(currentPage);
+      setHasMoreMessages(currentPage < lastPage);
+    } catch {
+      // ignore load errors for older messages
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  }, [selected?.id, page, hasMoreMessages, loadingOlderMessages]);
+
   // ── Derived ───────────────────────────────────────────────────────────────
+  // TEMP: debug ChatPage render and messages length
+  // eslint-disable-next-line no-console
+  console.log('[ChatPage] render, messages length =', messages.length);
+
   const otherUser = selected?._isSupport
     ? SUPPORT_CONV.other_user
     : selected?.other_user || selected?.userOne || selected?.userTwo;
@@ -394,32 +540,35 @@ export default function ChatPage() {
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (loading && conversations.length === 0) {
     return (
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="animate-pulse flex gap-4">
-          <div className="w-80 h-[500px] rounded-xl bg-gray-100" />
-          <div className="flex-1 h-[500px] rounded-xl bg-gray-100" />
+      <div className="min-h-screen flex flex-col">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 flex items-center justify-center">
+          <div className="animate-pulse flex gap-4">
+            <div className="w-80 h-[500px] rounded-xl bg-gray-100" />
+            <div className="flex-1 h-[500px] rounded-xl bg-gray-100" />
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-5">Messages</h1>
+    <div className="min-h-screen flex flex-col">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 flex-1 flex flex-col min-h-0">
+        <h1 className="text-2xl font-bold text-gray-900 mb-5">Messages</h1>
 
-      {!user ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <p className="text-gray-500 mb-4">Sign in to use chat.</p>
-          <Link
-            to="/login"
-            state={{ from: location }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
-          >
-            Sign in
-          </Link>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-gray-200 overflow-hidden bg-white shadow-lg flex min-h-[560px] md:min-h-[600px]">
+        {!user ? (
+          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+            <p className="text-gray-500 mb-4">Sign in to use chat.</p>
+            <Link
+              to="/login"
+              state={{ from: location }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
+            >
+              Sign in
+            </Link>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-gray-200 overflow-hidden bg-white shadow-lg flex-1 flex min-h-0">
 
           {/* ── Conversation list (left panel) ─────────────────────────── */}
           <aside className={`
@@ -517,10 +666,16 @@ export default function ChatPage() {
               isSupport={selected?._isSupport}
               onBack={() => setMobileView('list')}
               inputDisabled={!selected?.id}
+              onTyping={handleTyping}
+              hasMoreMessages={hasMoreMessages}
+              loadingOlderMessages={loadingOlderMessages}
+              onLoadPrevious={loadPreviousMessages}
             />
           </div>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
+    
   );
 }

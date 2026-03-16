@@ -17,15 +17,47 @@ export default function ChatBox({
   isSupport = false,
   onBack,
   inputDisabled = false,
+  onTyping,
+  hasMoreMessages = false,
+  loadingOlderMessages = false,
+  onLoadPrevious,
 }) {
   const { avatar } = useAuth();
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Auto-scroll to bottom whenever messages change
+  // TEMP: debug ChatBox render and messages length
+  // eslint-disable-next-line no-console
+  console.log('[ChatBox] render, messages length =', messages.length);
+
+  // Smart auto-scroll:
+  // - When a new message arrives and user is near bottom, scroll to bottom.
+  // - When the current user sends a message, always scroll to bottom.
+  // - Do not force scroll if user has scrolled up and a remote message arrives.
+  const lastMessageIdRef = useRef(null);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, isTyping]);
+    if (!messagesContainerRef.current) return;
+    const container = messagesContainerRef.current;
+
+    const last = messages[messages.length - 1];
+    const lastId = last ? (last.id ?? last._tempId) : null;
+    const prevLastId = lastMessageIdRef.current;
+    const isNew = lastId && lastId !== prevLastId;
+    lastMessageIdRef.current = lastId;
+
+    if (!isNew || !last) return;
+
+    const isMine = last.user_id === currentUserId || last.sender?.id === currentUserId;
+
+    const distanceFromBottom = container.scrollHeight - (container.scrollTop + container.clientHeight);
+    const nearBottom = distanceFromBottom < 40;
+
+    if (isMine || nearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+  }, [messages, currentUserId]);
 
   // Focus input when conversation is selected
   useEffect(() => {
@@ -139,7 +171,22 @@ export default function ChatBox({
       </div>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1 min-h-0 bg-gray-50/50">
+      <div
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-4 space-y-1 min-h-0 bg-gray-50/50"
+      >
+        {hasMoreMessages && onLoadPrevious && (
+          <div className="flex justify-center mb-2">
+            <button
+              type="button"
+              onClick={onLoadPrevious}
+              disabled={loadingOlderMessages}
+              className="text-xs text-m4m-purple hover:underline disabled:opacity-50"
+            >
+              {loadingOlderMessages ? 'Loading previous messages…' : 'Show previous messages'}
+            </button>
+          </div>
+        )}
         {/* System welcome messages — always shown at top */}
         {systemMsgs.map((m) => (
           <div key={m.id} className="flex justify-center mb-4">
@@ -163,8 +210,8 @@ export default function ChatBox({
           </div>
         ) : (
           <>
-            {groupedMessages.map(({ date, msgs }) => (
-              <div key={date}>
+            {groupedMessages.map(({ date, msgs }, groupIdx) => (
+              <div key={`${date}-${groupIdx}`}>
                 {/* Date separator */}
                 <div className="flex items-center gap-3 my-4">
                   <div className="flex-1 h-px bg-gray-200" />
@@ -175,12 +222,13 @@ export default function ChatBox({
                   const isMine = m.user_id === currentUserId || m.sender?.id === currentUserId;
                   const isLastInGroup = idx === msgs.length - 1 || (msgs[idx + 1]?.user_id ?? msgs[idx + 1]?.sender?.id) !== (m.user_id ?? m.sender?.id);
                   const isPending = m._pending === true;
-                  const isSeen = m.seen_at != null && isMine;
+                  const status = m.status; // 'sent' | 'delivered' | 'seen'
+                  const isSeen = (status === 'seen' || m.seen_at != null) && isMine;
                   const isLastMyMsg = lastMyMsg?.id === m.id;
 
                   return (
                     <div
-                      key={m.id ?? m._tempId}
+                      key={m.id ?? m._tempId ?? idx}
                       className={`flex mb-1 ${isMine ? 'justify-end' : 'justify-start'}`}
                     >
                       {/* Other user avatar — only on last in group */}
@@ -201,14 +249,29 @@ export default function ChatBox({
                         </div>
                         <div className={`flex items-center gap-1.5 mt-0.5 ${isMine ? 'flex-row-reverse' : ''}`}>
                           <span className="text-[10px] text-gray-400">
-                            {m.created_at ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : isPending ? 'Sending…' : ''}
+                            {m.created_at
+                              ? new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : isPending
+                                ? 'Sending…'
+                                : ''}
                           </span>
                           {isMine && isLastMyMsg && (
-                            isSeen
-                              ? <span className="text-[10px] text-blue-500 font-medium">Seen</span>
-                              : isPending
-                                ? <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" /></svg>
-                                : <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                            <>
+                              {isPending && (
+                                <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" />
+                                </svg>
+                              )}
+                              {!isPending && status === 'seen' && (
+                                <span className="text-[10px] text-blue-500 font-medium">✓✓</span>
+                              )}
+                              {!isPending && status === 'delivered' && status !== 'seen' && (
+                                <span className="text-[10px] text-gray-400 font-medium">✓✓</span>
+                              )}
+                              {!isPending && (!status || status === 'sent') && (
+                                <span className="text-[10px] text-gray-400 font-medium">✓</span>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -254,11 +317,19 @@ export default function ChatBox({
             type="text"
             placeholder="Type a message..."
             value={newMessage}
-            onChange={(e) => onNewMessageChange(e.target.value)}
+            onChange={(e) => {
+              onNewMessageChange(e.target.value);
+              // TEMP: debug typing from input
+              // eslint-disable-next-line no-console
+              console.log('User is typing');
+              if (onTyping) onTyping();
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (!inputDisabled) onSend();
+              } else if (onTyping) {
+                onTyping();
               }
             }}
             className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors text-sm"
