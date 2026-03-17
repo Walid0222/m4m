@@ -297,7 +297,7 @@ export default function DisputeDetailPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Link to="/disputes" className="text-sm text-m4m-purple hover:underline mb-6 inline-block">
         ← Back to disputes
       </Link>
@@ -339,205 +339,217 @@ export default function DisputeDetailPage() {
         )}
       </div>
 
-      {/* Timeline */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
-        <div className="rounded-xl border border-gray-200 bg-white divide-y divide-gray-100">
-          {activities.length === 0 ? (
-            <p className="p-4 text-sm text-gray-500 text-center">No activity yet.</p>
-          ) : (
-            activities.map((a) => (
-              <div key={a.id} className="p-4 flex items-start gap-3">
-                <div className="w-2 h-2 mt-2 rounded-full bg-m4m-purple shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{formatActivityLabel(a)}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {a.created_at ? new Date(a.created_at).toLocaleString() : ''}
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-
-      {/* Messages */}
-      <section className="mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Messages</h2>
-        <div className="rounded-xl border border-gray-200 bg-white divide-y divide-gray-100 max-h-80 overflow-y-auto">
-          {messages.length === 0 ? (
-            <p className="p-4 text-sm text-gray-500 text-center">No messages yet.</p>
-          ) : (
-            messages.map((m) => (
-              <div key={m.id} className="p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium text-gray-900">{m.user?.name ?? '—'}</span>
-                  <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-                    {ROLE_LABELS[m.role] ?? m.role}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    {m.created_at ? new Date(m.created_at).toLocaleString() : ''}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">{m.body}</p>
-              </div>
-            ))
-          )}
-        </div>
-        <form onSubmit={handleSendMessage} className="mt-3 flex gap-2">
-          <textarea
-            value={messageBody}
-            onChange={(e) => setMessageBody(e.target.value)}
-            placeholder="Type your message..."
-            rows={2}
-            maxLength={5000}
-            className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-            disabled={messageSubmitting}
-          />
-          <button
-            type="submit"
-            disabled={messageSubmitting || !messageBody.trim()}
-            className="px-4 py-2 rounded-lg bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark disabled:opacity-50 transition-colors"
-          >
-            {messageSubmitting ? 'Sending…' : 'Send'}
-          </button>
-        </form>
-        {messageError && <p className="mt-1 text-sm text-red-600">{messageError}</p>}
-      </section>
-
-      {/* Evidence */}
-      <section>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Evidence</h2>
-        <div className="rounded-xl border border-gray-200 bg-white divide-y divide-gray-100 mb-4">
-          {evidences.length === 0 ? (
-            <p className="p-4 text-sm text-gray-500 text-center">No evidence yet.</p>
-          ) : (
-            evidences.map((ev) => (
-              <div key={ev.id} className="p-4">
-                <div className="flex items-start gap-3">
-                  {ev.type === 'image' && imagePreviews[ev.id] && (
-                    <img
-                      src={imagePreviews[ev.id]}
-                      alt={ev.title || 'Evidence'}
-                      className="w-20 h-20 object-cover rounded-lg border border-gray-200 shrink-0 cursor-pointer"
-                      onClick={() => handleViewEvidenceFile(ev)}
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-gray-900">{ev.title || `${ev.type} evidence`}</span>
-                      <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">{ev.type}</span>
+      {/* Main content: Timeline (left) and Messages + Evidence (right) */}
+      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+        {/* Timeline */}
+        <section>
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Timeline</h2>
+            <div className="divide-y divide-gray-100">
+              {activities.length === 0 ? (
+                <p className="py-4 text-sm text-gray-500 text-center">No activity yet.</p>
+              ) : (
+                activities.map((a) => (
+                  <div key={a.id} className="py-4 flex items-start gap-3">
+                    <div className="w-2 h-2 mt-2 rounded-full bg-m4m-purple shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{formatActivityLabel(a)}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {a.created_at ? new Date(a.created_at).toLocaleString() : ''}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500 mb-1">
-                      {ev.user?.name ?? 'Unknown'}
-                      {ev.role && (
-                        <>
-                          {' '}
-                          ({ROLE_LABELS[ev.role] ?? ev.role})
-                        </>
-                      )}
-                      {ev.created_at && (
-                        <>
-                          {' '}
-                          &bull;{' '}
-                          {new Date(ev.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}
-                        </>
-                      )}
-                    </p>
-                    {ev.description && <p className="text-sm text-gray-600">{ev.description}</p>}
-                    {(ev.type === 'image' || ev.type === 'file' || ev.type === 'link') && (
-                      <button
-                        type="button"
-                        onClick={() => handleViewEvidenceFile(ev)}
-                        className="mt-2 text-sm font-medium text-m4m-purple hover:underline"
-                      >
-                        {ev.type === 'link' ? 'Open link' : 'View file'}
-                      </button>
-                    )}
                   </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        <form onSubmit={handleUploadEvidence} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <h3 className="font-semibold text-gray-900 mb-3">Add evidence</h3>
-          <div className="space-y-3 mb-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
-              <select
-                value={evidenceType}
-                onChange={(e) => { setEvidenceType(e.target.value); setEvidenceError(''); }}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-              >
-                <option value="note">Note</option>
-                <option value="link">Link</option>
-                <option value="image">Image</option>
-                <option value="file">File</option>
-              </select>
-            </div>
-            {evidenceType === 'note' && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Description (required)</label>
-                <textarea
-                  value={evidenceDescription}
-                  onChange={(e) => setEvidenceDescription(e.target.value)}
-                  rows={3}
-                  placeholder="Add your note..."
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none"
-                  disabled={evidenceSubmitting}
-                />
-              </div>
-            )}
-            {evidenceType === 'link' && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">URL (required)</label>
-                <input
-                  type="url"
-                  value={evidencePath}
-                  onChange={(e) => { setEvidencePath(e.target.value); setEvidenceError(''); }}
-                  placeholder="https://..."
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                  disabled={evidenceSubmitting}
-                />
-              </div>
-            )}
-            {(evidenceType === 'image' || evidenceType === 'file') && (
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">File (required, max 10MB)</label>
-                <input
-                  ref={evidenceFileInputRef}
-                  type="file"
-                  accept={evidenceType === 'image' ? 'image/*' : '*'}
-                  onChange={(e) => { setEvidenceFile(e.target.files?.[0] ?? null); setEvidenceError(''); }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                  disabled={evidenceSubmitting}
-                />
-              </div>
-            )}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Title (optional)</label>
-              <input
-                type="text"
-                value={evidenceTitle}
-                onChange={(e) => setEvidenceTitle(e.target.value)}
-                placeholder="Brief title"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                disabled={evidenceSubmitting}
-              />
+                ))
+              )}
             </div>
           </div>
-          {evidenceError && <p className="mb-3 text-sm text-red-600">{evidenceError}</p>}
-          <button
-            type="submit"
-            disabled={evidenceSubmitting}
-            className="px-4 py-2 rounded-lg bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark disabled:opacity-50 transition-colors"
-          >
-            {evidenceSubmitting ? 'Uploading…' : 'Add evidence'}
-          </button>
-        </form>
-      </section>
+        </section>
+
+        {/* Messages + Evidence */}
+        <div className="space-y-6">
+          {/* Messages */}
+          <section>
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Messages</h2>
+              <div className="rounded-xl border border-gray-100 bg-white divide-y divide-gray-100 max-h-80 overflow-y-auto">
+                {messages.length === 0 ? (
+                  <p className="p-4 text-sm text-gray-500 text-center">No messages yet.</p>
+                ) : (
+                  messages.map((m) => (
+                    <div key={m.id} className="p-4">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium text-gray-900">{m.user?.name ?? '—'}</span>
+                        <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+                          {ROLE_LABELS[m.role] ?? m.role}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {m.created_at ? new Date(m.created_at).toLocaleString() : ''}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{m.body}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <form onSubmit={handleSendMessage} className="mt-3 flex gap-2">
+                <textarea
+                  value={messageBody}
+                  onChange={(e) => setMessageBody(e.target.value)}
+                  placeholder="Type your message..."
+                  rows={2}
+                  maxLength={5000}
+                  className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                  disabled={messageSubmitting}
+                />
+                <button
+                  type="submit"
+                  disabled={messageSubmitting || !messageBody.trim()}
+                  className="px-4 py-2 rounded-lg bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark disabled:opacity-50 transition-colors"
+                >
+                  {messageSubmitting ? 'Sending…' : 'Send'}
+                </button>
+              </form>
+              {messageError && <p className="mt-1 text-sm text-red-600">{messageError}</p>}
+            </div>
+          </section>
+
+          {/* Evidence */}
+          <section>
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Evidence</h2>
+              <div className="rounded-xl border border-gray-200 bg-white divide-y divide-gray-100 mb-4">
+                {evidences.length === 0 ? (
+                  <p className="p-4 text-sm text-gray-500 text-center">No evidence yet.</p>
+                ) : (
+                  evidences.map((ev) => (
+                    <div key={ev.id} className="p-4">
+                      <div className="flex items-start gap-3">
+                        {ev.type === 'image' && imagePreviews[ev.id] && (
+                          <img
+                            src={imagePreviews[ev.id]}
+                            alt={ev.title || 'Evidence'}
+                            className="w-20 h-20 object-cover rounded-lg border border-gray-200 shrink-0 cursor-pointer"
+                            onClick={() => handleViewEvidenceFile(ev)}
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-gray-900">{ev.title || `${ev.type} evidence`}</span>
+                            <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-600">{ev.type}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mb-1">
+                            {ev.user?.name ?? 'Unknown'}
+                            {ev.role && (
+                              <>
+                                {' '}
+                                ({ROLE_LABELS[ev.role] ?? ev.role})
+                              </>
+                            )}
+                            {ev.created_at && (
+                              <>
+                                {' '}
+                                &bull;{' '}
+                                {new Date(ev.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                              </>
+                            )}
+                          </p>
+                          {ev.description && <p className="text-sm text-gray-600">{ev.description}</p>}
+                          {(ev.type === 'image' || ev.type === 'file' || ev.type === 'link') && (
+                            <button
+                              type="button"
+                              onClick={() => handleViewEvidenceFile(ev)}
+                              className="mt-2 text-sm font-medium text-m4m-purple hover:underline"
+                            >
+                              {ev.type === 'link' ? 'Open link' : 'View file'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <form onSubmit={handleUploadEvidence} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <h3 className="font-semibold text-gray-900 mb-3">Add evidence</h3>
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                    <select
+                      value={evidenceType}
+                      onChange={(e) => { setEvidenceType(e.target.value); setEvidenceError(''); }}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                    >
+                      <option value="note">Note</option>
+                      <option value="link">Link</option>
+                      <option value="image">Image</option>
+                      <option value="file">File</option>
+                    </select>
+                  </div>
+                  {evidenceType === 'note' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Description (required)</label>
+                      <textarea
+                        value={evidenceDescription}
+                        onChange={(e) => setEvidenceDescription(e.target.value)}
+                        rows={3}
+                        placeholder="Add your note..."
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm resize-none"
+                        disabled={evidenceSubmitting}
+                      />
+                    </div>
+                  )}
+                  {evidenceType === 'link' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">URL (required)</label>
+                      <input
+                        type="url"
+                        value={evidencePath}
+                        onChange={(e) => { setEvidencePath(e.target.value); setEvidenceError(''); }}
+                        placeholder="https://..."
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                        disabled={evidenceSubmitting}
+                      />
+                    </div>
+                  )}
+                  {(evidenceType === 'image' || evidenceType === 'file') && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">File (required, max 10MB)</label>
+                      <input
+                        ref={evidenceFileInputRef}
+                        type="file"
+                        accept={evidenceType === 'image' ? 'image/*' : '*'}
+                        onChange={(e) => { setEvidenceFile(e.target.files?.[0] ?? null); setEvidenceError(''); }}
+                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                        disabled={evidenceSubmitting}
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Title (optional)</label>
+                    <input
+                      type="text"
+                      value={evidenceTitle}
+                      onChange={(e) => setEvidenceTitle(e.target.value)}
+                      placeholder="Brief title"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                      disabled={evidenceSubmitting}
+                    />
+                  </div>
+                </div>
+                {evidenceError && <p className="mb-3 text-sm text-red-600">{evidenceError}</p>}
+                <button
+                  type="submit"
+                  disabled={evidenceSubmitting}
+                  className="px-4 py-2 rounded-lg bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark disabled:opacity-50 transition-colors"
+                >
+                  {evidenceSubmitting ? 'Uploading…' : 'Add evidence'}
+                </button>
+              </form>
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }
