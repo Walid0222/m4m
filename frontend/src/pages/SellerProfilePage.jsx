@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import ReportModal from '../components/ReportModal';
 import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
-import { getProducts, getSellerProfile, getPublicSellerStats, paginatedItems, submitReport, getFavoriteIds, toggleFavorite, getToken } from '../services/api';
+import { getProducts, getSellerProfile, getPublicSellerStats, paginatedItems, submitReport, getFavoriteIds, toggleFavorite, getToken, createConversation } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 
 function getLastSeenLabel(lastActivityAt) {
@@ -45,6 +45,7 @@ function StatBadge({ label, value }) {
 export default function SellerProfilePage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [seller, setSeller] = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -133,6 +134,23 @@ export default function SellerProfilePage() {
     fetchData();
     return () => { cancelled = true; };
   }, [id]);
+
+  const handleChatSeller = useCallback(async () => {
+    if (!seller?.id) return;
+    if (!user || !getToken()) {
+      navigate('/login', { state: { from: `/seller/${seller?.id ?? id}` } });
+      return;
+    }
+    if (user.id === seller.id) return;
+    try {
+      const conversation = await createConversation({ other_user_id: seller.id });
+      const convId = conversation?.id;
+      if (convId) navigate(`/chat?conversation=${convId}`);
+      else navigate('/chat');
+    } catch {
+      // Silently ignore chat errors on profile page
+    }
+  }, [seller?.id, user, navigate, id]);
 
   if (loading && !seller) {
     return (
@@ -241,7 +259,7 @@ export default function SellerProfilePage() {
               </div>
             </div>
 
-            {/* Stats + Report button */}
+            {/* Stats + Actions */}
             <div className="flex flex-col gap-4 items-end shrink-0">
               <div className="flex gap-6 sm:gap-10 border-t sm:border-t-0 sm:border-l border-m4m-gray-200 pt-4 sm:pt-0 sm:pl-8">
                 <StatBadge label="Total sales" value={seller?.total_sales ?? 0} />
@@ -250,16 +268,28 @@ export default function SellerProfilePage() {
                 <StatBadge label="Success rate" value={successRate} />
                 <StatBadge label="Avg. response" value={avgResponse} />
               </div>
-              <button
-                type="button"
-                onClick={() => setShowReport(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
-                </svg>
-                Report seller
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleChatSeller}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-m4m-purple hover:bg-m4m-purple-dark transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M5 20l2.586-2.586A2 2 0 018.828 17H19a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11l2-2" />
+                  </svg>
+                  Chat with seller
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowReport(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-500 border border-red-200 hover:bg-red-50 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                  </svg>
+                  Report seller
+                </button>
+              </div>
             </div>
           </div>
         </div>

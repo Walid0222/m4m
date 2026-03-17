@@ -1676,22 +1676,67 @@ function SupportChatPanel({ adminUser }) {
                 <p className="text-xs text-gray-400 text-center py-6">No messages yet.</p>
               )}
               {threadMessages.map((m) => {
-                const isAdminMsg = m._from === 'admin' || m.user_id === 'admin';
+                const senderId = m.user_id ?? m.sender?.id;
+                const adminId = adminUser?.id ?? 'admin';
+                const isAdminMsg = senderId === adminId;
+                const senderName = m.sender?.name || selectedThread?.userName || 'User';
+                const senderAvatar = m.sender?.avatar || null;
+                const adminAvatar = adminUser?.avatar || null;
+
                 return (
-                  <div key={m.id} className={`flex ${isAdminMsg ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    key={m.id}
+                    className={`flex items-end ${isAdminMsg ? 'justify-end' : 'justify-start'}`}
+                  >
+                    {!isAdminMsg && (
+                      <span className="w-7 h-7 rounded-full bg-m4m-purple/10 text-m4m-purple flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 overflow-hidden">
+                        {senderAvatar ? (
+                          <img src={senderAvatar} alt={senderName} className="w-full h-full object-cover" />
+                        ) : (
+                          (senderName || '').charAt(0).toUpperCase() || '?'
+                        )}
+                      </span>
+                    )}
+
                     <div className="flex flex-col max-w-[75%]">
-                      <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed break-words ${
-                        isAdminMsg
-                          ? 'bg-m4m-purple text-white rounded-br-sm'
-                          : 'bg-white border border-gray-200 text-gray-900 rounded-bl-sm shadow-sm'
-                      }`}>
+                      <div
+                        className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed break-words ${
+                          isAdminMsg
+                            ? 'bg-m4m-purple text-white rounded-br-sm'
+                            : 'bg-white border border-gray-200 text-gray-900 rounded-bl-sm shadow-sm'
+                        }`}
+                      >
                         {m.body}
                       </div>
-                      <span className={`text-[10px] text-gray-400 mt-0.5 ${isAdminMsg ? 'text-right' : 'text-left'}`}>
-                        {isAdminMsg ? (m.sender?.name || adminUser?.name || 'M4M Support') : (selectedThread?.userName || m.sender?.name || 'User')}
-                        {m.created_at && ` · ${new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                      <span
+                        className={`text-[10px] text-gray-400 mt-0.5 ${
+                          isAdminMsg ? 'text-right' : 'text-left'
+                        }`}
+                      >
+                        {isAdminMsg
+                          ? (m.sender?.name || adminUser?.name || 'M4M Support')
+                          : senderName}
+                        {m.created_at &&
+                          ` · ${new Date(m.created_at).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}`}
                       </span>
                     </div>
+
+                    {isAdminMsg && (
+                      <span className="w-7 h-7 rounded-full bg-m4m-purple/10 text-m4m-purple flex items-center justify-center text-xs font-bold ml-2 flex-shrink-0 overflow-hidden">
+                        {adminAvatar ? (
+                          <img
+                            src={adminAvatar}
+                            alt={adminUser?.name || 'M4M Support'}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          (adminUser?.name || 'M4M Support').charAt(0).toUpperCase()
+                        )}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -2458,6 +2503,12 @@ export default function AdminDashboardPage() {
     'service-requests': 0,
     reports: 0,
   });
+  const [adminStats, setAdminStats] = useState({
+    pendingDeposits: 0,
+    pendingWithdrawals: 0,
+    openDisputes: 0,
+    unreadSupportMessages: 0,
+  });
 
   useEffect(() => {
     if (VALID_ADMIN_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
@@ -2480,6 +2531,12 @@ export default function AdminDashboardPage() {
           verification: moderation.pending_verifications ?? 0,
           'service-requests': moderation.pending_service_requests ?? 0,
           reports: moderation.pending_reports ?? 0,
+        });
+        setAdminStats({
+          pendingDeposits: moderation.pending_deposits ?? 0,
+          pendingWithdrawals: moderation.pending_withdraws ?? 0,
+          openDisputes: orders.disputed ?? 0,
+          unreadSupportMessages: stats.support?.unread_messages ?? 0,
         });
       } catch {
         // silently ignore; badges will not update until next successful fetch
@@ -2516,8 +2573,8 @@ export default function AdminDashboardPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
           <p className="text-gray-500 text-sm mt-1">
@@ -2540,21 +2597,152 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2 mb-7">
-        {TABS.map((t) => (
-          <TabButton
-            key={t.id}
-            {...t}
-            active={activeTab === t.id}
-            onClick={setActiveTab}
-            badgeCount={getBadgeForTab(t.id)}
-          />
-        ))}
+      {/* Overview metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Deposits Pending */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .843-3 1.882 0 1.04 1.343 1.882 3 1.882s3 .843 3 1.882c0 1.04-1.343 1.882-3 1.882m0-7.528V6m0 9.528V18m0 3c5.523 0 10-3.134 10-7s-4.477-7-10-7S2 7.134 2 11s4.477 7 10 7z" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Deposits pending</p>
+            <p className="text-xl font-semibold text-gray-900">
+              {adminStats?.pendingDeposits ?? '—'}
+            </p>
+          </div>
+        </div>
+
+        {/* Withdrawals Pending */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .843-3 1.882 0 1.04 1.343 1.882 3 1.882s3 .843 3 1.882C15 14.686 13.657 15.529 12 15.529m0-7.529V4m0 11.529V20m8-8a8 8 0 11-16 0 8 8 0 0116 0z" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Withdrawals pending</p>
+            <p className="text-xl font-semibold text-gray-900">
+              {adminStats?.pendingWithdrawals ?? '—'}
+            </p>
+          </div>
+        </div>
+
+        {/* Open Disputes */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m6 2v-2M4 11h16M5 19h14a1 1 0 00.96-.73l2-7A1 1 0 0021 10H3a1 1 0 00-.96 1.27l2 7A1 1 0 005 19zm7-9V5a2 2 0 114 0v5" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Open disputes</p>
+            <p className="text-xl font-semibold text-gray-900">
+              {adminStats?.openDisputes ?? '—'}
+            </p>
+          </div>
+        </div>
+
+        {/* Unread Support Messages */}
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M21 12a9 9 0 11-18 0 9 9 0 018.25-8.96A7 7 0 0120 10v1.5a2.5 2.5 0 01-2.5 2.5H17l-2 2v-2h-1" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Unread support messages</p>
+            <p className="text-xl font-semibold text-gray-900">
+              {adminStats?.unreadSupportMessages ?? '—'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs grouped by category (visual only) */}
+      <div className="space-y-4 mb-7">
+        {/* Support & Operations */}
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Support &amp; Operations
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {TABS.filter((t) => ['overview', 'support'].includes(t.id)).map((t) => (
+              <TabButton
+                key={t.id}
+                {...t}
+                active={activeTab === t.id}
+                onClick={setActiveTab}
+                badgeCount={getBadgeForTab(t.id)}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* Finance */}
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Finance
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {TABS.filter((t) =>
+              ['deposits', 'withdrawals', 'escrow', 'reports'].includes(t.id)
+            ).map((t) => (
+              <TabButton
+                key={t.id}
+                {...t}
+                active={activeTab === t.id}
+                onClick={setActiveTab}
+                badgeCount={getBadgeForTab(t.id)}
+              />
+            ))}
+          </div>
+        </section>
+
+        {/* Moderation */}
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Moderation
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {TABS.filter((t) => ['disputes', 'verification', 'service-requests'].includes(t.id)).map(
+              (t) => (
+                <TabButton
+                  key={t.id}
+                  {...t}
+                  active={activeTab === t.id}
+                  onClick={setActiveTab}
+                  badgeCount={getBadgeForTab(t.id)}
+                />
+              )
+            )}
+          </div>
+        </section>
+
+        {/* Platform */}
+        <section>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Platform
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {TABS.filter((t) =>
+              ['services', 'coupons', 'announcements', 'marketplace-settings'].includes(t.id)
+            ).map((t) => (
+              <TabButton
+                key={t.id}
+                {...t}
+                active={activeTab === t.id}
+                onClick={setActiveTab}
+                badgeCount={getBadgeForTab(t.id)}
+              />
+            ))}
+          </div>
+        </section>
       </div>
 
       {/* Panel */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5 md:p-6 shadow-sm">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 md:p-6">
         {activeTab === 'overview' && <OverviewPanel key={`ov-${refreshToken}`} />}
         {activeTab === 'deposits' && <DepositsPanel key={`dep-${refreshToken}`} />}
         {activeTab === 'escrow' && <EscrowPanel key={`esc-${refreshToken}`} />}
@@ -2566,7 +2754,19 @@ export default function AdminDashboardPage() {
         {activeTab === 'services' && <ServiceManagementPanel key={`svc-${refreshToken}`} />}
         {activeTab === 'coupons' && <CouponsPanel key={`coup-${refreshToken}`} />}
         {activeTab === 'announcements' && <AnnouncementsPanel key={`ann-${refreshToken}`} />}
-        {activeTab === 'support' && <SupportChatPanel key={`sup-${refreshToken}`} adminUser={user} />}
+        {activeTab === 'support' && (
+          <div className="flex flex-col gap-3 h-full">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Support Inbox</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Manage conversations with buyers and sellers.
+              </p>
+            </div>
+            <div className="flex-1 min-h-0">
+              <SupportChatPanel key={`sup-${refreshToken}`} adminUser={user} />
+            </div>
+          </div>
+        )}
         {activeTab === 'marketplace-settings' && <MarketplaceSettingsPanel />}
       </div>
     </div>
