@@ -38,10 +38,18 @@ export default function DisputesPage() {
     fetchDisputes();
   }, [fetchDisputes]);
 
-  // Auto-refresh disputes when global refresh tick advances
+  // Silent auto-refresh disputes when global refresh tick advances (no skeleton)
   useEffect(() => {
-    fetchDisputes();
-  }, [tick, fetchDisputes]);
+    if (!tick) return;
+    (async () => {
+      try {
+        const data = await getDisputes({ per_page: 50 });
+        setDisputes(paginatedItems(data) ?? []);
+      } catch {
+        // keep last known disputes on error
+      }
+    })();
+  }, [tick]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

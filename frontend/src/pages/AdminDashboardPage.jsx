@@ -2743,17 +2743,17 @@ export default function AdminDashboardPage() {
 
       {/* Panel */}
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 md:p-6">
-        {activeTab === 'overview' && <OverviewPanel key={`ov-${refreshToken}`} />}
-        {activeTab === 'deposits' && <DepositsPanel key={`dep-${refreshToken}`} />}
-        {activeTab === 'escrow' && <EscrowPanel key={`esc-${refreshToken}`} />}
-        {activeTab === 'withdrawals' && <WithdrawalsPanel key={`wd-${refreshToken}`} />}
-        {activeTab === 'reports' && <ReportsPanel key={`rep-${refreshToken}`} />}
-        {activeTab === 'disputes' && <DisputesPanel key={`dis-${refreshToken}`} />}
-        {activeTab === 'verification' && <VerificationPanel key={`ver-${refreshToken}`} />}
-        {activeTab === 'service-requests' && <ServiceRequestsPanel key={`sr-${refreshToken}`} />}
-        {activeTab === 'services' && <ServiceManagementPanel key={`svc-${refreshToken}`} />}
-        {activeTab === 'coupons' && <CouponsPanel key={`coup-${refreshToken}`} />}
-        {activeTab === 'announcements' && <AnnouncementsPanel key={`ann-${refreshToken}`} />}
+        {activeTab === 'overview' && <OverviewPanel />}
+        {activeTab === 'deposits' && <DepositsPanel />}
+        {activeTab === 'escrow' && <EscrowPanel />}
+        {activeTab === 'withdrawals' && <WithdrawalsPanel />}
+        {activeTab === 'reports' && <ReportsPanel />}
+        {activeTab === 'disputes' && <DisputesPanel />}
+        {activeTab === 'verification' && <VerificationPanel />}
+        {activeTab === 'service-requests' && <ServiceRequestsPanel />}
+        {activeTab === 'services' && <ServiceManagementPanel />}
+        {activeTab === 'coupons' && <CouponsPanel />}
+        {activeTab === 'announcements' && <AnnouncementsPanel />}
         {activeTab === 'support' && (
           <div className="flex flex-col gap-3 h-full">
             <div>
@@ -2763,7 +2763,7 @@ export default function AdminDashboardPage() {
               </p>
             </div>
             <div className="flex-1 min-h-0">
-              <SupportChatPanel key={`sup-${refreshToken}`} adminUser={user} />
+              <SupportChatPanel adminUser={user} />
             </div>
           </div>
         )}

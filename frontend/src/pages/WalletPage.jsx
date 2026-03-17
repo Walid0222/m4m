@@ -194,13 +194,13 @@ export default function WalletPage() {
     return list;
   }, [balance?.transactions, extraTransactions, deposits, withdrawals]);
 
-  // Reset paginated transactions when wallet is refreshed
+  // Reset paginated transactions when wallet is explicitly refreshed (not on every tick)
   useEffect(() => {
     setExtraTransactions([]);
     setTransactionsNextPageUrl(null);
     setTransactionsPage(1);
     setTransactionsHasFetched(false);
-  }, [tick]);
+  }, [balance?.transactions]);
 
   const handleLoadMoreTransactions = async () => {
     setLoadMoreLoading(true);

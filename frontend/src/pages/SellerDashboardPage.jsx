@@ -357,9 +357,10 @@ export default function SellerDashboardPage() {
   const [serviceRequestError, setServiceRequestError] = useState('');
   const { tick } = useRefresh();
 
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (options = { showLoading: true }) => {
     if (!getToken() || !user?.is_seller) return;
-    setLoadingProducts(true);
+    const showLoading = options?.showLoading !== false;
+    if (showLoading) setLoadingProducts(true);
     try {
       const data = await getMyProducts();
       const list = paginatedItems(data);
@@ -367,7 +368,7 @@ export default function SellerDashboardPage() {
     } catch {
       setProducts([]);
     } finally {
-      setLoadingProducts(false);
+      if (showLoading) setLoadingProducts(false);
     }
   }, [user?.is_seller]);
 
@@ -419,9 +420,10 @@ export default function SellerDashboardPage() {
   }, [services]);
   const filteredOfferTypes = form.service_id ? (offerTypesByService[form.service_id] || []) : offerTypes;
 
-  const fetchOrders = useCallback(async (page = 1) => {
+  const fetchOrders = useCallback(async (page = 1, options = { showLoading: true }) => {
     if (!getToken() || !user?.is_seller) return;
-    setLoadingOrders(true);
+    const showLoading = options?.showLoading !== false;
+    if (showLoading) setLoadingOrders(true);
     try {
       const data = await getSellerOrders({ page, per_page: 15 });
       const items = Array.isArray(data?.data) ? data.data : (paginatedItems(data) ?? []);
@@ -435,7 +437,7 @@ export default function SellerDashboardPage() {
       setOrdersLastPage(1);
       setOrdersTotal(0);
     } finally {
-      setLoadingOrders(false);
+      if (showLoading) setLoadingOrders(false);
     }
   }, [user?.is_seller]);
 
@@ -498,9 +500,10 @@ export default function SellerDashboardPage() {
   useEffect(() => {
     if (!tick) return;
     if (!getToken() || !user?.is_seller) return;
-    fetchProducts();
+    // Silent background refresh: keep current UI visible while data updates
+    fetchProducts({ showLoading: false });
     fetchEscrow();
-    fetchOrders(ordersCurrentPage);
+    fetchOrders(ordersCurrentPage, { showLoading: false });
   }, [tick, user?.is_seller, ordersCurrentPage, fetchProducts, fetchOrders, fetchEscrow]);
 
   const handleManualRefresh = () => {

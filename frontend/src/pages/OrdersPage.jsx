@@ -42,11 +42,20 @@ export default function OrdersPage() {
     fetchOrders();
   }, [fetchOrders]);
 
-  // Re-fetch orders when global refresh tick advances
+  // Silent auto-refresh on global tick (no loading skeleton)
   useEffect(() => {
+    if (!tick) return;
     if (!getToken()) return;
-    fetchOrders();
-  }, [tick, fetchOrders]);
+    (async () => {
+      try {
+        const result = await getOrders();
+        setFetchError(false);
+        setOrders(paginatedItems(result));
+      } catch {
+        setFetchError(true);
+      }
+    })();
+  }, [tick]);
 
   const handleConfirmDelivery = useCallback(async (orderId) => {
     setConfirmingOrderId(orderId);
