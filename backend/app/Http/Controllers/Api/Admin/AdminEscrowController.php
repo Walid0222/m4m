@@ -18,11 +18,13 @@ class AdminEscrowController extends Controller
 
     /**
      * Return admin escrow overview: total pending, count, orders.
+     * Includes both held (waiting buyer confirmation) and pending_release (ready for payout).
      */
     public function index(Request $request): JsonResponse
     {
-        $orders = Order::where('escrow_status', 'pending_release')
+        $orders = Order::whereIn('escrow_status', ['held', 'pending_release'])
             ->with('seller:id,name,email')
+            ->orderByRaw("CASE WHEN escrow_status = 'pending_release' THEN 0 ELSE 1 END")
             ->orderBy('release_at')
             ->get();
 
@@ -116,7 +118,7 @@ class AdminEscrowController extends Controller
     public function refund(Request $request, Order $order): JsonResponse
     {
         try {
-            DB::transaction(function () use ($order) {
+            DB::transaction(function () use ($order, $request) {
                 $locked = Order::whereKey($order->id)->lockForUpdate()->first();
                 if (! $locked) {
                     throw new \RuntimeException('ORDER_NOT_FOUND');

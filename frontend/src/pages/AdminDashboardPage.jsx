@@ -413,7 +413,7 @@ function EscrowPanel() {
         </div>
       </div>
       {orders.length === 0 ? (
-        <p className="text-gray-400 text-sm">No orders pending release.</p>
+        <p className="text-gray-400 text-sm">No escrow orders (held or pending release).</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200">
           <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -432,8 +432,8 @@ function EscrowPanel() {
                   <td className="px-4 py-3">{Number(o.amount).toFixed(2)} MAD</td>
                   <td className="px-4 py-3 text-gray-500">{o.release_at ? new Date(o.release_at).toLocaleString() : '—'}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.escrow_status === 'disputed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {o.escrow_status ?? 'pending_release'}
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.escrow_status === 'held' ? 'bg-blue-100 text-blue-700' : o.escrow_status === 'disputed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {o.escrow_status === 'held' ? 'Waiting buyer confirmation' : o.escrow_status === 'pending_release' ? 'Pending release' : (o.escrow_status ?? '—')}
                     </span>
                   </td>
                   <td className="px-4 py-3">
