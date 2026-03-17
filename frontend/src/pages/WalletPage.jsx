@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import { useRefresh } from '../contexts/RefreshContext';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { Eye, EyeOff } from 'lucide-react';
 import {
   getWallet,
   getWalletTransactions,
@@ -151,6 +153,12 @@ export default function WalletPage() {
   const [escrowData, setEscrowData] = useState(null);
   const bal = Number(balance?.available_balance ?? balance?.balance ?? 0);
   const isSeller = user?.is_seller === true || user?.is_seller === 1;
+  const { showBalance, toggleShowBalance } = useBalanceVisibility();
+  const mainBalanceDisplay = loading
+    ? '—'
+    : showBalance
+      ? `${bal.toFixed(2)} ${CURRENCY}`
+      : '••••• MAD';
 
   const transactionHistory = useMemo(() => {
     const baseFromApi = [];
@@ -404,9 +412,25 @@ export default function WalletPage() {
               </div>
             </div>
           </div>
-          <p className="mt-2 text-4xl md:text-5xl font-bold">
-            {bal.toFixed(2)} <span className="text-2xl font-semibold text-purple-200">{CURRENCY}</span>
-          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <p
+              className={`text-4xl md:text-5xl font-bold transition-all duration-200 ease-out ${
+                showBalance ? 'opacity-100 blur-0' : 'opacity-80 blur-sm'
+              }`}
+            >
+              {mainBalanceDisplay}
+            </p>
+            {!loading && (
+              <button
+                type="button"
+                onClick={toggleShowBalance}
+                className="text-purple-100 hover:text-white"
+                aria-label={showBalance ? 'Hide balance' : 'Show balance'}
+              >
+                {showBalance ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            )}
+          </div>
           <div className="mt-6 flex flex-wrap gap-3">
             {!isSeller && (
               <button
@@ -863,7 +887,16 @@ export default function WalletPage() {
               </button>
             </div>
             <div className="rounded-xl bg-purple-50 border border-purple-200 p-3 mb-5">
-              <p className="text-sm text-purple-800 font-medium">Available: <span className="font-bold">{bal.toFixed(2)} {CURRENCY}</span></p>
+              <p className="text-sm text-purple-800 font-medium">
+                Available:{' '}
+                <span
+                  className={`font-bold transition-all duration-200 ease-out ${
+                    showBalance ? 'opacity-100 blur-0' : 'opacity-80 blur-sm'
+                  }`}
+                >
+                  {showBalance ? `${bal.toFixed(2)} ${CURRENCY}` : '••••• MAD'}
+                </span>
+              </p>
             </div>
             {withdrawError && <p className="text-sm text-red-600 mb-4">{withdrawError}</p>}
             <form onSubmit={handleWithdrawSubmitRequest} className="space-y-4">

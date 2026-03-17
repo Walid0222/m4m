@@ -1028,7 +1028,12 @@ export default function HomePage() {
               </Link>
             </div>
             <p className="mt-6 text-sm text-gray-400">
-              <span className="text-amber-400">⭐</span> 4.8 average seller rating
+              <span className="inline-flex items-center gap-1 text-amber-400">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 .587l3.668 7.568L24 9.423l-6 5.847L19.335 24 12 19.897 4.665 24 6 15.27 0 9.423l8.332-1.268z" />
+                </svg>
+                4.8 average seller rating
+              </span>
               <br />
               <span className="text-gray-500">Trusted by thousands of gamers worldwide</span>
             </p>

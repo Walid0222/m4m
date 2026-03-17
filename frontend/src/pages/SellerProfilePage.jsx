@@ -330,7 +330,12 @@ export default function SellerProfilePage() {
             return (
               <section className="mb-8">
                 <h2 className="text-lg font-semibold text-m4m-black mb-4 flex items-center gap-2">
-                  <span>⭐</span> Featured Product
+                  <span className="inline-flex items-center justify-center text-amber-400">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 .587l3.668 7.568L24 9.423l-6 5.847L19.335 24 12 19.897 4.665 24 6 15.27 0 9.423l8.332-1.268z" />
+                    </svg>
+                  </span>
+                  Featured Product
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
                   <ProductCard

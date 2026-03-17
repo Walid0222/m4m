@@ -212,8 +212,8 @@ export default function OrdersPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-orange-800 font-medium text-sm">
                   {deliveredOrders.length === 1
-                    ? '✅ Your order has been delivered!'
-                    : `✅ ${deliveredOrders.length} orders have been delivered!`}
+                    ? 'Your order has been delivered.'
+                    : `${deliveredOrders.length} orders have been delivered.`}
                 </p>
                 <p className="text-orange-600 text-xs mt-0.5">
                   Tip: Only confirm once you have verified the credentials. Orders auto-confirm after 3 days.

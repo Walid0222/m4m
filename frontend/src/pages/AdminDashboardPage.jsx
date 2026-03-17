@@ -51,19 +51,19 @@ import {
 } from '../services/api';
 
 const TABS = [
-  { id: 'overview', label: '📊 Overview' },
-  { id: 'escrow', label: '💰 Escrow Monitoring' },
+  { id: 'overview', label: 'Overview' },
+  { id: 'escrow', label: 'Escrow Monitoring' },
   { id: 'deposits', label: 'Deposits' },
   { id: 'withdrawals', label: 'Withdrawals' },
   { id: 'reports', label: 'Reports' },
-  { id: 'disputes', label: '⚖ Disputes' },
+  { id: 'disputes', label: 'Disputes' },
   { id: 'verification', label: 'Verifications' },
-  { id: 'service-requests', label: '🛎 Service requests' },
-  { id: 'services', label: '📋 Service Management' },
-  { id: 'coupons', label: '🎟 Coupons' },
-  { id: 'announcements', label: '📢 Announcements' },
-  { id: 'support', label: '💬 Support Chat' },
-  { id: 'marketplace-settings', label: '⚙️ Marketplace' },
+  { id: 'service-requests', label: 'Service requests' },
+  { id: 'services', label: 'Service Management' },
+  { id: 'coupons', label: 'Coupons' },
+  { id: 'announcements', label: 'Announcements' },
+  { id: 'support', label: 'Support Chat' },
+  { id: 'marketplace-settings', label: 'Marketplace' },
 ];
 
 const REPORT_FILTER_OPTIONS = [
@@ -719,13 +719,13 @@ function VerificationPanel() {
                         onClick={() => setConfirm({ id: req.id, action: 'approved' })}
                         className="px-4 py-2 rounded-xl text-sm font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors"
                       >
-                        ✅ Approve
+                        Approve
                       </button>
                       <button
                         onClick={() => setConfirm({ id: req.id, action: 'rejected' })}
                         className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors"
                       >
-                        ✗ Reject
+                        Reject
                       </button>
                     </div>
                   )}
@@ -1230,7 +1230,14 @@ function ServiceManagementPanel() {
                 </div>
               ) : (
                 <>
-                  <span className="text-xl flex-shrink-0">{svc.icon || '📦'}</span>
+                  <span className="text-xl flex-shrink-0">
+                    {svc.icon || (
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10l9 4 9-4V7" />
+                      </svg>
+                    )}
+                  </span>
                   <span className="font-medium text-gray-900 truncate text-sm">{svc.name}</span>
                   <div className="flex gap-1 flex-shrink-0">
                     <button type="button" onClick={() => { setServicesEditingId(svc.id); setServiceForm({ name: svc.name || '', icon: svc.icon || '', category_id: svc.category_id != null ? String(svc.category_id) : '' }); }} className="p-1 text-gray-500 hover:bg-gray-100 rounded text-xs">Edit</button>
@@ -1794,14 +1801,14 @@ function OverviewPanel() {
   if (!stats) return <p className="text-gray-500 text-sm">Could not load statistics.</p>;
 
   const cards = [
-    { label: 'Total Users', value: stats.users?.total ?? 0, color: 'bg-blue-50 text-blue-700', icon: '👥' },
-    { label: 'Total Sellers', value: stats.users?.sellers ?? 0, color: 'bg-purple-50 text-purple-700', icon: '🏪' },
-    { label: 'Verified Sellers', value: stats.users?.verified_sellers ?? 0, color: 'bg-green-50 text-green-700', icon: '✅' },
-    { label: 'Banned Users', value: stats.users?.banned ?? 0, color: 'bg-red-50 text-red-700', icon: '🚫' },
-    { label: 'Total Orders', value: stats.orders?.total ?? 0, color: 'bg-indigo-50 text-indigo-700', icon: '📦' },
-    { label: 'Completed Orders', value: stats.orders?.completed ?? 0, color: 'bg-emerald-50 text-emerald-700', icon: '✔' },
-    { label: 'Disputed Orders', value: stats.orders?.disputed ?? 0, color: 'bg-orange-50 text-orange-700', icon: '⚠' },
-    { label: 'Platform Revenue', value: `${Number(stats.platform?.total_revenue ?? 0).toFixed(2)} MAD`, color: 'bg-yellow-50 text-yellow-700', icon: '💰' },
+    { label: 'Total Users', value: stats.users?.total ?? 0, color: 'bg-blue-50 text-blue-700', icon: 'users' },
+    { label: 'Total Sellers', value: stats.users?.sellers ?? 0, color: 'bg-purple-50 text-purple-700', icon: 'store' },
+    { label: 'Verified Sellers', value: stats.users?.verified_sellers ?? 0, color: 'bg-green-50 text-green-700', icon: 'shield-check' },
+    { label: 'Banned Users', value: stats.users?.banned ?? 0, color: 'bg-red-50 text-red-700', icon: 'ban' },
+    { label: 'Total Orders', value: stats.orders?.total ?? 0, color: 'bg-indigo-50 text-indigo-700', icon: 'package' },
+    { label: 'Completed Orders', value: stats.orders?.completed ?? 0, color: 'bg-emerald-50 text-emerald-700', icon: 'check-circle' },
+    { label: 'Disputed Orders', value: stats.orders?.disputed ?? 0, color: 'bg-orange-50 text-orange-700', icon: 'alert-triangle' },
+    { label: 'Platform Revenue', value: `${Number(stats.platform?.total_revenue ?? 0).toFixed(2)} MAD`, color: 'bg-yellow-50 text-yellow-700', icon: 'wallet' },
   ];
 
   const pending = [
@@ -1817,7 +1824,16 @@ function OverviewPanel() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
         {cards.map(({ label, value, color, icon }) => (
           <div key={label} className={`rounded-xl p-4 ${color}`}>
-            <p className="text-2xl mb-1">{icon}</p>
+            <p className="text-2xl mb-1">
+              {icon === 'users' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20h6M3 20h5v-2a4 4 0 00-3-3.87M16 7a4 4 0 11-8 0 4 4 0 018 0zM5 14a4 4 0 014-4h6a4 4 0 014 4" /></svg>}
+              {icon === 'store' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9l1-5h16l1 5M4 9h16v10H4zM9 13h6" /></svg>}
+              {icon === 'shield-check' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3l8 4v5c0 5-3.5 9-8 9s-8-4-8-9V7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" /></svg>}
+              {icon === 'ban' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636A9 9 0 005.636 18.364 9 9 0 0018.364 5.636z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12" /></svg>}
+              {icon === 'package' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10l9 4 9-4V7" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11v10" /></svg>}
+              {icon === 'check-circle' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>}
+              {icon === 'alert-triangle' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.29 3.86L1.82 18a1 1 0 00.86 1.5h18.64a1 1 0 00.86-1.5L13.71 3.86a1 1 0 00-1.72 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01" /></svg>}
+              {icon === 'wallet' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16v10H4z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7l2-3h10l2 3" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12h2v2h-2z" /></svg>}
+            </p>
             <p className="text-2xl font-bold">{value}</p>
             <p className="text-xs font-medium mt-0.5 opacity-80">{label}</p>
           </div>

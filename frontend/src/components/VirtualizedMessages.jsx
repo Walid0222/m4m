@@ -345,15 +345,18 @@ export default function VirtualizedMessages({
                 {/* My avatar — only on last in group */}
                 {isMine && isLastInGroup && (
                   <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold ml-2 self-end mb-0.5 flex-shrink-0 overflow-hidden">
-                    {avatar ? (
-                      <img
-                        src={avatar}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      '👤'
-                    )}
+                             {avatar ? (
+                               <img
+                                 src={avatar}
+                                 alt=""
+                                 className="w-full h-full object-cover"
+                               />
+                             ) : (
+                               <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 12a5 5 0 100-10 5 5 0 000 10z" />
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 22a8 8 0 1116 0H4z" />
+                               </svg>
+                             )}
                   </span>
                 )}
                 {isMine && !isLastInGroup && (

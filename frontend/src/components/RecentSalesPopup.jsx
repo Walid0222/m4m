@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ShoppingCart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const PRODUCTS = [
@@ -75,9 +76,7 @@ export default function RecentSalesPopup() {
     >
       <div className="pointer-events-auto max-w-xs sm:max-w-sm w-[calc(100vw-2rem)] sm:w-auto rounded-2xl bg-white shadow-xl border border-gray-200 px-4 py-3 flex items-start gap-3">
         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-m4m-purple/10 flex items-center justify-center text-lg">
-          <span role="img" aria-label="Recent purchase">
-            🛒
-          </span>
+          <ShoppingCart className="w-4 h-4 text-m4m-purple" />
         </div>
         <div className="min-w-0">
           <p className="text-xs font-semibold text-gray-900 mb-0.5">Recent purchase</p>

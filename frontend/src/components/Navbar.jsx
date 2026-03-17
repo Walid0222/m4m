@@ -14,7 +14,10 @@ import {
   UserCheck,
   UserX,
   Bell,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getWallet, getNotifications, markNotificationRead, searchOfferTypes, getToken, getSellerWarnings, toggleVacationMode, getConversationsUnreadTotal } from '../services/api';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -62,6 +65,7 @@ export default function Navbar() {
   const profileRef = useRef(null);
   const desktopNotificationsRef = useRef(null);
   const mobileNotificationsRef = useRef(null);
+  const { showBalance, toggleShowBalance } = useBalanceVisibility();
 
   useEffect(() => {
     setSearchQuery(searchParams.get('search') || '');
@@ -245,7 +249,10 @@ export default function Navbar() {
     setMobileMenuOpen(false);
   };
 
-  const balanceDisplay = walletBalance !== null ? `${Number(walletBalance).toFixed(2)} MAD` : '—';
+  const rawBalanceDisplay =
+    walletBalance !== null ? `${Number(walletBalance).toFixed(2)} MAD` : '—';
+  const balanceDisplay =
+    rawBalanceDisplay !== '—' && !showBalance ? '••••• MAD' : rawBalanceDisplay;
 
   // Group notifications for display (aggregate new_order into a single item)
   const displayNotifications = useMemo(() => {
@@ -417,7 +424,12 @@ export default function Navbar() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-2.5">
             <div className="flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                <span className="text-amber-600 shrink-0" aria-hidden>⚠</span>
+                <span className="text-amber-600 shrink-0" aria-hidden>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.29 3.86L1.82 18a1 1 0 00.86 1.5h18.64a1 1 0 00.86-1.5L13.71 3.86a1 1 0 00-1.72 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01" />
+                  </svg>
+                </span>
                 <div>
                   <p className="text-sm font-semibold text-amber-900">Vacation Mode Enabled</p>
                   <p className="text-xs text-amber-800 mt-0.5">Your products are temporarily unavailable to buyers. Disable vacation mode to resume sales.</p>
@@ -484,7 +496,12 @@ export default function Navbar() {
                       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
                     >
                       <div className="w-9 h-9 rounded-lg bg-purple-100 flex-shrink-0 flex items-center justify-center text-purple-600 text-sm">
-                        {ot.icon || '📦'}
+                        {ot.icon || (
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10l9 4 9-4V7" />
+                          </svg>
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-gray-900 truncate">
@@ -518,7 +535,21 @@ export default function Navbar() {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                   </svg>
-                  {balanceDisplay}
+                  <span
+                    className={`transition-all duration-200 ease-out ${
+                      showBalance ? 'opacity-100 blur-0' : 'opacity-80 blur-sm'
+                    }`}
+                  >
+                    {balanceDisplay}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleShowBalance(); }}
+                    className="ml-1 text-m4m-purple hover:text-m4m-purple-dark"
+                    aria-label={showBalance ? 'Hide balance' : 'Show balance'}
+                  >
+                    {showBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </Link>
 
                 {/* Seller admin-warning indicator */}

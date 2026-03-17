@@ -63,7 +63,12 @@ export default function ServicePage() {
 
       <div className="flex items-center gap-4 mb-6">
         <span className="text-4xl md:text-5xl flex-shrink-0" role="img" aria-hidden>
-          {service.icon || '📦'}
+          {service.icon || (
+            <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10l9 4 9-4V7" />
+            </svg>
+          )}
         </span>
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{service.name}</h1>
@@ -79,7 +84,14 @@ export default function ServicePage() {
               to={`/offer-type/${ot.slug}`}
               className="flex items-center gap-3 p-4 rounded-xl border border-m4m-gray-200 bg-white hover:border-m4m-purple hover:shadow-md transition-all text-left"
             >
-              <span className="text-2xl flex-shrink-0">{ot.icon || '📋'}</span>
+              <span className="text-2xl flex-shrink-0">
+                {ot.icon || (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 4h10a1 1 0 011 1v14a1 1 0 01-1 1H8l-4-4V5a1 1 0 011-1h3z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6M9 8h6M9 16h3" />
+                  </svg>
+                )}
+              </span>
               <span className="font-medium text-m4m-black truncate">{ot.name}</span>
             </Link>
           ))}

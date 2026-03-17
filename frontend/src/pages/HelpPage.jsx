@@ -1,4 +1,5 @@
 import { useParams, Link, NavLink } from 'react-router-dom';
+import { MessageSquare, Mail, Twitter } from 'lucide-react';
 
 const NAV_LINKS = [
   { slug: 'about',        label: 'About M4M' },
@@ -259,13 +260,15 @@ function ContactContent() {
       <p className="text-gray-500 text-sm mb-8">Have a question or issue? Reach out through one of these channels.</p>
       <div className="grid sm:grid-cols-2 gap-4">
         {[
-          { icon: '💬', title: 'Live Support Chat', desc: 'Chat with our support team directly from the platform.', action: 'Open Chat', to: '/chat' },
-          { icon: '📧', title: 'Email Support', desc: 'Send us an email and we will respond within 24 hours.', action: 'support@m4m.market', to: '#' },
-          { icon: '🐦', title: 'Twitter / X', desc: 'Follow us for updates and send us a DM for quick support.', action: '@m4mmarket', to: '#' },
-          { icon: '💬', title: 'Discord Community', desc: 'Join our Discord server to connect with other users and get help.', action: 'Join Discord', to: '#' },
+          { icon: <MessageSquare className="w-5 h-5" />, title: 'Live Support Chat', desc: 'Chat with our support team directly from the platform.', action: 'Open Chat', to: '/chat' },
+          { icon: <Mail className="w-5 h-5" />, title: 'Email Support', desc: 'Send us an email and we will respond within 24 hours.', action: 'support@m4m.market', to: '#' },
+          { icon: <Twitter className="w-5 h-5" />, title: 'Twitter / X', desc: 'Follow us for updates and send us a DM for quick support.', action: '@m4mmarket', to: '#' },
+          { icon: <MessageSquare className="w-5 h-5" />, title: 'Discord Community', desc: 'Join our Discord server to connect with other users and get help.', action: 'Join Discord', to: '#' },
         ].map(({ icon, title, desc, action, to }) => (
           <div key={title} className="rounded-xl border border-gray-200 bg-white p-5">
-            <div className="text-2xl mb-2">{icon}</div>
+            <div className="text-2xl mb-2 flex items-center justify-center text-m4m-purple">
+              {icon}
+            </div>
             <h3 className="font-semibold text-gray-900 text-sm mb-1">{title}</h3>
             <p className="text-gray-500 text-xs mb-3">{desc}</p>
             <Link to={to} className="text-xs font-semibold text-m4m-purple hover:underline">{action}</Link>

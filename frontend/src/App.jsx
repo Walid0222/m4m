@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, ProtectedRoute, SellerRoute, AdminRoute } from './contexts/AuthContext';
 import { MarketplaceSettingsProvider } from './contexts/MarketplaceSettingsContext';
 import { RefreshProvider } from './contexts/RefreshContext';
+import { BalanceVisibilityProvider } from './contexts/BalanceVisibilityContext';
 import Layout from './components/Layout';
 import ChatLayout from './layouts/ChatLayout';
 import HomePage from './pages/HomePage';
@@ -34,9 +35,10 @@ export default function App() {
     <AuthProvider>
       <MarketplaceSettingsProvider>
         <RefreshProvider>
-          <BrowserRouter>
-            <ReviewReminderPopup />
-            <Routes>
+          <BalanceVisibilityProvider>
+            <BrowserRouter>
+              <ReviewReminderPopup />
+              <Routes>
               <Route path="/" element={<Layout />}>
                 <Route index element={<HomePage />} />
                 <Route path="service/:slug" element={<ServicePage />} />
@@ -155,9 +157,10 @@ export default function App() {
                 <Route index element={<ChatPage />} />
               </Route>
 
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </BrowserRouter>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </BalanceVisibilityProvider>
         </RefreshProvider>
       </MarketplaceSettingsProvider>
     </AuthProvider>

@@ -4,6 +4,8 @@ import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../contexts/AuthContext';
 import { getWallet, getOrders, paginatedItems, getToken, api, uploadProfileAvatar } from '../services/api';
 import { getBuyerPurchaseBadge } from '../lib/sellerBadge';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { Eye, EyeOff } from 'lucide-react';
 
 // Try to PATCH /me if backend supports it; gracefully fail otherwise
 async function updateProfile(body) {
@@ -42,6 +44,7 @@ export default function UserProfilePage() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const { showBalance, toggleShowBalance } = useBalanceVisibility();
 
   const avatarInputRef = useRef(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(null);
@@ -222,7 +225,10 @@ export default function UserProfilePage() {
                 )}
                 {purchaseBadge && (
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${purchaseBadge.color}`}>
-                    🛒 {purchaseBadge.label}
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h11l1-5H8.4M7 13L5.4 5M7 13l-2 8h14M10 21a1 1 0 11-2 0 1 1 0 012 0zm9 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                    </svg>
+                    {purchaseBadge.label}
                   </span>
                 )}
               </div>
@@ -235,7 +241,25 @@ export default function UserProfilePage() {
         <div className="grid grid-cols-2 divide-x divide-gray-100">
           <div className="p-5 text-center">
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Wallet balance</p>
-            <p className="mt-1 text-2xl font-bold text-gray-900">{loading ? '—' : balance != null ? `${balance.toFixed(2)} MAD` : '—'}</p>
+            <div className="mt-1 flex items-center justify-center gap-2">
+              <p
+                className={`text-2xl font-bold text-gray-900 transition-all duration-200 ease-out ${
+                  showBalance ? 'opacity-100 blur-0' : 'opacity-80 blur-sm'
+                }`}
+              >
+                {loading ? '—' : balance != null ? (showBalance ? `${balance.toFixed(2)} MAD` : '••••• MAD') : '—'}
+              </p>
+              {!loading && balance != null && (
+                <button
+                  type="button"
+                  onClick={toggleShowBalance}
+                  className="text-gray-400 hover:text-m4m-purple"
+                  aria-label={showBalance ? 'Hide balance' : 'Show balance'}
+                >
+                  {showBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              )}
+            </div>
             <Link to="/wallet" className="mt-1.5 inline-block text-xs text-m4m-purple font-medium hover:underline">View wallet</Link>
           </div>
           <div className="p-5 text-center">

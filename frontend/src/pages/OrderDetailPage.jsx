@@ -271,7 +271,7 @@ export default function OrderDetailPage() {
       {isDelivered && isBuyer && (
         <div className="mb-6 p-4 bg-green-50 rounded-xl border border-green-200">
           <p className="text-sm text-green-800 mb-3 font-medium">
-            ✅ Your order has been delivered. Please review the delivery before confirming.
+            Your order has been delivered. Please review the delivery before confirming.
           </p>
           <button
             type="button"
@@ -562,7 +562,7 @@ export default function OrderDetailPage() {
                 </p>
                 {item.product?.delivery_type && (
                   <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full font-medium ${item.product.delivery_type === 'instant' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {item.product.delivery_type === 'instant' ? '⚡ Instant' : '📦 Manual'}
+                    {item.product.delivery_type === 'instant' ? 'Instant' : 'Manual'}
                   </span>
                 )}
               </div>
@@ -647,7 +647,7 @@ export default function OrderDetailPage() {
       {/* Completed info */}
       {isCompleted && (
         <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200 text-sm text-gray-600">
-          ✅ Order completed. Funds have been released to the seller.
+          Order completed. Funds have been released to the seller.
         </div>
       )}
     </div>

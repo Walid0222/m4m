@@ -10,6 +10,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
+import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { Eye, EyeOff } from 'lucide-react';
 import {
   paginatedItems,
   getToken,
@@ -135,14 +137,22 @@ function VerificationSection({ user }) {
     return (
       <div>
         <h1 className="text-xl font-bold text-m4m-black mb-6">Seller Verification</h1>
-        <div className="rounded-2xl border border-green-200 bg-green-50 p-8 text-center shadow-sm">
-          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+        <div className="rounded-2xl border border-green-200 bg-green-50 p-8 shadow-sm flex flex-col items-center justify-center text-center w-full">
+          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-4">
             <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </div>
-          <p className="text-xl font-bold text-green-800 mb-1">You are a Verified Seller ✅</p>
-          <p className="text-green-700 text-sm">Your identity has been confirmed by the M4M team. A verified badge is displayed on your profile and products.</p>
+          <p className="text-xl font-bold text-green-800 mb-1 flex items-center gap-2 justify-center">
+            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" />
+            </svg>
+            You are a Verified Seller
+          </p>
+          <p className="text-green-700 text-sm max-w-md">
+            Your identity has been confirmed by the M4M team. A verified badge is displayed on your profile and products.
+          </p>
         </div>
       </div>
     );
@@ -189,21 +199,43 @@ function VerificationSection({ user }) {
       <h1 className="text-xl font-bold text-m4m-black mb-2">Get Verified</h1>
       <p className="text-m4m-gray-500 text-sm mb-6">Become a Verified Seller to build trust with buyers and increase your sales.</p>
 
-      {isRejected && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 mb-6 text-sm text-red-800">
-          ❌ Your previous verification request was rejected. You may submit a new one below with updated documents.
+        {isRejected && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 mb-6 text-sm text-red-800 flex items-center gap-2">
+          <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 6L6 18M6 6l12 12" />
+          </svg>
+          <span>Your previous verification request was rejected. You may submit a new one below with updated documents.</span>
         </div>
       )}
 
       {/* Benefits */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         {[
-          { icon: '🏅', title: 'Verified badge', desc: 'A blue checkmark badge appears on your profile and all your products.' },
-          { icon: '📈', title: 'More visibility', desc: 'Verified sellers are ranked higher in search results.' },
-          { icon: '🛡️', title: 'Buyer trust', desc: 'Buyers feel safer purchasing from verified sellers.' },
+          { icon: 'badge', title: 'Verified badge', desc: 'A checkmark badge appears on your profile and all your products.' },
+          { icon: 'trend', title: 'More visibility', desc: 'Verified sellers are ranked higher in search results.' },
+          { icon: 'shield', title: 'Buyer trust', desc: 'Buyers feel safer purchasing from verified sellers.' },
         ].map(({ icon, title, desc }) => (
           <div key={title} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <span className="text-2xl">{icon}</span>
+            <span className="text-2xl flex items-center justify-center text-m4m-purple">
+              {icon === 'badge' && (
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2l3 3 4 .5-1.5 3.5L19 13l-3 2.5-.5 4-3.5-1.5L8 19l.5-4L6 13l1.5-3.5L6 5.5 10 5z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 12l2 2 4-4" />
+                </svg>
+              )}
+              {icon === 'trend' && (
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 17l6-6 4 4 8-8" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8v8" />
+                </svg>
+              )}
+              {icon === 'shield' && (
+                <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3l8 4v5c0 5-3.5 9-8 9s-8-4-8-9V7z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
+                </svg>
+              )}
+            </span>
             <p className="font-semibold text-gray-900 mt-2 text-sm">{title}</p>
             <p className="text-xs text-gray-500 mt-1 leading-relaxed">{desc}</p>
           </div>
@@ -218,7 +250,7 @@ function VerificationSection({ user }) {
           <li>Upload a selfie of you holding the same ID card.</li>
           <li>Optionally attach a bank statement for faster approval.</li>
           <li>The M4M admin team reviews your documents within 1–3 business days.</li>
-          <li>Once approved, a ✅ Verified badge appears on your profile and products.</li>
+          <li>Once approved, a verified badge appears on your profile and products.</li>
         </ol>
       </div>
 
@@ -356,6 +388,7 @@ export default function SellerDashboardPage() {
   const [serviceRequestSubmitting, setServiceRequestSubmitting] = useState(false);
   const [serviceRequestError, setServiceRequestError] = useState('');
   const { tick } = useRefresh();
+  const { showBalance, toggleShowBalance } = useBalanceVisibility();
 
   const ordersBadgeCount = useMemo(
     () =>
@@ -1095,8 +1128,14 @@ export default function SellerDashboardPage() {
               rows={5}
               className="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none resize-y mb-4"
             />
-            <p className="text-xs text-gray-500 mb-4">
-              ⚠️ This information will be sent to the buyer and stored securely. The order will be marked as delivered immediately.
+            <p className="text-xs text-gray-500 mb-4 flex items-center gap-1.5">
+              <svg className="w-3 h-3 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.29 3.86L1.82 18a1 1 0 00.86 1.5h18.64a1 1 0 00.86-1.5L13.71 3.86a1 1 0 00-1.72 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01" />
+              </svg>
+              <span>
+                This information will be sent to the buyer and stored securely. The order will be marked as delivered immediately.
+              </span>
             </p>
             <div className="flex gap-3">
               <button
@@ -1112,7 +1151,7 @@ export default function SellerDashboardPage() {
                 disabled={deliverSubmitting || !deliverContent.trim()}
                 className="flex-1 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors"
               >
-                {deliverSubmitting ? 'Sending…' : '📤 Send Delivery'}
+                {deliverSubmitting ? 'Sending…' : 'Send Delivery'}
               </button>
             </div>
           </div>
@@ -1371,9 +1410,29 @@ export default function SellerDashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <p className="text-xl font-bold text-m4m-black">
-                    {walletBalance != null ? `${Number(walletBalance).toFixed(2)} MAD` : '—'}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p
+                      className={`text-xl font-bold text-m4m-black transition-all duration-200 ease-out ${
+                        showBalance ? 'opacity-100 blur-0' : 'opacity-80 blur-sm'
+                      }`}
+                    >
+                      {walletBalance != null
+                        ? showBalance
+                          ? `${Number(walletBalance).toFixed(2)} MAD`
+                          : '••••• MAD'
+                        : '—'}
+                    </p>
+                    {walletBalance != null && (
+                      <button
+                        type="button"
+                        onClick={toggleShowBalance}
+                        className="text-m4m-gray-400 hover:text-m4m-purple"
+                        aria-label={showBalance ? 'Hide balance' : 'Show balance'}
+                      >
+                        {showBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5 mb-0.5">
@@ -1539,12 +1598,22 @@ export default function SellerDashboardPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                   <div className="rounded-xl border border-gray-200 bg-white p-4">
                     <p className="text-xs text-gray-500 mb-1">Rating</p>
-                    <p className="text-xl font-bold text-gray-900">{Number(sellerStats.rating_average ?? 0).toFixed(1)} ⭐</p>
+                    <p className="text-xl font-bold text-gray-900 flex items-center gap-1.5">
+                      {Number(sellerStats.rating_average ?? 0).toFixed(1)}
+                      <svg className="w-4 h-4 text-amber-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 .587l3.668 7.568L24 9.423l-6 5.847L19.335 24 12 19.897 4.665 24 6 15.27 0 9.423l8.332-1.268z" />
+                      </svg>
+                    </p>
                     <p className="text-xs text-gray-400">{sellerStats.rating_count ?? 0} review(s)</p>
                   </div>
                   <div className="rounded-xl border border-gray-200 bg-white p-4">
                     <p className="text-xs text-gray-500 mb-1">Seller Badge</p>
-                    <p className="text-lg font-bold text-m4m-purple">🏅 {sellerStats.badge ?? 'New'}</p>
+                    <p className="text-lg font-bold text-m4m-purple flex items-center gap-1.5">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2l3 3 4 .5-1.5 3.5L19 13l-3 2.5-.5 4-3.5-1.5L8 19l.5-4L6 13l1.5-3.5L6 5.5 10 5z" />
+                      </svg>
+                      {sellerStats.badge ?? 'New'}
+                    </p>
                     <p className="text-xs text-gray-400">{sellerStats.total_sales ?? 0} sales</p>
                   </div>
                   <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -1554,7 +1623,9 @@ export default function SellerDashboardPage() {
                   </div>
                   <div className="rounded-xl border border-gray-200 bg-white p-4">
                     <p className="text-xs text-gray-500 mb-1">Verified</p>
-                    <p className="text-lg font-bold">{user?.is_verified_seller ? '✅ Yes' : '❌ No'}</p>
+                    <p className="text-lg font-bold">
+                      {user?.is_verified_seller ? 'Yes' : 'No'}
+                    </p>
                     <p className="text-xs text-gray-400">{user?.is_verified_seller ? 'Verified seller' : 'Not verified'}</p>
                   </div>
                 </div>
@@ -1738,17 +1809,17 @@ export default function SellerDashboardPage() {
                           {(categories || []).map((c) => {
                             const isSelected = String(form.category_id) === String(c.id);
                             const iconMap = {
-                              gaming: '🎮',
-                              streaming: '📺',
-                              'gift-cards': '🎁',
-                              software: '💻',
-                              'social-media': '📱',
-                              subscriptions: '🔄',
-                              accounts: '👤',
-                              'top-up': '⚡',
-                              marketing: '📈',
+                              gaming: '',
+                              streaming: '',
+                              'gift-cards': '',
+                              software: '',
+                              'social-media': '',
+                              subscriptions: '',
+                              accounts: '',
+                              'top-up': '',
+                              marketing: '',
                             };
-                            const icon = c.icon || iconMap[c.slug] || iconMap[c.name?.toLowerCase()] || '📦';
+                            const icon = c.icon || iconMap[c.slug] || iconMap[c.name?.toLowerCase()] || '';
                             return (
                               <button
                                 key={c.id}
@@ -1865,7 +1936,7 @@ export default function SellerDashboardPage() {
                         <div className="flex gap-3">
                           {['manual', 'instant'].map((dt) => (
                             <button key={dt} type="button" onClick={() => updateForm('delivery_type', dt)} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors capitalize ${form.delivery_type === dt ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
-                              {dt === 'instant' ? '⚡ Instant delivery' : '📦 Manual delivery'}
+                              {dt === 'instant' ? 'Instant delivery' : 'Manual delivery'}
                             </button>
                           ))}
                         </div>
@@ -2318,7 +2389,7 @@ export default function SellerDashboardPage() {
                               : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'
                           }`}
                         >
-                          {dt === 'instant' ? '⚡ Instant delivery' : '📦 Manual delivery'}
+                          {dt === 'instant' ? 'Instant delivery' : 'Manual delivery'}
                         </button>
                       ))}
                     </div>
@@ -2532,7 +2603,12 @@ export default function SellerDashboardPage() {
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="font-semibold text-m4m-black truncate flex-1">{p.name}</h3>
                       {p.is_pinned ? (
-                        <span className="shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">⭐ Featured Product</span>
+                        <span className="shrink-0 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 .587l3.668 7.568L24 9.423l-6 5.847L19.335 24 12 19.897 4.665 24 6 15.27 0 9.423l8.332-1.268z" />
+                          </svg>
+                          Featured Product
+                        </span>
                       ) : null}
                     </div>
                     <p className="mt-1 text-lg font-bold text-m4m-black">{Math.round(Number(p.price || 0))} MAD</p>
@@ -2701,7 +2777,7 @@ export default function SellerDashboardPage() {
                           const hasInstantItem = items.some((i) => i.product?.delivery_type === 'instant');
                           const canSendDelivery = canSetDelivered && hasManualItem;
                           const badgeClass = orderStatusBadgeClasses[status] || style.badge;
-                          const deliveryLabel = hasInstantItem && hasManualItem ? 'Mixed' : hasInstantItem ? '⚡ Instant' : '📦 Manual';
+                          const deliveryLabel = hasInstantItem && hasManualItem ? 'Mixed' : hasInstantItem ? 'Instant' : 'Manual';
                           return (
                             <tr key={order.id} className="hover:bg-m4m-gray-50/50 transition-colors">
                               <td className="px-4 py-3">

@@ -7,6 +7,7 @@ import {
   getNotifications,
   markNotificationRead,
 } from '../services/api';
+import { AlertTriangle, X as XIcon } from 'lucide-react';
 
 /**
  * Normalizes seller-warnings API response to a list of { id, reason, message, date, source }.
@@ -100,21 +101,12 @@ export default function AdminWarningBanner() {
           key={`${w.source}-${w.id}`}
           className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4"
         >
-          <svg
-            className="w-5 h-5 text-amber-600 shrink-0 mt-0.5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-amber-800 text-sm">⚠️ ADMIN WARNING</p>
+            <p className="font-semibold text-amber-800 text-sm flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4" />
+              ADMIN WARNING
+            </p>
             {w.reason && (
               <p className="text-sm text-amber-700 mt-0.5">
                 <span className="font-medium">Reason:</span> {w.reason}
@@ -134,7 +126,10 @@ export default function AdminWarningBanner() {
             onClick={() => handleDismiss(w)}
             className="shrink-0 px-2.5 py-1 rounded-lg border border-amber-300 bg-white text-[11px] font-medium text-amber-700 hover:bg-amber-100 transition-colors"
           >
-            Dismiss ✖
+            <span className="flex items-center gap-1.5">
+              <XIcon className="w-3 h-3" />
+              Dismiss
+            </span>
           </button>
         </div>
       ))}

@@ -94,9 +94,9 @@ export default function AuthPage() {
           {banInfo && (
             <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm space-y-1">
               {banInfo.ban_type === 'permanent' ? (
-                <p className="font-semibold">🚫 Your account has been permanently banned by M4M administration.</p>
+                <p className="font-semibold">Your account has been permanently banned by M4M administration.</p>
               ) : (
-                <p className="font-semibold">⏸ Your account is temporarily suspended.</p>
+                <p className="font-semibold">Your account is temporarily suspended.</p>
               )}
               {banInfo.ban_reason && <p><span className="font-medium">Reason:</span> {banInfo.ban_reason}</p>}
               {banInfo.ban_type === 'temporary' && banInfo.banned_until && (
