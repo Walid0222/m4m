@@ -221,12 +221,14 @@ export default function ChatPage() {
           setPage(currentPage);
           setHasMoreMessages(currentPage < lastPage);
 
+          // Refresh conversation list so unread counters update
+          refreshConversations();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('chat:refresh'));
+          }
+
           // Mark conversation as seen (read receipts)
-          console.log('Conversation opened:', selected.id);
-          console.log('Calling seen API for conversation:', selected.id);
-          markConversationSeen(selected.id)
-            .then(() => console.log('Seen API success'))
-            .catch((e) => console.error('Seen API error', e));
+          markConversationSeen(selected.id).catch(() => {});
         } else if (!cancelled && !Array.isArray(list)) {
           setMessages([]);
         }
@@ -297,8 +299,9 @@ export default function ChatPage() {
             refreshConversations();
           }
 
-          // Let the navbar know to refresh notifications so the chat badge updates promptly
+          // Update header chat badge and notifications
           if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('chat:refresh'));
             window.dispatchEvent(new Event('notifications:refresh'));
           }
         });
@@ -585,7 +588,7 @@ export default function ChatPage() {
                   ? SUPPORT_CONV.other_user
                   : c.other_user || (c.user_one_id === user?.id ? c.userTwo : c.userOne);
                 const isSelected = selected?.id === c.id;
-                const count = isSupport ? 0 : (unread[c.id] || 0);
+                const count = isSupport ? 0 : (c.unread_count ?? unread[c.id] ?? 0);
                 const isOnline = !isSupport && other && isSellerOnline(other);
 
                 return (

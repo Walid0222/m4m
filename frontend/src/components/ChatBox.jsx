@@ -52,7 +52,7 @@ export default function ChatBox({
     : 'Buyer';
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-white">
+    <div className="flex flex-col h-full bg-white">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white shrink-0">
         {/* Back button on mobile */}
@@ -132,17 +132,19 @@ export default function ChatBox({
       </div>
 
       {/* Messages area (virtualized) */}
-      <VirtualizedMessages
-        messages={messages}
-        hasMoreMessages={hasMoreMessages}
-        loadingOlderMessages={loadingOlderMessages}
-        onLoadPrevious={onLoadPrevious}
-        isTyping={isTyping}
-        currentUserId={currentUserId}
-        otherUser={otherUser}
-        isSupport={isSupport}
-        avatar={avatar}
-      />
+      <div className="flex-1 min-h-0">
+        <VirtualizedMessages
+          messages={messages}
+          hasMoreMessages={hasMoreMessages}
+          loadingOlderMessages={loadingOlderMessages}
+          onLoadPrevious={onLoadPrevious}
+          isTyping={isTyping}
+          currentUserId={currentUserId}
+          otherUser={otherUser}
+          isSupport={isSupport}
+          avatar={avatar}
+        />
+      </div>
 
       {/* Input bar */}
       <div className="p-3 md:p-4 border-t border-gray-200 bg-white shrink-0">

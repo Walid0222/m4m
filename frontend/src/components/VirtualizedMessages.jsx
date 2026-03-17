@@ -23,9 +23,7 @@ export default function VirtualizedMessages({
   avatar,
 }) {
   const virtuosoRef = useRef(null);
-  const isAtBottomRef = useRef(true);
-  const lastMessageKeyRef = useRef(null);
-
+  const [autoScroll, setAutoScroll] = React.useState(false);
   const systemMsgs = useMemo(
     () => messages.filter((m) => m._system),
     [messages]
@@ -60,6 +58,7 @@ export default function VirtualizedMessages({
     }, []);
   }, [regularMsgs]);
 
+  
   // Last message from the current user, to show status (sent / delivered / seen)
   const lastMyMsg = useMemo(() => {
     const copy = [...messages].reverse();
@@ -110,48 +109,27 @@ export default function VirtualizedMessages({
     return items;
   }, [groupedMessages, isTyping]);
 
-  // Smart auto-scroll: when a new message arrives
+  
   useEffect(() => {
-    if (rows.length === 0) return;
 
-    // Find the last message row (ignore typing row)
-    let lastMessageIndex = -1;
-    for (let i = rows.length - 1; i >= 0; i -= 1) {
-      if (rows[i]?.type === 'message') {
-        lastMessageIndex = i;
-        break;
-      }
-    }
-    if (lastMessageIndex === -1) return;
-
-    const lastMessage = rows[lastMessageIndex].message;
-    const lastId = lastMessage ? lastMessage.id ?? lastMessage._tempId : null;
-    if (!lastId) return;
-    const prevLastId = lastMessageKeyRef.current;
-    const isNew = lastId && lastId !== prevLastId;
-    lastMessageKeyRef.current = lastId;
-
-    if (!isNew || !lastMessage) return;
-
+    const last = messages[messages.length - 1];
+    if (!last) return;
+  
     const isMine =
-      lastMessage.user_id === currentUserId ||
-      lastMessage.sender?.id === currentUserId;
+      last.user_id === currentUserId ||
+      last.sender?.id === currentUserId;
+  
+    setAutoScroll(isMine);
+  
+  }, [messages, currentUserId]);
 
-    if (isMine || (isAtBottomRef.current && lastMessageIndex !== rows.length - 1)) {
-      virtuosoRef.current?.scrollToIndex({
-        index: lastMessageIndex,
-        align: 'end',
-        behavior: 'auto',
-      });
-    }
-  }, [rows, currentUserId]);
-
+  
   if (!otherUser) {
     return null;
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 bg-gray-50/50">
+    <div className="h-full flex flex-col bg-gray-50/50">
       {/* System welcome messages — always shown at top, outside virtualization */}
       {systemMsgs.map((m) => (
         <div key={m.id} className="flex justify-center mb-4">
@@ -196,34 +174,36 @@ export default function VirtualizedMessages({
           </p>
         </div>
       ) : (
-        <Virtuoso
-          ref={virtuosoRef}
-          className="flex-1"
-          data={rows}
-          followOutput="auto"
-          overscan={60}
-          components={{
-            Header: () =>
-              hasMoreMessages && onLoadPrevious ? (
-                <div className="flex justify-center py-2">
-                  <button
-                    type="button"
-                    onClick={onLoadPrevious}
-                    disabled={loadingOlderMessages}
-                    className="text-xs text-m4m-purple hover:underline disabled:opacity-50"
-                  >
-                    {loadingOlderMessages
-                      ? 'Loading previous messages…'
-                      : 'Show previous messages'}
-                  </button>
-                </div>
-              ) : null,
-            List: React.forwardRef((props, ref) => (
-              // eslint-disable-next-line react/jsx-props-no-spreading
-              <div {...props} ref={ref} className="px-4 py-4" />
-            )),
-          }}
-          itemContent={(index, row) => {
+        <div className="flex-1 min-h-0">
+          <Virtuoso
+  ref={virtuosoRef}
+  style={{ height: "100%" }}
+  data={rows}
+  followOutput={autoScroll ? "smooth" : false}
+    overscan={20}
+  increaseViewportBy={{ top: 200, bottom: 200 }}
+            components={{
+              Header: () =>
+                hasMoreMessages && onLoadPrevious ? (
+                  <div className="flex justify-center py-2">
+                    <button
+                      type="button"
+                      onClick={onLoadPrevious}
+                      disabled={loadingOlderMessages}
+                      className="text-xs text-m4m-purple hover:underline disabled:opacity-50"
+                    >
+                      {loadingOlderMessages
+                        ? 'Loading previous messages…'
+                        : 'Show previous messages'}
+                    </button>
+                  </div>
+                ) : null,
+              List: React.forwardRef((props, ref) => (
+                // eslint-disable-next-line react/jsx-props-no-spreading
+                <div {...props} ref={ref} className="px-4 py-4" />
+              )),
+            }}
+            itemContent={(index, row) => {
             if (row.type === 'date') {
               return (
                 <div className="flex items-center gap-3 my-4">
@@ -382,15 +362,9 @@ export default function VirtualizedMessages({
               </div>
             );
           }}
-          atBottomStateChange={(atBottom) => {
-            isAtBottomRef.current = atBottom;
-          }}
-          rangeChanged={(range) => {
-            const nearBottom = range.endIndex >= rows.length - 2;
-            isAtBottomRef.current = nearBottom;
-          }}
-          computeItemKey={(_, row) => row.key}
-        />
+            computeItemKey={(_, row) => row.key}
+          />
+          </div>
       )}
     </div>
   );

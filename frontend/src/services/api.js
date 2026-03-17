@@ -628,6 +628,10 @@ export function getConversations(params = {}) {
   return api.get('/conversations', { params }).then(unwrap);
 }
 
+export function getConversationsUnreadTotal() {
+  return api.get('/conversations/unread-total').then(unwrap);
+}
+
 export function getConversation(id, params = {}) {
   return api.get(`/conversations/${id}`, { params }).then(unwrap);
 }

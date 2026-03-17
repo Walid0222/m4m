@@ -226,6 +226,7 @@ Route::prefix('v1')->group(function () {
 
             // Chat (regular conversations)
             Route::get('/conversations',                                  [ConversationController::class, 'index']);
+            Route::get('/conversations/unread-total',                     [ConversationController::class, 'totalUnread']);
             Route::post('/conversations',                                 [ConversationController::class, 'store']);
             Route::get('/conversations/{conversation}',                   [ConversationController::class, 'show']);
             Route::post('/conversations/{conversation}/messages',         [ConversationController::class, 'storeMessage']);

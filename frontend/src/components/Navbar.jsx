@@ -16,7 +16,7 @@ import {
   Bell,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getWallet, getNotifications, markNotificationRead, searchOfferTypes, getToken, getSellerWarnings, toggleVacationMode } from '../services/api';
+import { getWallet, getNotifications, markNotificationRead, searchOfferTypes, getToken, getSellerWarnings, toggleVacationMode, getConversationsUnreadTotal } from '../services/api';
 import { useRefresh } from '../contexts/RefreshContext';
 import { getCategoryColor } from '../lib/categoryColor';
 
@@ -54,6 +54,7 @@ export default function Navbar() {
   const [warningCount, setWarningCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [chatUnreadTotal, setChatUnreadTotal] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [vacationToggleLoading, setVacationToggleLoading] = useState(false);
@@ -102,10 +103,11 @@ export default function Navbar() {
     return () => { cancelled = true; };
   }, [user]);
 
-  // Clear notifications when user logs out / changes
+  // Clear notifications and chat unread when user logs out / changes
   useEffect(() => {
     if (!user || !getToken()) {
       setNotifications([]);
+      setChatUnreadTotal(0);
     }
   }, [user]);
 
@@ -125,12 +127,30 @@ export default function Navbar() {
     };
   }, [user]);
 
-  // Auto-refresh notifications when global refresh tick advances
+  const refreshChatUnread = useCallback(async () => {
+    if (!user || !getToken()) {
+      setChatUnreadTotal(0);
+      return;
+    }
+    let cancelled = false;
+    try {
+      const data = await getConversationsUnreadTotal();
+      if (!cancelled && data && typeof data.total === 'number') {
+        setChatUnreadTotal(data.total);
+      }
+    } catch {
+      if (!cancelled) setChatUnreadTotal(0);
+    }
+    return () => { cancelled = true; };
+  }, [user]);
+
+  // Auto-refresh notifications and chat unread when global refresh tick advances
   useEffect(() => {
     if (!tick) return;
     refreshNotifications();
     refreshWallet();
-  }, [tick, refreshNotifications, refreshWallet]);
+    refreshChatUnread();
+  }, [tick, refreshNotifications, refreshWallet, refreshChatUnread]);
 
   useEffect(() => {
     if (notificationsOpen && user && getToken()) {
@@ -146,6 +166,16 @@ export default function Navbar() {
     window.addEventListener('notifications:refresh', handler);
     return () => window.removeEventListener('notifications:refresh', handler);
   }, [refreshNotifications]);
+
+  useEffect(() => {
+    refreshChatUnread();
+  }, [refreshChatUnread]);
+
+  useEffect(() => {
+    const handler = () => refreshChatUnread();
+    window.addEventListener('chat:refresh', handler);
+    return () => window.removeEventListener('chat:refresh', handler);
+  }, [refreshChatUnread]);
 
   // Allow other parts of the app to force a wallet refresh via a DOM event
   useEffect(() => {
@@ -219,10 +249,7 @@ export default function Navbar() {
     const type = n.type || n.data?.type;
     return type !== 'new_message';
   });
-  const unreadMessages = notifications.filter((n) => {
-    const type = n.type || n.data?.type;
-    return type === 'new_message' && !n.read_at;
-  }).length;
+  const unreadMessages = chatUnreadTotal;
   const unreadCount = notifications.filter((n) => {
     const type = n.type || n.data?.type;
     return type !== 'new_message' && !n.read_at;

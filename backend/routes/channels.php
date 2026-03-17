@@ -10,11 +10,12 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
 });
 
 Broadcast::channel('conversation.{conversation}', function ($user, $conversationId) {
+    $conversation = \App\Models\Conversation::find($conversationId);
 
-    \Log::info('Broadcast auth test', [
-        'user_id' => $user?->id,
-        'conversation_id' => $conversationId
-    ]);
+    if (! $conversation) {
+        return false;
+    }
 
-    return true;
+    return $conversation->user_one_id === $user->id
+        || $conversation->user_two_id === $user->id;
 });

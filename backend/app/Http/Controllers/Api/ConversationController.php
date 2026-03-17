@@ -24,6 +24,9 @@ class ConversationController extends Controller
             })
             ->with(['userOne:id,name,last_activity_at,avatar', 'userTwo:id,name,last_activity_at,avatar', 'order:id,status', 'product:id,name'])
             ->withCount(['messages'])
+            ->withCount(['messages as unread_count' => function ($q) use ($userId) {
+                $q->where('user_id', '!=', $userId)->whereNull('read_at');
+            }])
             ->latest('updated_at')
             ->paginate($request->integer('per_page', 15));
 
@@ -33,6 +36,26 @@ class ConversationController extends Controller
         });
 
         return $this->success($conversations);
+    }
+
+    /**
+     * Total count of unread messages (from others) across all regular conversations for the current user.
+     */
+    public function totalUnread(Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        $total = Message::whereHas('conversation', function ($q) use ($userId) {
+            $q->where('type', 'regular')
+                ->where(function ($q2) use ($userId) {
+                    $q2->where('user_one_id', $userId)->orWhere('user_two_id', $userId);
+                });
+        })
+            ->where('user_id', '!=', $userId)
+            ->whereNull('read_at')
+            ->count();
+
+        return $this->success(['total' => $total]);
     }
 
     public function store(Request $request): JsonResponse
@@ -52,26 +75,31 @@ class ConversationController extends Controller
         $userOneId = min($me, $other);
         $userTwoId = max($me, $other);
 
-        $conversation = Conversation::firstOrCreate(
-            [
-                'user_one_id' => $userOneId,
-                'user_two_id' => $userTwoId,
-                'order_id' => $validated['order_id'] ?? null,
-                'product_id' => $validated['product_id'] ?? null,
-            ],
-            ['type' => 'regular']
-        );
+        $conversation = Conversation::where('user_one_id', $userOneId)
+            ->where('user_two_id', $userTwoId)
+            ->where('type', 'regular')
+            ->first();
 
-        // If this conversation row was just created and the other party is a seller with an auto-reply,
-        // send the auto-reply once for this conversation.
-        if ($conversation->wasRecentlyCreated) {
-            $otherUser = \App\Models\User::find($other);
-            if ($otherUser && $otherUser->is_seller && ! empty($otherUser->auto_reply_message)) {
-                $conversation->messages()->create([
-                    'user_id' => $otherUser->id,
-                    'body'    => $otherUser->auto_reply_message,
-                ]);
-            }
+        if ($conversation) {
+            $conversation->load(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id', 'product:id,name']);
+            return $this->success($conversation->toArray(), 'Conversation ready.', 200);
+        }
+
+        $conversation = Conversation::create([
+            'user_one_id' => $userOneId,
+            'user_two_id' => $userTwoId,
+            'type'        => 'regular',
+            'order_id'    => $validated['order_id'] ?? null,
+            'product_id'  => $validated['product_id'] ?? null,
+        ]);
+
+        // If the other party is a seller with an auto-reply, send it once for this conversation.
+        $otherUser = \App\Models\User::find($other);
+        if ($otherUser && $otherUser->is_seller && ! empty($otherUser->auto_reply_message)) {
+            $conversation->messages()->create([
+                'user_id' => $otherUser->id,
+                'body'    => $otherUser->auto_reply_message,
+            ]);
         }
 
         $conversation->load(['userOne:id,name,last_activity_at', 'userTwo:id,name,last_activity_at', 'order:id', 'product:id,name']);
@@ -90,12 +118,12 @@ class ConversationController extends Controller
         $conversation->load(['userOne:id,name,last_activity_at,avatar', 'userTwo:id,name,last_activity_at,avatar', 'order:id,status', 'product:id,name']);
         $conversation->other_user = $conversation->user_one_id === $userId ? $conversation->userTwo : $conversation->userOne;
 
-        // Mark incoming messages as read for the current user (regular conversations only)
+        // Mark all messages from the other user as read (regular conversations only)
         if (! $isSupportConvo) {
             $conversation->messages()
                 ->where('user_id', '!=', $userId)
                 ->whereNull('read_at')
-                ->update(['read_at' => now()]);
+                ->update(['read_at' => now(), 'status' => 'seen']);
         }
 
         $messages = $conversation->messages()
