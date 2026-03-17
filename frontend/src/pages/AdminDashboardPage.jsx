@@ -732,10 +732,11 @@ function VerificationPanel() {
                 </div>
 
                 {/* Documents */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   {[
                     { label: 'National ID — Front', url: req.id_front_url ?? req.national_id_front },
                     { label: 'National ID — Back', url: req.id_back_url ?? req.national_id_back },
+                    { label: 'Selfie holding ID', url: req.selfie_with_id_url ?? req.selfie_with_id },
                     { label: 'Bank statement (optional)', url: req.bank_statement_url ?? req.bank_statement },
                   ].map(({ label, url }) => (
                     <div key={label}>

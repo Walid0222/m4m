@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingCart,
@@ -54,6 +54,7 @@ export default function Navbar() {
   const [warningCount, setWarningCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [showAggregatedOrders, setShowAggregatedOrders] = useState(false);
   const [chatUnreadTotal, setChatUnreadTotal] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -245,10 +246,42 @@ export default function Navbar() {
   };
 
   const balanceDisplay = walletBalance !== null ? `${Number(walletBalance).toFixed(2)} MAD` : '—';
-  const visibleNotifications = notifications.filter((n) => {
-    const type = n.type || n.data?.type;
-    return type !== 'new_message';
-  });
+
+  // Group notifications for display (aggregate new_order into a single item)
+  const displayNotifications = useMemo(() => {
+    const newOrders = [];
+    const others = [];
+
+    notifications.forEach((n) => {
+      const type = n.type || n.data?.type;
+      if (type === 'new_order') {
+        newOrders.push(n);
+      } else if (type !== 'new_message') {
+        // Keep existing behavior: hide chat notifications from the dropdown
+        others.push(n);
+      }
+    });
+
+    if (newOrders.length === 0) {
+      return others;
+    }
+
+    const count = newOrders.length;
+    const message =
+      count === 1 ? '1 new order received' : `${count} new orders received`;
+    const aggregate = {
+      kind: 'aggregated_new_orders',
+      id: 'agg_new_orders',
+      type: 'new_order',
+      message,
+      count,
+      items: newOrders,
+    };
+
+    // For now, show aggregate first; others follow as usual
+    return [aggregate, ...others];
+  }, [notifications]);
+
   const unreadMessages = chatUnreadTotal;
   const unreadCount = notifications.filter((n) => {
     const type = n.type || n.data?.type;
@@ -325,6 +358,27 @@ export default function Navbar() {
     }
     const icon = getNotificationIcon(type);
     return { icon, message };
+  }
+
+  const isAggregatedNewOrders = (n) => n && n.kind === 'aggregated_new_orders';
+
+  async function handleOrderNotificationClick(item) {
+    // Mark this specific notification as read if needed
+    if (!item.read_at) {
+      try {
+        await markNotificationRead(item.id);
+        setNotifications((prev) =>
+          prev.map((x) =>
+            x.id === item.id ? { ...x, read_at: new Date().toISOString() } : x
+          )
+        );
+      } catch {
+        // ignore; state will sync on next refresh
+      }
+    }
+    setNotificationsOpen(false);
+    setMobileMenuOpen(false);
+    navigate('/seller-dashboard');
   }
 
   async function handleNotificationClick(n) {
@@ -507,11 +561,64 @@ export default function Navbar() {
                         <span className="font-semibold text-gray-900">Notifications</span>
                         {unreadCount > 0 && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">{unreadCount} new</span>}
                       </div>
-                      {visibleNotifications.length === 0 ? (
+                      {displayNotifications.length === 0 ? (
                         <p className="px-4 py-8 text-sm text-gray-400 text-center">No notifications yet.</p>
                       ) : (
                         <ul>
-                          {visibleNotifications.map((n) => {
+                          {displayNotifications.map((n) => {
+                            if (isAggregatedNewOrders(n)) {
+                              const { icon } = getNotificationDisplay({ type: 'new_order', data: {} });
+                              return (
+                                <li key={n.id}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowAggregatedOrders((prev) => !prev)}
+                                    className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-center justify-between gap-3"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      {icon && <span className="flex-shrink-0 mt-0.5">{icon}</span>}
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-gray-800 line-clamp-2">{n.message}</p>
+                                      </div>
+                                    </div>
+                                    <span className="text-xs text-gray-400">
+                                      {showAggregatedOrders ? 'Hide' : 'View'}
+                                    </span>
+                                  </button>
+                                  {showAggregatedOrders && (
+                                    <div className="border-t border-gray-100 bg-gray-50">
+                                      {n.items.map((item) => (
+                                        <button
+                                          key={item.id}
+                                          type="button"
+                                          onClick={() => handleOrderNotificationClick(item)}
+                                          className={`w-full text-left px-4 py-2.5 hover:bg-gray-100 transition-colors flex items-center justify-between text-xs ${
+                                            !item.read_at ? 'bg-purple-50' : ''
+                                          }`}
+                                        >
+                                          <div className="flex flex-col">
+                                            <span className="font-medium text-gray-800">
+                                              Order #{item.data?.order_id ?? item.data?.order_number ?? item.data?.order_id}
+                                            </span>
+                                            <span className="text-[11px] text-gray-500">
+                                              {item.created_at
+                                                ? new Date(item.created_at).toLocaleString()
+                                                : ''}
+                                            </span>
+                                          </div>
+                                          <span className="ml-3 font-semibold text-gray-900">
+                                            {typeof item.data?.total_amount === 'number'
+                                              ? `${Number(item.data.total_amount).toFixed(2)} MAD`
+                                              : ''}
+                                          </span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </li>
+                              );
+                            }
+
                             const { icon, message } = getNotificationDisplay(n);
                             return (
                               <li key={n.id}>
@@ -655,11 +762,11 @@ export default function Navbar() {
                 {notificationsOpen && (
                   <div className="absolute right-0 mt-2 w-72 max-h-80 overflow-y-auto rounded-2xl bg-white border border-gray-200 shadow-xl z-50">
                     <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-900 text-sm">Notifications</div>
-                      {visibleNotifications.length === 0 ? (
+                      {displayNotifications.length === 0 ? (
                       <p className="px-4 py-6 text-sm text-gray-400 text-center">No notifications.</p>
                     ) : (
                       <ul>
-                          {visibleNotifications.map((n) => {
+                          {displayNotifications.map((n) => {
                           const { icon, message } = getNotificationDisplay(n);
                           return (
                             <li key={n.id}>
