@@ -4,6 +4,7 @@ import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import ServiceCard from '../components/ServiceCard';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import {
   getProducts,
   getProduct,
@@ -74,29 +75,6 @@ const TESTIMONIALS = [
   },
 ];
 
-const SORT_OPTIONS = [
-  { value: 'best_selling', label: 'Best selling' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'lowest_price', label: 'Lowest price' },
-  { value: 'highest_price', label: 'Highest price' },
-  { value: 'highest_rating', label: 'Highest rating' },
-];
-
-const RATING_OPTIONS = [
-  { value: '', label: 'Any rating' },
-  { value: '3', label: '3+ stars' },
-  { value: '4', label: '4+ stars' },
-  { value: '5', label: '5 stars' },
-];
-
-const PRICE_PRESETS = [
-  { min: '', max: '', label: 'Any price' },
-  { min: '0', max: '25', label: 'Under $25' },
-  { min: '25', max: '50', label: '$25 – $50' },
-  { min: '50', max: '100', label: '$50 – $100' },
-  { min: '100', max: '', label: '$100+' },
-];
-
 const SEARCH_DEBOUNCE_MS = 400;
 const PRODUCTS_PER_PAGE = 12;
 
@@ -110,8 +88,30 @@ function getProductRating(p) {
   return avg != null ? Number(avg) : null;
 }
 
+const SORT_OPTIONS_KEYS = [
+  { value: 'best_selling', labelKey: 'home.sort_best_selling' },
+  { value: 'newest', labelKey: 'home.sort_newest' },
+  { value: 'lowest_price', labelKey: 'home.sort_lowest_price' },
+  { value: 'highest_price', labelKey: 'home.sort_highest_price' },
+  { value: 'highest_rating', labelKey: 'home.sort_highest_rating' },
+];
+const RATING_OPTIONS_KEYS = [
+  { value: '', labelKey: 'home.any_rating' },
+  { value: '3', labelKey: 'home.rating_3' },
+  { value: '4', labelKey: 'home.rating_4' },
+  { value: '5', labelKey: 'home.rating_5' },
+];
+const PRICE_PRESETS_KEYS = [
+  { min: '', max: '', labelKey: 'home.any_price' },
+  { min: '0', max: '25', labelKey: 'home.under_25' },
+  { min: '25', max: '50', labelKey: 'home.price_25_50' },
+  { min: '50', max: '100', labelKey: 'home.price_50_100' },
+  { min: '100', max: '', labelKey: 'home.price_100_plus' },
+];
+
 export default function HomePage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchFromUrl = searchParams.get('search') ?? '';
   const [products, setProducts] = useState([]);
@@ -593,14 +593,14 @@ export default function HomePage() {
           {isMarketplaceOnly && marketplaceStats && (
             <div className="flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-m4m-purple/10 text-m4m-purple text-sm font-medium">
-                {marketplaceStats.total_products?.toLocaleString() ?? 0} Products
+                {marketplaceStats.total_products?.toLocaleString() ?? 0} {t('home.stats_products')}
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-m4m-purple/10 text-m4m-purple text-sm font-medium">
-                {marketplaceStats.total_sellers?.toLocaleString() ?? 0} Sellers
+                {marketplaceStats.total_sellers?.toLocaleString() ?? 0} {t('home.stats_sellers')}
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800 text-sm font-medium">
                 <Star className="w-4 h-4 text-amber-500" />
-                {marketplaceStats.average_rating ?? '—'} Rating
+                {marketplaceStats.average_rating ?? '—'} {t('home.rating')}
               </span>
             </div>
           )}
@@ -682,50 +682,50 @@ export default function HomePage() {
         <div className="rounded-2xl border border-m4m-gray-200 bg-white shadow-sm overflow-hidden hidden md:block">
           <div className="p-4 md:p-5 space-y-4 md:space-y-0 md:flex md:flex-wrap md:items-end md:gap-4">
             <form onSubmit={handleSearchSubmit} className="flex-1 min-w-0 md:min-w-[280px] md:max-w-md">
-              <label htmlFor="marketplace-search" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">Search</label>
+              <label htmlFor="marketplace-search" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">{t('home.search')}</label>
               <div className="relative">
                 <input
                   id="marketplace-search"
                   type="search"
-                  placeholder="Search products..."
+                  placeholder={t('home.search_placeholder')}
                   value={searchInput}
                   onChange={(e) => handleSearchChange(e.target.value)}
                   className="w-full px-4 py-2.5 pr-10 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black placeholder-m4m-gray-400 focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors"
-                  aria-label="Search products"
+                  aria-label={t('home.search_placeholder')}
                 />
-                <button type="submit" aria-label="Search" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-m4m-gray-400 hover:text-m4m-purple hover:bg-m4m-gray-100 transition-colors">
+                <button type="submit" aria-label={t('home.search')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-m4m-gray-400 hover:text-m4m-purple hover:bg-m4m-gray-100 transition-colors">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 </button>
               </div>
             </form>
             <div className="w-full sm:w-auto min-w-0">
-              <label htmlFor="filter-seller" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">Seller</label>
+              <label htmlFor="filter-seller" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">{t('home.seller')}</label>
               <select id="filter-seller" value={sellerId} onChange={(e) => handleSellerChange(e.target.value)} className="w-full sm:w-[180px] px-3 py-2.5 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors">
-                <option value="">All sellers</option>
+                <option value="">{t('home.all_sellers')}</option>
                 {uniqueSellers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="w-full sm:w-auto">
-              <span className="block text-xs font-medium text-m4m-gray-500 mb-1.5">Price range</span>
+              <span className="block text-xs font-medium text-m4m-gray-500 mb-1.5">{t('home.price_range')}</span>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-1.5">
-                  <input type="number" min="0" step="0.01" placeholder="Min" value={priceMin} onChange={(e) => handlePriceMinChange(e.target.value)} className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none" />
+                  <input type="number" min="0" step="0.01" placeholder={t('home.min')} value={priceMin} onChange={(e) => handlePriceMinChange(e.target.value)} className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none" />
                   <span className="text-m4m-gray-400 font-medium">–</span>
-                  <input type="number" min="0" step="0.01" placeholder="Max" value={priceMax} onChange={(e) => handlePriceMaxChange(e.target.value)} className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none" />
+                  <input type="number" min="0" step="0.01" placeholder={t('home.max')} value={priceMax} onChange={(e) => handlePriceMaxChange(e.target.value)} className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none" />
                 </div>
-                {PRICE_PRESETS.slice(1).map((preset) => (
-                  <button key={preset.label} type="button" onClick={() => handlePricePreset(preset)} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${priceMin === preset.min && priceMax === preset.max ? 'bg-m4m-purple text-white' : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'}`}>{preset.label}</button>
+                {PRICE_PRESETS_KEYS.slice(1).map((preset) => (
+                  <button key={t(preset.labelKey)} type="button" onClick={() => handlePricePreset(preset)} className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${priceMin === preset.min && priceMax === preset.max ? 'bg-m4m-purple text-white' : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'}`}>{t(preset.labelKey)}</button>
                 ))}
               </div>
             </div>
             <div className="w-full sm:w-auto">
-              <label htmlFor="filter-rating" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">Rating</label>
+              <label htmlFor="filter-rating" className="block text-xs font-medium text-m4m-gray-500 mb-1.5">{t('home.rating')}</label>
               <select id="filter-rating" value={minRating} onChange={(e) => handleRatingChange(e.target.value)} className="w-full sm:w-[130px] px-3 py-2.5 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors">
-                {RATING_OPTIONS.map((opt) => <option key={opt.value || 'any'} value={opt.value}>{opt.label}</option>)}
+                {RATING_OPTIONS_KEYS.map((opt) => <option key={opt.value || 'any'} value={opt.value}>{t(opt.labelKey)}</option>)}
               </select>
             </div>
             {hasActiveFilters && (
-              <button type="button" onClick={clearFilters} className="px-3 py-2 rounded-xl text-sm font-medium text-m4m-purple hover:bg-m4m-purple/10 transition-colors border border-m4m-purple/30">Clear all</button>
+              <button type="button" onClick={clearFilters} className="px-3 py-2 rounded-xl text-sm font-medium text-m4m-purple hover:bg-m4m-purple/10 transition-colors border border-m4m-purple/30">{t('home.clear_all')}</button>
             )}
           </div>
         </div>
@@ -733,7 +733,7 @@ export default function HomePage() {
       <section>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sticky top-14 z-40 bg-white px-4 py-2 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-m4m-black">
-            Products
+            {t('home.stats_products')}
             {!loading && (
               <span className="ml-2 text-m4m-gray-500 font-normal">
                 {total > 0 ? `${from}–${to} of ${total}` : '(0)'}
@@ -753,9 +753,9 @@ export default function HomePage() {
               onChange={(e) => handleSortChange(e.target.value)}
               className="px-3 py-2 rounded-xl border border-m4m-gray-200 bg-white text-m4m-black text-sm font-medium focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none transition-colors"
             >
-              {SORT_OPTIONS.map((opt) => (
+              {SORT_OPTIONS_KEYS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
-                  {opt.label}
+                  {t(opt.labelKey)}
                 </option>
               ))}
             </select>
@@ -775,14 +775,14 @@ export default function HomePage() {
           </div>
         ) : fetchError ? (
           <div className="rounded-2xl border border-m4m-gray-200 bg-white py-16 px-6 text-center shadow-sm">
-            <p className="text-m4m-gray-600 font-medium">Something went wrong</p>
-            <p className="text-sm text-m4m-gray-500 mt-1">We couldn&apos;t load products. Try again.</p>
-            <button type="button" onClick={() => setRetryTrigger((t) => t + 1)} className="mt-4 px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-light transition-colors">Try again</button>
+            <p className="text-m4m-gray-600 font-medium">{t('home.something_went_wrong')}</p>
+            <p className="text-sm text-m4m-gray-500 mt-1">{t('home.load_products_error')}</p>
+            <button type="button" onClick={() => setRetryTrigger((r) => r + 1)} className="mt-4 px-5 py-2.5 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-light transition-colors">{t('home.try_again')}</button>
           </div>
         ) : filteredProducts.length === 0 ? (
           <div className="rounded-2xl border border-m4m-gray-200 bg-white py-16 text-center shadow-sm">
-            <p className="text-m4m-gray-500">No products match your filters.</p>
-            <button type="button" onClick={clearFilters} className="mt-4 text-m4m-purple font-medium hover:underline">Clear filters</button>
+            <p className="text-m4m-gray-500">{t('home.no_products_match')}</p>
+            <button type="button" onClick={clearFilters} className="mt-4 text-m4m-purple font-medium hover:underline">{t('home.clear_filters')}</button>
           </div>
         ) : (
           <>
@@ -850,7 +850,7 @@ export default function HomePage() {
               type="button"
               className="absolute inset-0 bg-black/40"
               onClick={() => setMobileFiltersOpen(false)}
-              aria-label="Close filters"
+              aria-label={t('home.clear_filters')}
             />
             {/* Drawer */}
             <div
@@ -859,13 +859,13 @@ export default function HomePage() {
               }`}
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-m4m-gray-200">
-                <h3 className="text-sm font-semibold text-m4m-black">Filters</h3>
+                <h3 className="text-sm font-semibold text-m4m-black">{t('home.filters')}</h3>
                 <button
                   type="button"
                   className="text-sm text-m4m-gray-500"
                   onClick={() => setMobileFiltersOpen(false)}
                 >
-                  Close
+                  {t('common.close')}
                 </button>
               </div>
               <div className="p-4 space-y-4 text-sm">
@@ -875,7 +875,7 @@ export default function HomePage() {
                     htmlFor="mobile-filter-seller"
                     className="block text-xs font-medium text-m4m-gray-500 mb-1.5"
                   >
-                    Seller
+                    {t('home.seller')}
                   </label>
                   <select
                     id="mobile-filter-seller"
@@ -883,7 +883,7 @@ export default function HomePage() {
                     onChange={(e) => handleSellerChange(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors"
                   >
-                    <option value="">All sellers</option>
+                    <option value="">{t('home.all_sellers')}</option>
                     {uniqueSellers.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
@@ -895,14 +895,14 @@ export default function HomePage() {
                 {/* Price range */}
                 <div>
                   <span className="block text-xs font-medium text-m4m-gray-500 mb-1.5">
-                    Price range
+                    {t('home.price_range')}
                   </span>
                   <div className="flex items-center gap-2 mb-2">
                     <input
                       type="number"
                       min="0"
                       step="0.01"
-                      placeholder="Min"
+                      placeholder={t('home.min')}
                       value={priceMin}
                       onChange={(e) => handlePriceMinChange(e.target.value)}
                       className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none"
@@ -912,16 +912,16 @@ export default function HomePage() {
                       type="number"
                       min="0"
                       step="0.01"
-                      placeholder="Max"
+                      placeholder={t('home.max')}
                       value={priceMax}
                       onChange={(e) => handlePriceMaxChange(e.target.value)}
                       className="w-20 px-2.5 py-2 rounded-lg border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:bg-white outline-none"
                     />
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {PRICE_PRESETS.slice(1).map((preset) => (
+                    {PRICE_PRESETS_KEYS.slice(1).map((preset) => (
                       <button
-                        key={preset.label}
+                        key={t(preset.labelKey)}
                         type="button"
                         onClick={() => handlePricePreset(preset)}
                         className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -930,7 +930,7 @@ export default function HomePage() {
                             : 'bg-m4m-gray-100 text-m4m-gray-700 hover:bg-m4m-gray-200'
                         }`}
                       >
-                        {preset.label}
+                        {t(preset.labelKey)}
                       </button>
                     ))}
                   </div>
@@ -942,7 +942,7 @@ export default function HomePage() {
                     htmlFor="mobile-filter-rating"
                     className="block text-xs font-medium text-m4m-gray-500 mb-1.5"
                   >
-                    Rating
+                    {t('home.rating')}
                   </label>
                   <select
                     id="mobile-filter-rating"
@@ -950,9 +950,9 @@ export default function HomePage() {
                     onChange={(e) => handleRatingChange(e.target.value)}
                     className="w-full px-3 py-2.5 rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/50 text-m4m-black text-sm focus:ring-2 focus:ring-m4m-purple focus:border-transparent focus:bg-white outline-none transition-colors"
                   >
-                    {RATING_OPTIONS.map((opt) => (
+                    {RATING_OPTIONS_KEYS.map((opt) => (
                       <option key={opt.value || 'any'} value={opt.value}>
-                        {opt.label}
+                        {t(opt.labelKey)}
                       </option>
                     ))}
                   </select>
@@ -998,24 +998,24 @@ export default function HomePage() {
           <div className="absolute top-10 left-10 w-72 h-72 bg-m4m-purple rounded-full blur-3xl" />
           <div className="absolute bottom-0 right-10 w-96 h-64 bg-purple-400 rounded-full blur-3xl" />
         </div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 md:py-20 flex flex-col md:flex-row items-center gap-10">
+        <div className="relative max-w-7xl mx-auto px-4 md:px-8 py-14 md:py-20 flex flex-col md:flex-row items-center md:items-start justify-center md:justify-between gap-10">
           <div className="flex-1 text-center md:text-left">
             <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-1.5 text-sm text-white/80 mb-5">
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
               Trusted by 10,000+ gamers worldwide
             </div>
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight mb-5">
-              Buy & Sell Digital Products Instantly
+              {t("home.hero_title")}
             </h1>
             <p className="text-base md:text-lg text-gray-300 max-w-xl mb-8 mx-auto md:mx-0 leading-relaxed">
-              Secure marketplace for gaming accounts, digital credits and game services — delivered instantly worldwide.
+              {t("home.hero_subtitle")}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
               <Link
                 to="/marketplace"
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
               >
-                Browse Products
+                {t("home.browse_products")}
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                 </svg>
@@ -1024,7 +1024,7 @@ export default function HomePage() {
                 to="/help/how-to-sell"
                 className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-white/10 border border-white/20 text-white hover:bg-white/20 transition-colors"
               >
-                Become a Seller
+                {t("home.become_seller")}
               </Link>
             </div>
             <p className="mt-6 text-sm text-gray-400">
@@ -1035,9 +1035,9 @@ export default function HomePage() {
                 4.8 average seller rating
               </span>
               <br />
-              <span className="text-gray-500">Trusted by thousands of gamers worldwide</span>
+              <span className="text-gray-500">{t("home.trusted_gamers")}</span>
             </p>
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6 mt-4">
+            <div className="flex flex-wrap justify-center md:justify-start items-center gap-4 md:gap-6 mt-4">
               {['steam', 'discord', 'netflix', 'spotify', 'fortnite', 'playstation', 'xbox', 'nintendo'].map((slug) => (
                 <img
                   key={slug}
@@ -1051,14 +1051,14 @@ export default function HomePage() {
           {/* Stats */}
           <div className="flex-shrink-0 grid grid-cols-2 gap-3">
             {[
-              { label: 'Products', value: '500+' },
-              { label: 'Sellers', value: '120+' },
-              { label: 'Orders', value: '8K+' },
-              { label: 'Happy Buyers', value: '5K+' },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-5 text-center">
+              { labelKey: 'home.stats_products', value: '500+' },
+              { labelKey: 'home.stats_sellers', value: '120+' },
+              { labelKey: 'home.stats_orders', value: '8K+' },
+              { labelKey: 'home.stats_buyers', value: '5K+' },
+            ].map(({ labelKey, value }) => (
+              <div key={labelKey} className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-5 text-center">
                 <p className="text-2xl font-bold text-white">{value}</p>
-                <p className="text-sm text-gray-400 mt-1">{label}</p>
+                <p className="text-sm text-gray-400 mt-1">{t(labelKey)}</p>
               </div>
             ))}
           </div>
@@ -1070,16 +1070,16 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
             {[
-              { icon: Lock, title: 'Secure marketplace', desc: 'All transactions are encrypted & protected' },
-              { icon: BadgeCheck, title: 'Verified sellers', desc: 'Sellers are reviewed and badge-approved' },
-              { icon: ShieldCheck, title: 'Buyer protection', desc: 'Full refund if you don\'t receive your order' },
-              { icon: Zap, title: 'Instant delivery', desc: 'Many products delivered automatically' },
-            ].map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="p-4 rounded-xl border border-gray-200 bg-white hover:shadow-md transition-shadow flex flex-col gap-2 min-w-0">
+              { icon: Lock, titleKey: 'home.trust_secure_marketplace', descKey: 'home.trust_secure_desc' },
+              { icon: BadgeCheck, titleKey: 'home.trust_verified_sellers', descKey: 'home.trust_verified_desc' },
+              { icon: ShieldCheck, titleKey: 'home.trust_buyer_protection', descKey: 'home.trust_buyer_desc' },
+              { icon: Zap, titleKey: 'home.trust_instant_delivery', descKey: 'home.trust_instant_desc' },
+            ].map(({ icon: Icon, titleKey, descKey }) => (
+              <div key={titleKey} className="p-4 rounded-xl border border-gray-200 bg-white hover:shadow-md transition-shadow flex flex-col gap-2 min-w-0">
                 <Icon className="w-6 h-6 text-m4m-purple flex-shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900">{title}</p>
-                  <p className="text-xs text-gray-500 leading-tight hidden sm:block">{desc}</p>
+                  <p className="text-sm font-semibold text-gray-900">{t(titleKey)}</p>
+                  <p className="text-xs text-gray-500 leading-tight hidden sm:block">{t(descKey)}</p>
                 </div>
               </div>
             ))}
@@ -1093,16 +1093,16 @@ export default function HomePage() {
           <section className="mb-6 md:mb-8">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div>
-                <h2 className="text-lg font-semibold text-m4m-black">Categories</h2>
+                <h2 className="text-lg font-semibold text-m4m-black">{t('home.categories')}</h2>
                 <p className="text-sm text-m4m-gray-500">
-                  Browse by game or service
+                  {t('home.browse_filter')}
                 </p>
               </div>
               <Link
                 to="/marketplace"
                 className="text-sm font-medium text-m4m-purple hover:underline"
               >
-                See all
+                {t('common.see_all')}
               </Link>
             </div>
 
@@ -1129,7 +1129,7 @@ export default function HomePage() {
                         type="button"
                         className="text-[11px] font-medium text-m4m-purple hover:underline"
                       >
-                        {groupName === 'Services' ? 'Show all services →' : 'Show all games →'}
+                        {groupName === 'Services' ? t('home.show_all_services') : t('home.show_all_games')}
                       </button>
                     </div>
                     <div className="grid grid-cols-4 lg:grid-cols-7 gap-3">
@@ -1153,17 +1153,17 @@ export default function HomePage() {
               <div>
                 <h2 className="flex items-center gap-2 text-lg font-semibold text-m4m-black">
                   <Flame className="w-4 h-4 text-m4m-purple" />
-                  Flash Deals
+                  {t('home.flash_deals_title')}
                 </h2>
                 <p className="text-sm text-m4m-gray-500">
-                  Limited-time discounts on popular products
+                  {t('home.flash_deals_subtitle')}
                 </p>
               </div>
               <Link
                 to="/marketplace?sort=trending"
                 className="text-sm font-medium text-m4m-purple hover:underline"
               >
-                See all
+                {t('common.see_all')}
               </Link>
             </div>
             <div className="rounded-2xl border border-m4m-gray-200 bg-white p-3 md:p-5">
@@ -1193,16 +1193,16 @@ export default function HomePage() {
           <section className="mb-6 md:mb-8">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div>
-                <h2 className="text-lg font-semibold text-m4m-black">Recently Viewed</h2>
+                <h2 className="text-lg font-semibold text-m4m-black">{t('home.recently_viewed')}</h2>
                 <p className="text-sm text-m4m-gray-500">
-                  Products you opened recently on M4M
+                  {t('home.browse_filter')}
                 </p>
               </div>
               <Link
                 to="/recently-viewed"
                 className="text-sm font-medium text-m4m-purple hover:underline"
               >
-                See all
+                {t('common.see_all')}
               </Link>
             </div>
             <div className="rounded-2xl border border-m4m-gray-200 bg-white p-3 md:p-5">

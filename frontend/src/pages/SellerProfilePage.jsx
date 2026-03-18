@@ -5,6 +5,7 @@ import ReportModal from '../components/ReportModal';
 import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
 import { getProducts, getSellerProfile, getPublicSellerStats, paginatedItems, submitReport, getFavoriteIds, toggleFavorite, getToken, createConversation } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 function getLastSeenLabel(lastActivityAt) {
   if (!lastActivityAt) return 'Offline';
@@ -45,6 +46,7 @@ function StatBadge({ label, value }) {
 export default function SellerProfilePage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [seller, setSeller] = useState(null);
   const [products, setProducts] = useState([]);
@@ -229,7 +231,7 @@ export default function SellerProfilePage() {
                   {isVerified && <VerifiedBadge size="lg" />}
                   {sellerLevel != null && (
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
-                      Seller Level: {sellerLevel}
+                      {t('product.seller_level')} {sellerLevel}
                     </span>
                   )}
                 </div>
@@ -244,7 +246,7 @@ export default function SellerProfilePage() {
                 )}
                 {memberSinceLabel && (
                   <p className="mt-1 text-xs text-m4m-gray-500">
-                    Member since: <span className="font-medium text-m4m-black">{memberSinceLabel}</span>
+                    {t('product.member_since')}: <span className="font-medium text-m4m-black">{memberSinceLabel}</span>
                   </p>
                 )}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -277,7 +279,7 @@ export default function SellerProfilePage() {
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M5 20l2.586-2.586A2 2 0 018.828 17H19a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11l2-2" />
                   </svg>
-                  Chat with seller
+                  {t('product.chat_with_seller')}
                 </button>
                 <button
                   type="button"

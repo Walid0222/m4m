@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { AlertCircle, Star, Zap, CheckCircle2, Lock, ShieldCheck, Flame, Info, BadgeCheck, Umbrella, Sun, X } from 'lucide-react';
 import {
   getProduct,
@@ -79,6 +80,7 @@ function PurchaseConfirmModal({
   const seller = product.seller || {};
   const salesBadge = getSellerSalesBadge(seller.completed_sales ?? seller.completedSales ?? 0);
   const isVerified = seller.is_verified === true || seller.is_verified === 1;
+  const { t } = useLanguage();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onCancel}>
       <div className="rounded-2xl bg-white shadow-2xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
@@ -88,9 +90,9 @@ function PurchaseConfirmModal({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Confirm your purchase</h3>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">{t('product.confirm_purchase')}</h3>
           <p className="text-sm text-gray-600 leading-relaxed">
-            Before completing your purchase, please check the seller reviews and product description carefully.
+            {t('product.confirm_help')}
           </p>
         </div>
         {/* Seller trust info */}
@@ -100,13 +102,13 @@ function PurchaseConfirmModal({
             {isVerified && (
               <p className="flex items-center gap-1.5">
                 <BadgeCheck className="w-3.5 h-3.5 text-blue-600" />
-                <span><strong>Verified seller</strong> — identity confirmed by M4M team.</span>
+                <span><strong>{t('product.verified_seller').split(' — ')[0]}</strong>{' — '}{t('product.verified_seller').split(' — ')[1] || ''}</span>
               </p>
             )}
             {salesBadge && (
               <p className="flex items-center gap-1.5">
                 <Flame className="w-3.5 h-3.5 text-amber-600" />
-                <span><strong>{salesBadge.label}</strong> — seller has a strong track record.</span>
+                <span><strong>{salesBadge.label}</strong> — {t('product.strong_track_record')}</span>
               </p>
             )}
             {seller.seller_level != null && (
@@ -125,22 +127,22 @@ function PurchaseConfirmModal({
         </div>
         <div className="rounded-xl bg-gray-50 border border-gray-200 p-4 mb-5 space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Product</span>
+                <span className="text-gray-500">{t('product.product')}</span>
             <span className="font-medium text-gray-900 text-right max-w-[60%] line-clamp-1">{product.name}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Quantity</span>
+            <span className="text-gray-500">{t('product.quantity')}</span>
             <span className="font-medium text-gray-900">{quantity}</span>
           </div>
           <div className="flex justify-between text-xs text-gray-600 border-t border-gray-200 pt-2 mt-2">
-            <span>Subtotal</span>
+            <span>{t('product.subtotal')}</span>
             <span className="font-medium text-gray-900">{Math.round(Number(subtotal || 0))} MAD</span>
           </div>
           <div className="flex items-center justify-between gap-2 text-xs">
             <div className="flex flex-col">
-              <span className="font-medium text-gray-700">Coupon code</span>
+              <span className="font-medium text-gray-700">{t('product.coupon_code')}</span>
               <span className="text-[11px] text-gray-500">
-                Apply a valid coupon to reduce your total. Seller earnings are not reduced.
+                {t('product.coupon_help')}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -157,7 +159,7 @@ function PurchaseConfirmModal({
                 disabled={isCheckingCoupon || !couponCode.trim()}
                 className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60"
               >
-                {isCheckingCoupon ? 'Checking…' : 'Apply'}
+                {isCheckingCoupon ? t('product.checking') : t('product.apply')}
               </button>
             </div>
           </div>
@@ -166,21 +168,21 @@ function PurchaseConfirmModal({
           )}
           {discountAmount > 0 && (
             <div className="flex justify-between text-xs text-green-700 mt-1">
-              <span>Coupon discount</span>
+              <span>{t('product.coupon_discount')}</span>
               <span>-{Math.round(Number(discountAmount || 0))} MAD</span>
             </div>
           )}
           <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
-            <span className="font-semibold text-gray-900">Final total</span>
+            <span className="font-semibold text-gray-900">{t('product.final_total')}</span>
             <span className="font-bold text-gray-900">{Math.round(Number(finalTotal || 0))} MAD</span>
           </div>
           {onBuyerNoteChange && (
             <div className="mt-3 pt-3 border-t border-gray-200">
-              <label className="block text-xs font-medium text-gray-700 mb-1">Order note (optional)</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">{t('product.order_note')}</label>
               <textarea
                 value={buyerNote || ''}
                 onChange={(e) => onBuyerNoteChange(e.target.value)}
-                placeholder="e.g. Please deliver as soon as possible."
+                placeholder={t('product.placeholder_note')}
                 rows={2}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-900 focus:ring-2 focus:ring-m4m-purple outline-none resize-none"
               />
@@ -188,9 +190,9 @@ function PurchaseConfirmModal({
           )}
         </div>
         <div className="flex gap-3">
-          <button type="button" onClick={onCancel} className="flex-1 py-3 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+          <button type="button" onClick={onCancel} className="flex-1 py-3 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">{t('common.cancel')}</button>
           <button type="button" onClick={onConfirm} disabled={isLoading} className="flex-1 py-3 rounded-xl font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-70 transition-colors">
-            {isLoading ? 'Processing…' : 'Confirm purchase'}
+            {isLoading ? t('product.processing') : t('product.confirm_purchase_btn')}
           </button>
         </div>
       </div>
@@ -203,6 +205,7 @@ export default function ProductPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { marketplaceSettings } = useMarketplaceSettings();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -405,8 +408,8 @@ export default function ProductPage() {
     if (!settings?.showViewingIndicator) return null;
     if (viewers === 0) return null;
     const threshold = settings?.exactViewerThreshold ?? 5;
-    if (viewers < threshold) return settings?.lowViewerText ?? 'Several people are viewing this item';
-    return `${viewers} people are viewing this item`;
+    if (viewers < threshold) return settings?.lowViewerText ?? t('product.viewing_now');
+    return `${viewers} ${t('product.viewing_now')}`;
   }, [viewers, settings?.showViewingIndicator, settings?.exactViewerThreshold, settings?.lowViewerText]);
 
   const handleSubmitReview = async (e) => {
@@ -578,7 +581,7 @@ export default function ProductPage() {
     if (Number.isNaN(ts)) return null;
     const diffMs = Date.now() - ts;
     const diffMin = Math.max(0, Math.round(diffMs / 60000));
-    if (diffMin < 2) return 'Online';
+    if (diffMin < 2) return t('product.online');
     if (diffMin < 60) return `Last seen ${diffMin} minute${diffMin !== 1 ? 's' : ''} ago`;
     const diffHours = Math.round(diffMin / 60);
     return `Last seen ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
@@ -662,7 +665,7 @@ export default function ProductPage() {
               ) : (
                 <div className="flex flex-col items-center gap-2 text-gray-400">
                   <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  <span className="text-sm">No image</span>
+                  <span className="text-sm">{t('product.no_image')}</span>
                 </div>
               )}
             </div>
@@ -784,7 +787,7 @@ export default function ProductPage() {
                     isOutOfStock ? 'text-red-600' : 'text-green-600'
                   }`}
                 >
-                  {isOutOfStock ? '✕ Out of stock' : `✓ ${stock} in stock`}
+                  {isOutOfStock ? `✕ ${t('product.out_of_stock')}` : `✓ ${stock} ${t('product.in_stock')}`}
                 </span>
                 {deliveryTime && (
                   <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
@@ -862,18 +865,18 @@ export default function ProductPage() {
                     <div className="mt-0.5">
                       <SellerSalesBadge completedSales={seller.completed_sales ?? seller.completedSales ?? 0} />
                     </div>
-                    {sellerMemberSinceLabel && (
+                {sellerMemberSinceLabel && (
                       <p className="text-xs text-gray-500 mt-0.5">
-                        Member since:{' '}
+                        {t('product.member_since')}:{" "}
                         <span className="font-medium text-gray-900">{sellerMemberSinceLabel}</span>
                       </p>
                     )}
-                    <p className="text-xs text-gray-400 mt-0.5">View seller profile</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{t('product.view_seller')}</p>
                   </div>
                 </Link>
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${sellerOnline ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${sellerOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
-                  {lastSeenLabel || (sellerOnline ? 'Online' : 'Last seen recently')}
+                  {lastSeenLabel || (sellerOnline ? t('product.online') : `${t('product.last_seen')} recently`)}
                 </span>
               </div>
               <div className="text-xs text-gray-500 mt-2 space-y-1">
@@ -894,7 +897,7 @@ export default function ProductPage() {
 
             {/* Purchase box (mobile) */}
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">{t('product.quantity')}</label>
               <input
                 type="number"
                 min={1}
@@ -905,7 +908,7 @@ export default function ProductPage() {
                 className="w-24 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none disabled:bg-gray-50 disabled:text-gray-400 mb-4"
               />
               <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
-                <span>Total</span>
+                <span>{t('product.total')}</span>
                 <span className="font-bold text-gray-900 text-base">{Math.round(Number(price || 0) * Number(quantity || 1))} MAD</span>
               </div>
               {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
@@ -915,7 +918,7 @@ export default function ProductPage() {
                 disabled={buying || isOutOfStock || seller.vacation_mode}
                 className="w-full py-3.5 rounded-xl font-bold text-base bg-green-600 text-white hover:bg-green-700 hover:text-white active:bg-green-700 active:text-white disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
               >
-                {buying ? 'Processing…' : isOutOfStock ? 'Out of stock' : seller.vacation_mode ? 'Seller on vacation' : 'BUY NOW'}
+                {buying ? t('product.processing') : isOutOfStock ? t('product.out_of_stock') : seller.vacation_mode ? 'Seller on vacation' : t('product.buy_now')}
               </button>
               {!user && (
                 <p className="text-xs text-gray-400 text-center mt-2">
@@ -925,7 +928,7 @@ export default function ProductPage() {
             <div className="mt-4 text-sm text-gray-600 space-y-1">
               <p className="flex items-center gap-1.5">
                 <Lock className="w-4 h-4" />
-                <span>Secure payment</span>
+                <span>{t('product.secure_payment')}</span>
               </p>
               <p className="flex items-center gap-1.5">
                 <Zap className="w-4 h-4" />
@@ -942,7 +945,7 @@ export default function ProductPage() {
           {/* Description */}
           {product.description && (
             <div className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-3">Description</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-3">{t('product.description')}</h2>
               <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">{product.description}</p>
             </div>
           )}
@@ -995,10 +998,12 @@ export default function ProductPage() {
           {/* Reviews */}
           <section>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-              <h2 className="text-xl font-semibold text-gray-900">Reviews {reviews.length > 0 && <span className="text-gray-400 font-normal text-base">({reviews.length})</span>}</h2>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {t('product.reviews')} {reviews.length > 0 && <span className="text-gray-400 font-normal text-base">({reviews.length})</span>}
+              </h2>
               {user && eligibleOrders.length > 0 && !reviewFormOpen && (
                 <button type="button" onClick={() => { setReviewFormOpen(true); setReviewError(''); setReviewOrderId(eligibleOrders[0]?.id || ''); }} className="px-4 py-2 rounded-xl font-medium bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors text-sm">
-                  Write a review
+                  {t('product.write_review')}
                 </button>
               )}
             </div>
@@ -1200,7 +1205,7 @@ export default function ProductPage() {
                 {viewerText}
               </span>
             )}
-            <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1">
               <span
                 className={`inline-flex items-center gap-1 text-sm font-medium ${
                   isOutOfStock ? 'text-red-600' : 'text-green-600'
@@ -1209,12 +1214,12 @@ export default function ProductPage() {
                 {isOutOfStock ? (
                   <>
                     <X className="w-4 h-4 shrink-0" aria-hidden />
-                    Out of stock
+                    {t('product.out_of_stock')}
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4 shrink-0" aria-hidden />
-                    {stock} in stock
+                    {stock} {t('product.in_stock')}
                   </>
                 )}
               </span>
@@ -1330,7 +1335,7 @@ export default function ProductPage() {
 
           {/* Purchase section */}
           <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">{t('product.quantity')}</label>
             <input
               type="number"
               min={1}
@@ -1341,7 +1346,7 @@ export default function ProductPage() {
               className="w-24 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none disabled:bg-gray-50 disabled:text-gray-400 mb-4"
             />
             <div className="flex items-center justify-between text-sm text-gray-500 mb-3">
-              <span>Total</span>
+              <span>{t('product.total')}</span>
               <span className="font-bold text-gray-900 text-base">{Math.round(Number(price || 0) * Number(quantity || 1))} MAD</span>
             </div>
             {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
@@ -1351,7 +1356,7 @@ export default function ProductPage() {
               disabled={buying || isOutOfStock || seller.vacation_mode}
               className="w-full py-3.5 rounded-xl font-bold text-base bg-green-600 text-white hover:bg-green-700 hover:text-white active:bg-green-700 active:text-white disabled:opacity-60 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
-              {buying ? 'Processing…' : isOutOfStock ? 'Out of stock' : seller.vacation_mode ? 'Seller on vacation' : 'BUY NOW'}
+              {buying ? t('product.processing') : isOutOfStock ? t('product.out_of_stock') : seller.vacation_mode ? 'Seller on vacation' : t('product.buy_now')}
             </button>
             {!user && (
               <p className="text-xs text-gray-400 text-center mt-2">You need to <Link to="/login" className="text-m4m-purple font-medium hover:underline">sign in</Link> to purchase</p>
@@ -1361,25 +1366,25 @@ export default function ProductPage() {
             <div className="mt-4 text-sm text-gray-600 space-y-1">
               <p className="flex items-center gap-1.5">
                 <Lock className="w-4 h-4" />
-                <span>Secure payment</span>
+                <span>{t('product.secure_payment')}</span>
               </p>
               <p className="flex items-center gap-1.5">
                 <Zap className="w-4 h-4" />
-                <span>{product.delivery_type === 'instant' ? 'Instant delivery' : 'Delivery as described'}</span>
+                <span>{product.delivery_type === 'instant' ? t('product.instant_delivery') : t('product.delivery_as_described')}</span>
               </p>
               <p className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4" />
-                <span>Buyer protection</span>
+                <span>{t('product.buyer_protection')}</span>
               </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Similar products / More from this seller */}
+          {/* Similar products / More from this seller */}
       {similarProducts.length > 0 && (
         <section className="mt-12 pt-10 border-t border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900 mb-5">More from this seller</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-5">{t('product.more_from_seller')}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {similarProducts.map((p) => (
               <ProductCard
@@ -1393,10 +1398,10 @@ export default function ProductPage() {
         </section>
       )}
 
-      {/* Recommended products */}
+          {/* Recommended products */}
       {recommendedProducts.length > 0 && (
         <section className="mt-10">
-          <h2 className="text-xl font-semibold text-gray-900 mb-5">Recommended for you</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-5">{t('product.recommended_for_you')}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {recommendedProducts.map((p) => (
               <ProductCard

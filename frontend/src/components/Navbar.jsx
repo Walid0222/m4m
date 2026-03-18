@@ -18,6 +18,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getWallet, getNotifications, markNotificationRead, searchOfferTypes, getToken, getSellerWarnings, toggleVacationMode, getConversationsUnreadTotal } from '../services/api';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -66,6 +67,7 @@ export default function Navbar() {
   const desktopNotificationsRef = useRef(null);
   const mobileNotificationsRef = useRef(null);
   const { showBalance, toggleShowBalance } = useBalanceVisibility();
+  const { language, setLanguage, t } = useLanguage();
 
   useEffect(() => {
     setSearchQuery(searchParams.get('search') || '');
@@ -458,76 +460,118 @@ export default function Navbar() {
           </div>
         </div>
       )}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center h-14 md:h-16 gap-3 md:gap-4">
+      <div className="max-w-7xl mx-auto px-4 md:px-8">
+        <div className="flex items-center h-14 md:h-16 gap-4 md:gap-6 justify-between">
 
-          {/* Logo */}
-          <Link to="/" onClick={closeAll} className="flex-shrink-0 text-xl font-bold text-m4m-purple">
-            M4M
-          </Link>
+          {/* LEFT: Logo */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <Link to="/" onClick={closeAll} className="text-xl font-bold text-m4m-purple">
+              M4M
+            </Link>
+          </div>
 
-          {/* Center: search with autocomplete */}
-          <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-lg mx-auto" ref={searchRef}>
-            <div className="relative w-full">
-              <input
-                type="search"
-                placeholder="Search products..."
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); }}
-                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                className="w-full h-10 pl-4 pr-10 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:border-transparent text-sm"
-                aria-label="Search products"
-                autoComplete="off"
-              />
-              <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-m4m-purple transition-colors" aria-label="Search">
-                {suggestionLoading
-                  ? <span className="w-4 h-4 border-2 border-gray-300 border-t-m4m-purple rounded-full animate-spin block" />
-                  : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                }
-              </button>
-              {/* Suggestions dropdown */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                  {suggestions.map((ot) => (
-                    <button
-                      key={ot.id}
-                      type="button"
-                      onMouseDown={() => handleSuggestionClick(ot)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
-                    >
-                      <div className="w-9 h-9 rounded-lg bg-purple-100 flex-shrink-0 flex items-center justify-center text-purple-600 text-sm">
-                        {ot.icon || (
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10l9 4 9-4V7" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {highlightSearchInName(ot.service?.name ? `${ot.service.name} ${ot.name}` : ot.name, searchQuery)}
-                        </p>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getCategoryColor(ot.category?.slug)}`}>
-                            {ot.category?.name || 'Service'}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                  <button
-                    type="submit"
-                    className="w-full px-4 py-2.5 text-sm text-m4m-purple font-medium text-center hover:bg-purple-50 border-t border-gray-100 transition-colors"
+          {/* CENTER: search with autocomplete */}
+          <div className="hidden md:flex flex-1 justify-center px-2 md:px-6">
+            <form onSubmit={handleSearch} className="w-full max-w-xl" ref={searchRef}>
+              <div className="group relative w-full">
+                {/* Search icon (left) */}
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                  <svg
+                    className="w-4 h-4 text-gray-400 group-focus-within:text-m4m-purple transition-colors"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    See all results for &quot;{searchQuery}&quot; →
-                  </button>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
                 </div>
-              )}
-            </div>
-          </form>
 
-          {/* Right actions */}
-          <div className="hidden md:flex items-center gap-1 ml-auto">
+                <input
+                  type="search"
+                  placeholder={t('nav.search_placeholder')}
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); }}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  className="w-full h-10 pl-9 pr-10 rounded-xl border border-purple-100 bg-white/70 backdrop-blur-md text-gray-900 placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-400 focus:bg-white focus:shadow-md text-sm transition-all duration-200"
+                  aria-label={t('nav.search_placeholder')}
+                  autoComplete="off"
+                />
+
+                <button
+                  type="submit"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-m4m-purple transition-colors"
+                  aria-label="Search"
+                >
+                  {suggestionLoading ? (
+                    <span className="w-4 h-4 border-2 border-gray-300 border-t-m4m-purple rounded-full animate-spin block" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+                  )}
+                </button>
+
+                {/* Suggestions dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                    {suggestions.map((ot) => (
+                      <button
+                        key={ot.id}
+                        type="button"
+                        onMouseDown={() => handleSuggestionClick(ot)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-purple-100 flex-shrink-0 flex items-center justify-center text-purple-600 text-sm">
+                          {ot.icon || (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10l9 4 9-4V7" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {highlightSearchInName(
+                              ot.service?.name ? `${ot.service.name} ${ot.name}` : ot.name,
+                              searchQuery
+                            )}
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getCategoryColor(
+                                ot.category?.slug
+                              )}`}
+                            >
+                              {ot.category?.name || 'Service'}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                    <button
+                      type="submit"
+                      className="w-full px-4 py-2.5 text-sm text-m4m-purple font-medium text-center hover:bg-purple-50 border-t border-gray-100 transition-colors"
+                    >
+                      See all results for &quot;{searchQuery}&quot; →
+                    </button>
+                  </div>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* RIGHT: icons + user menu */}
+          <div className="hidden md:flex items-center gap-2">
             {user && (
               <>
                 {/* Wallet badge */}
@@ -568,7 +612,7 @@ export default function Navbar() {
                     </span>
                   </Link>
                 )}
-
+ 
                 {/* Notification bell */}
                 <div className="relative" ref={desktopNotificationsRef}>
                   <button
@@ -684,7 +728,7 @@ export default function Navbar() {
                     navigate('/chat');
                   }}
                   className="relative p-2 rounded-xl text-gray-500 hover:text-m4m-purple hover:bg-purple-50 transition-colors"
-                  aria-label={unreadMessages > 0 ? `${unreadMessages} unread messages` : 'Messages'}
+                  aria-label={unreadMessages > 0 ? `${unreadMessages} unread messages` : t('nav.messages')}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M5 20l2.586-2.586A2 2 0 018.828 17H19a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11l2-2" />
@@ -718,30 +762,31 @@ export default function Navbar() {
                         : (user.name?.charAt(0)?.toUpperCase() || '?')
                       }
                     </span>
-                    <span className="hidden lg:inline max-w-[96px] truncate text-gray-700">{user.name}</span>
+                   {/*  <span className="hidden lg:inline max-w-[96px] truncate text-gray-700">{user.name}</span>
                     <svg className={`w-4 h-4 text-gray-400 transition-transform ${profileOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    </svg> */}
                   </button>
+                  
                   {profileOpen && (
                     <div className="absolute right-0 mt-2 w-60 rounded-2xl bg-white border border-gray-200 shadow-xl py-1 z-50">
                       <div className="px-4 py-3 border-b border-gray-100">
                         <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
                         <p className="text-xs text-gray-400 truncate">{user.email}</p>
                       </div>
-                      <DropdownLink to="/profile" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}>My Profile</DropdownLink>
-                      <DropdownLink to="/orders" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>}>My Orders</DropdownLink>
-                      <DropdownLink to="/favorites" icon={<svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>}>My Favorites</DropdownLink>
+                      <DropdownLink to="/profile" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}>{t('nav.profile')}</DropdownLink>
+                      <DropdownLink to="/orders" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>}>{t('nav.orders')}</DropdownLink>
+                      <DropdownLink to="/favorites" icon={<svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>}>{t('nav.favorites')}</DropdownLink>
                       {user.is_admin ? (
                         <DropdownLink to="/admin?tab=disputes" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}>Disputes</DropdownLink>
                       ) : user.is_seller ? (
                         <DropdownLink to="/seller-disputes" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}>Disputes</DropdownLink>
                       ) : (
-                        <DropdownLink to="/disputes" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}>My Disputes</DropdownLink>
+                        <DropdownLink to="/disputes" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>}>{t('nav.my_disputes')}</DropdownLink>
                       )}
-                      <DropdownLink to="/chat" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>}>Messages</DropdownLink>
-                      <DropdownLink to="/wallet" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>}>Wallet</DropdownLink>
-                      <DropdownLink to="/settings" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}>Settings</DropdownLink>
+                      <DropdownLink to="/chat" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>}>{t('nav.messages')}</DropdownLink>
+                      <DropdownLink to="/wallet" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>}>{t('nav.wallet')}</DropdownLink>
+                      <DropdownLink to="/settings" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}>{t('nav.settings')}</DropdownLink>
                       {user.is_seller && (
                         <DropdownLink to="/seller-dashboard" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>}>Seller Dashboard</DropdownLink>
                       )}
@@ -757,22 +802,100 @@ export default function Navbar() {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                           </svg>
-                          Log out
+                          {t('nav.logout')}
                         </button>
-                      </div>
+            </div>
+
+            {/* Desktop language selector (far right) */}
+            
                     </div>
                   )}
+                  
                 </>
               ) : (
                 <Link to="/login" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors">
-                  Log in
+                  {t('nav.login')}
                 </Link>
               )}
             </div>
+            <select
+    value={language}
+    onChange={(e) => setLanguage(e.target.value)}
+    className="
+      px-3 py-1.5
+      rounded-full
+      border border-purple-200
+      text-xs font-semibold
+      bg-white
+      text-m4m-purple
+      shadow-sm
+      hover:border-m4m-purple
+      hover:shadow-md
+      focus:outline-none
+      focus:ring-2 focus:ring-m4m-purple/30
+      transition-all
+      cursor-pointer
+    "
+  >
+    <option value="en">EN</option>
+    <option value="fr">FR</option>
+    <option value="ar">AR</option>
+  </select>
+            
           </div>
 
-          {/* Mobile right: bell + hamburger */}
-          <div className="flex md:hidden items-center gap-1 ml-auto">
+          {/* Mobile right: language + bell + hamburger */}
+          <div className="flex md:hidden items-center gap-1">
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="
+              text-xs
+              px-2 py-1
+              bg-transparent
+              border-0
+              outline-none
+              appearance-none
+              shadow-none
+              "
+            >
+              <option value="en">EN</option>
+              <option value="fr">FR</option>
+              <option value="ar">AR</option>
+            </select>
+            {user && (
+  <button
+    type="button"
+    onClick={() => {
+      setNotificationsOpen(false);
+      setProfileOpen(false);
+      setMobileMenuOpen(false);
+      navigate('/chat');
+    }}
+    className="relative p-2 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
+    aria-label="Messages"
+  >
+    <svg
+      className="w-5 h-5"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 12h.01M12 12h.01M16 12h.01M5 20l2.586-2.586A2 2 0 018.828 17H19a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v11l2-2"
+      />
+    </svg>
+
+    {chatUnreadTotal > 0 && (
+      <span className="absolute top-1 right-1 min-w-[1.1rem] h-[1.1rem] px-0.5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+        {chatUnreadTotal > 99 ? '99+' : chatUnreadTotal}
+      </span>
+    )}
+  </button>
+)}
             {user && (
               <div className="relative" ref={mobileNotificationsRef}>
                 <button
@@ -835,11 +958,11 @@ export default function Navbar() {
               <div className="relative">
                 <input
                   type="search"
-                  placeholder="Search products..."
+                  placeholder={t('nav.search_placeholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full h-11 pl-4 pr-10 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-m4m-purple text-sm"
-                  aria-label="Search products"
+                  aria-label={t('nav.search_placeholder')}
                 />
                 <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-m4m-purple" aria-label="Search">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

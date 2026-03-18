@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function AuthPage() {
   const location = useLocation();
   const fromPath = location.state?.from?.pathname ?? '/';
   const sellerIntent = location.state?.sellerIntent === true;
+  const { t } = useLanguage();
 
   const [isLogin, setIsLogin] = useState(!sellerIntent);
   const [name, setName] = useState('');
@@ -49,7 +51,7 @@ export default function AuthPage() {
         return;
       } else if (!isLogin) {
         if (password !== passwordConfirmation) {
-          setError('Passwords do not match');
+          setError(t('auth.passwords_do_not_match'));
           setSubmitting(false);
           return;
         }
@@ -60,7 +62,7 @@ export default function AuthPage() {
         const payload = await login2fa(twoFaUserId, twoFaCode.trim());
         console.log('2FA RESPONSE:', payload);
         if (!payload?.user) {
-          setError('Invalid 2FA code.');
+          setError(t('auth.invalid_2fa'));
           setSubmitting(false);
           return;
         }
@@ -71,7 +73,7 @@ export default function AuthPage() {
         navigate(fromPath, { replace: true });
       }
     } catch (err) {
-      setError(err.message || 'Something went wrong');
+      setError(err.message || t('common.something_went_wrong'));
     } finally {
       setSubmitting(false);
     }
@@ -81,26 +83,26 @@ export default function AuthPage() {
     <div className="min-h-[60vh] flex items-center justify-center px-4 py-12 bg-m4m-gray-50">
       <div className="w-full max-w-md rounded-2xl border border-m4m-gray-200 bg-white p-8 shadow-sm">
         <h1 className="text-2xl font-bold text-m4m-black mb-2 text-center">
-          {isLogin ? (requires2FA ? 'Two-Factor Authentication' : 'Sign in') : 'Create account'}
+          {isLogin ? (requires2FA ? t('auth.two_factor') : t('auth.sign_in')) : t('auth.create_account')}
         </h1>
         <p className="text-m4m-gray-500 text-center mb-6">
           {isLogin
             ? (requires2FA
-              ? 'Enter the 6-digit code from your authenticator app to continue.'
-              : 'Welcome back to M4M')
-            : 'Join M4M Marketplace'}
+              ? t('auth.enter_2fa_code')
+              : t('auth.welcome_back'))
+            : t('auth.join_m4m')}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           {banInfo && (
             <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm space-y-1">
               {banInfo.ban_type === 'permanent' ? (
-                <p className="font-semibold">Your account has been permanently banned by M4M administration.</p>
+                <p className="font-semibold">{t('auth.banned_permanent')}</p>
               ) : (
-                <p className="font-semibold">Your account is temporarily suspended.</p>
+                <p className="font-semibold">{t('auth.banned_temporary')}</p>
               )}
-              {banInfo.ban_reason && <p><span className="font-medium">Reason:</span> {banInfo.ban_reason}</p>}
+              {banInfo.ban_reason && <p><span className="font-medium">{t('auth.reason')}</span> {banInfo.ban_reason}</p>}
               {banInfo.ban_type === 'temporary' && banInfo.banned_until && (
-                <p><span className="font-medium">Suspension ends:</span> {new Date(banInfo.banned_until).toLocaleString()}</p>
+                <p><span className="font-medium">{t('auth.suspension_ends')}</span> {new Date(banInfo.banned_until).toLocaleString()}</p>
               )}
             </div>
           )}
@@ -112,7 +114,7 @@ export default function AuthPage() {
           {!isLogin && (
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-m4m-gray-700 mb-1">
-                Name
+                {t('auth.name')}
               </label>
               <input
                 id="name"
@@ -121,7 +123,7 @@ export default function AuthPage() {
                 onChange={(e) => setName(e.target.value)}
                 required={!isLogin}
                 className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                placeholder="Your name"
+                placeholder={t('auth.placeholder_name')}
               />
             </div>
           )}
@@ -129,7 +131,7 @@ export default function AuthPage() {
             <>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-m4m-gray-700 mb-1">
-                  Email
+                  {t('auth.email')}
                 </label>
                 <input
                   id="email"
@@ -138,12 +140,12 @@ export default function AuthPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                  placeholder="you@example.com"
+                  placeholder={t('auth.placeholder_email')}
                 />
               </div>
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-m4m-gray-700 mb-1">
-                  Password
+                  {t('auth.password')}
                 </label>
                 <input
                   id="password"
@@ -152,7 +154,7 @@ export default function AuthPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                  placeholder="••••••••"
+                  placeholder={t('auth.placeholder_password')}
                 />
                 {isLogin && (
                   <div className="mt-2">
@@ -160,7 +162,7 @@ export default function AuthPage() {
                       to="/forgot-password"
                       className="text-xs text-m4m-purple hover:underline"
                     >
-                      Forgot your password?
+                      {t('auth.forgot_password')}
                     </Link>
                   </div>
                 )}
@@ -171,7 +173,7 @@ export default function AuthPage() {
             <div className="space-y-3">
               <div>
                 <label htmlFor="twofa" className="block text-sm font-medium text-m4m-gray-700 mb-1">
-                  Enter the 6-digit authenticator code
+                  {t('auth.enter_2fa_label')}
                 </label>
                 <input
                   id="twofa"
@@ -182,10 +184,10 @@ export default function AuthPage() {
                   onChange={(e) => setTwoFaCode(e.target.value)}
                   required
                   className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                  placeholder="123456"
+                  placeholder={t('auth.placeholder_2fa')}
                 />
                 <p className="mt-1 text-xs text-m4m-gray-500">
-                  Open your authenticator app (Google Authenticator, Authy, etc.) and enter the current code for your M4M account.
+                  {t('auth.authenticator_help')}
                 </p>
               </div>
               <div className="flex items-center justify-between gap-3">
@@ -194,7 +196,7 @@ export default function AuthPage() {
                   onClick={() => { setRequires2FA(false); setTwoFaCode(''); setTwoFaUserId(null); }}
                   className="text-xs text-m4m-gray-500 hover:text-m4m-purple"
                 >
-                  ← Back to login
+                  {t('auth.back_to_login')}
                 </button>
               </div>
             </div>
@@ -203,7 +205,7 @@ export default function AuthPage() {
             <>
               <div>
                 <label htmlFor="password_confirmation" className="block text-sm font-medium text-m4m-gray-700 mb-1">
-                  Confirm password
+                  {t('auth.confirm_password')}
                 </label>
                 <input
                   id="password_confirmation"
@@ -212,7 +214,7 @@ export default function AuthPage() {
                   onChange={(e) => setPasswordConfirmation(e.target.value)}
                   required
                   className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                  placeholder="••••••••"
+                  placeholder={t('auth.placeholder_password')}
                 />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -222,7 +224,7 @@ export default function AuthPage() {
                   onChange={(e) => setIsSeller(e.target.checked)}
                   className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple"
                 />
-                <span className="text-sm text-m4m-gray-700">I want to sell on M4M</span>
+                <span className="text-sm text-m4m-gray-700">{t('auth.i_want_to_sell')}</span>
               </label>
             </>
           )}
@@ -232,25 +234,25 @@ export default function AuthPage() {
             className="w-full py-3 rounded-lg font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60 transition-colors"
           >
             {submitting
-              ? 'Please wait…'
+              ? t('auth.please_wait')
               : isLogin
-                ? (requires2FA ? 'Verify code' : 'Sign in')
-                : 'Create account'}
+                ? (requires2FA ? t('auth.verify_code') : t('auth.sign_in'))
+                : t('auth.create_account')}
           </button>
         </form>
         <p className="mt-6 text-center text-sm text-m4m-gray-500">
-          {isLogin ? "Don't have an account? " : 'Already have an account? '}
+          {isLogin ? t('auth.dont_have_account') : t('auth.already_have_account')}
           <button
             type="button"
             onClick={() => { setIsLogin(!isLogin); setError(''); setRequires2FA(false); setTwoFaCode(''); setTwoFaUserId(null); }}
             className="text-m4m-purple font-medium hover:underline"
           >
-            {isLogin ? 'Sign up' : 'Sign in'}
+            {isLogin ? t('auth.sign_up') : t('auth.sign_in')}
           </button>
         </p>
         <p className="mt-4 text-center">
           <Link to="/" className="text-sm text-m4m-gray-500 hover:text-m4m-purple">
-            ← Back to Marketplace
+            {t('auth.back_to_marketplace')}
           </Link>
         </p>
       </div>

@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { isSellerOnline } from '../lib/sellerOnline';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
 import VirtualizedMessages from './VirtualizedMessages';
 
@@ -13,7 +14,7 @@ export default function ChatBox({
   onNewMessageChange,
   onSend,
   sending = false,
-  placeholder = 'Select a conversation',
+  placeholder,
   isTyping = false,
   isSupport = false,
   onBack,
@@ -24,7 +25,9 @@ export default function ChatBox({
   onLoadPrevious,
 }) {
   const { avatar } = useAuth();
+  const { t } = useLanguage();
   const inputRef = useRef(null);
+  const placeholderText = placeholder ?? t('chat.select_conversation');
 
   // Focus input when conversation is selected
   useEffect(() => {
@@ -39,8 +42,8 @@ export default function ChatBox({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
         </div>
-        <p className="text-gray-500 font-medium text-lg">{placeholder}</p>
-        <p className="text-sm text-gray-400 mt-2">Choose a conversation from the left</p>
+        <p className="text-gray-500 font-medium text-lg">{placeholderText}</p>
+        <p className="text-sm text-gray-400 mt-2">{t('chat.choose_conversation')}</p>
       </div>
     );
   }
@@ -61,7 +64,7 @@ export default function ChatBox({
             type="button"
             onClick={onBack}
             className="md:hidden p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors -ml-1"
-            aria-label="Back to conversations"
+            aria-label={t('chat.back_to_conversations')}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -152,7 +155,7 @@ export default function ChatBox({
           <input
             ref={inputRef}
             type="text"
-            placeholder="Type a message..."
+            placeholder={t('chat.placeholder_message')}
             value={newMessage}
             onChange={(e) => {
               onNewMessageChange(e.target.value);
@@ -177,7 +180,7 @@ export default function ChatBox({
             onClick={onSend}
             disabled={sending || inputDisabled || !newMessage.trim()}
             className="p-2.5 rounded-xl bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 flex items-center justify-center"
-            aria-label="Send message"
+            aria-label={t('chat.aria_send')}
           >
             {sending
               ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />

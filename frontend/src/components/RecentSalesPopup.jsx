@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ShoppingCart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const PRODUCTS = [
   'Fortnite 10000 V-Bucks',
@@ -24,6 +25,7 @@ function getRandomMinutesAgo() {
 
 export default function RecentSalesPopup() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   const [productName, setProductName] = useState('');
   const [minutesAgo, setMinutesAgo] = useState(2);
@@ -79,9 +81,9 @@ export default function RecentSalesPopup() {
           <ShoppingCart className="w-4 h-4 text-m4m-purple" />
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-gray-900 mb-0.5">Recent purchase</p>
+          <p className="text-xs font-semibold text-gray-900 mb-0.5">{t('product.recent_purchase')}</p>
           <p className="text-sm font-medium text-gray-800 truncate">{productName}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{minutesAgo} minute{minutesAgo !== 1 ? 's' : ''} ago</p>
+          <p className="text-xs text-gray-500 mt-0.5">{minutesAgo} {t('product.minutes_ago')}</p>
         </div>
       </div>
     </div>

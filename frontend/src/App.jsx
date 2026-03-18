@@ -3,6 +3,7 @@ import { AuthProvider, ProtectedRoute, SellerRoute, AdminRoute } from './context
 import { MarketplaceSettingsProvider } from './contexts/MarketplaceSettingsContext';
 import { RefreshProvider } from './contexts/RefreshContext';
 import { BalanceVisibilityProvider } from './contexts/BalanceVisibilityContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import Layout from './components/Layout';
 import ChatLayout from './layouts/ChatLayout';
 import HomePage from './pages/HomePage';
@@ -32,13 +33,14 @@ import ReviewReminderPopup from './components/ReviewReminderPopup';
 
 export default function App() {
   return (
-    <AuthProvider>
-      <MarketplaceSettingsProvider>
-        <RefreshProvider>
-          <BalanceVisibilityProvider>
-            <BrowserRouter>
-              <ReviewReminderPopup />
-              <Routes>
+    <LanguageProvider>
+      <AuthProvider>
+        <MarketplaceSettingsProvider>
+          <RefreshProvider>
+            <BalanceVisibilityProvider>
+              <BrowserRouter>
+                <ReviewReminderPopup />
+                <Routes>
               <Route path="/" element={<Layout />}>
                 <Route index element={<HomePage />} />
                 <Route path="service/:slug" element={<ServicePage />} />
@@ -157,12 +159,13 @@ export default function App() {
                 <Route index element={<ChatPage />} />
               </Route>
 
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </BrowserRouter>
-          </BalanceVisibilityProvider>
-        </RefreshProvider>
-      </MarketplaceSettingsProvider>
-    </AuthProvider>
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </BrowserRouter>
+            </BalanceVisibilityProvider>
+          </RefreshProvider>
+        </MarketplaceSettingsProvider>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }

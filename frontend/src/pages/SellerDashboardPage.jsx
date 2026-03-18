@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
 import { Eye, EyeOff } from 'lucide-react';
 import {
@@ -316,6 +317,7 @@ function VerificationSection({ user }) {
 
 export default function SellerDashboardPage() {
   const { user, refreshUser } = useAuth();
+  const { t } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -1935,8 +1937,15 @@ export default function SellerDashboardPage() {
                         <label className="block text-sm font-medium text-m4m-gray-700 mb-2">Delivery type</label>
                         <div className="flex gap-3">
                           {['manual', 'instant'].map((dt) => (
-                            <button key={dt} type="button" onClick={() => updateForm('delivery_type', dt)} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors capitalize ${form.delivery_type === dt ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'}`}>
-                              {dt === 'instant' ? 'Instant delivery' : 'Manual delivery'}
+                            <button
+                              key={dt}
+                              type="button"
+                              onClick={() => updateForm('delivery_type', dt)}
+                              className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors capitalize ${
+                                form.delivery_type === dt ? 'bg-m4m-purple text-white border-m4m-purple' : 'bg-white border-m4m-gray-200 text-m4m-gray-700 hover:bg-m4m-gray-50'
+                              }`}
+                            >
+                              {dt === 'instant' ? t('product.instant_delivery') : t('product.manual_delivery')}
                             </button>
                           ))}
                         </div>
