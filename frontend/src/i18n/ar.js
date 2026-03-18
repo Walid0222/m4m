@@ -188,7 +188,7 @@ const arOverrides = {
   "product.online": "متصل",
   "product.offline": "غير متصل",
   "product.buy": "شراء",
-  "product.seller_level": "مستوى البائع",
+  "product.seller_level": "المستوى",
   "product.description": "الوصف",
   "product.game": "اللعبة",
   "product.chat_with_seller": "الدردشة مع البائع",

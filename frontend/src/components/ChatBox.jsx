@@ -50,9 +50,7 @@ export default function ChatBox({
 
   const online = isSellerOnline(otherUser);
   const hasSellerLevel = typeof otherUser?.seller_level === 'number' && otherUser.seller_level > 0;
-  const roleLabel = hasSellerLevel
-    ? `Seller Level ${otherUser.seller_level}`
-    : 'Buyer';
+  const roleLabel = hasSellerLevel ? `Level ${otherUser.seller_level}` : 'Buyer';
 
   return (
     <div className="flex flex-col h-full bg-white">

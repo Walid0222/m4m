@@ -1146,6 +1146,46 @@ export default function HomePage() {
           </section>
         )}
 
+        {/* Recently Viewed - homepage only */}
+        {!isMarketplaceOnly && (recentlyViewedLoading || recentlyViewed.length > 0) && (
+          <section className="mb-6 md:mb-8">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div>
+                <h2 className="text-lg font-semibold text-m4m-black">{t('home.recently_viewed')}</h2>
+                <p className="text-sm text-m4m-gray-500">
+                  {t('home.browse_filter')}
+                </p>
+              </div>
+              <Link
+                to="/recently-viewed"
+                className="text-sm font-medium text-m4m-purple hover:underline"
+              >
+                {t('common.see_all')}
+              </Link>
+            </div>
+            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-3 md:p-5">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
+                {recentlyViewedLoading
+                  ? [1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className="h-full min-h-[320px] rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 animate-pulse"
+                      />
+                    ))
+                  : recentlyViewed.map((product) => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        isFavorited={favoriteIds.includes(Number(product.id))}
+                        onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
+                      />
+                    ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+
         {/* Flash Deals - homepage only */}
         {!isMarketplaceOnly && (trendingLoading || trending.length > 0) && (
           <section className="mb-6 md:mb-8">
@@ -1188,44 +1228,6 @@ export default function HomePage() {
           </section>
         )}
 
-        {/* Recently Viewed - homepage only */}
-        {!isMarketplaceOnly && (recentlyViewedLoading || recentlyViewed.length > 0) && (
-          <section className="mb-6 md:mb-8">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <div>
-                <h2 className="text-lg font-semibold text-m4m-black">{t('home.recently_viewed')}</h2>
-                <p className="text-sm text-m4m-gray-500">
-                  {t('home.browse_filter')}
-                </p>
-              </div>
-              <Link
-                to="/recently-viewed"
-                className="text-sm font-medium text-m4m-purple hover:underline"
-              >
-                {t('common.see_all')}
-              </Link>
-            </div>
-            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-3 md:p-5">
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
-                {recentlyViewedLoading
-                  ? [1, 2, 3, 4].map((i) => (
-                      <div
-                        key={i}
-                        className="h-full min-h-[320px] rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 animate-pulse"
-                      />
-                    ))
-                  : recentlyViewed.map((product) => (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        isFavorited={favoriteIds.includes(Number(product.id))}
-                        onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
-                      />
-                    ))}
-              </div>
-            </div>
-          </section>
-        )}
       </div>
     </>
     )}

@@ -202,7 +202,7 @@ const frOverrides = {
   "product.online": "En ligne",
   "product.offline": "Hors ligne",
   "product.buy": "Acheter",
-  "product.seller_level": "Niveau vendeur",
+  "product.seller_level": "Niveau",
   "product.description": "Description",
   "product.game": "Jeu",
   "product.chat_with_seller": "Discuter avec le vendeur",

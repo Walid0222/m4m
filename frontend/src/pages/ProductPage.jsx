@@ -114,7 +114,9 @@ function PurchaseConfirmModal({
             {seller.seller_level != null && (
               <p className="flex items-center gap-1.5">
                 <Star className="w-3.5 h-3.5 text-purple-600" />
-                <span><strong>Seller Level:</strong> {seller.seller_level}</span>
+                <span>
+                  <strong>Level:</strong> {seller.seller_level}
+                </span>
               </p>
             )}
             {!isVerified && !salesBadge && seller.seller_level == null && (
@@ -880,7 +882,7 @@ export default function ProductPage() {
                 </span>
               </div>
               <div className="text-xs text-gray-500 mt-2 space-y-1">
-                {sellerLevel != null && <div>Seller Level {sellerLevel}</div>}
+                {sellerLevel != null && <div>Level {sellerLevel}</div>}
                 {sellerSuccessRate != null && <div>{Number(sellerSuccessRate).toFixed(0)}% success rate</div>}
                 {sellerCompletedOrders > 0 && <div>{sellerCompletedOrders} orders completed</div>}
               </div>
@@ -1323,7 +1325,7 @@ export default function ProductPage() {
               </span>
             </div>
             <div className="text-xs text-gray-500 mt-2 space-y-1">
-              {sellerLevel != null && <div>Seller Level {sellerLevel}</div>}
+              {sellerLevel != null && <div>Level {sellerLevel}</div>}
               {sellerSuccessRate != null && <div>{Number(sellerSuccessRate).toFixed(0)}% success rate</div>}
               {sellerCompletedOrders > 0 && <div>{sellerCompletedOrders} orders completed</div>}
             </div>

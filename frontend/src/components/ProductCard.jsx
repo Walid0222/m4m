@@ -117,7 +117,7 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
           </Link>
         </h3>
 
-        {/* Seller line: sellername • Online Seller Level 2 */}
+        {/* Seller line: sellername • Online Level 2 */}
         <div className="mt-1 flex items-center gap-1 text-[11px] text-gray-500">
           {seller?.id ? (
             <Link

@@ -240,8 +240,12 @@ export default function Navbar() {
     e.preventDefault();
     const q = searchQuery.trim();
     setShowSuggestions(false);
+    // Navigate first so results & URL update, then close mobile menu
     navigate(q ? `/?search=${encodeURIComponent(q)}` : '/');
-    setMobileMenuOpen(false);
+    if (mobileMenuOpen) {
+      // Defer closing slightly to avoid any potential race with navigation
+      setTimeout(() => setMobileMenuOpen(false), 0);
+    }
   };
 
   const handleSuggestionClick = (offerType) => {
@@ -961,14 +965,66 @@ export default function Navbar() {
                   placeholder={t('nav.search_placeholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                   className="w-full h-11 pl-4 pr-10 rounded-xl border border-gray-200 bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-m4m-purple text-sm"
                   aria-label={t('nav.search_placeholder')}
+                  autoComplete="off"
                 />
-                <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-m4m-purple" aria-label="Search">
+                <button
+                  type="submit"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-m4m-purple"
+                  aria-label="Search"
+                >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 </button>
+
+                {/* Mobile suggestions dropdown (same logic as desktop) */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-64 overflow-y-auto">
+                    {suggestions.map((ot) => (
+                      <button
+                        key={ot.id}
+                        type="button"
+                        onMouseDown={() => handleSuggestionClick(ot)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-purple-100 flex-shrink-0 flex items-center justify-center text-purple-600 text-sm">
+                          {ot.icon || (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10l9 4 9-4V7" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {highlightSearchInName(
+                              ot.service?.name ? `${ot.service.name} ${ot.name}` : ot.name,
+                              searchQuery
+                            )}
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span
+                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getCategoryColor(
+                                ot.category?.slug
+                              )}`}
+                            >
+                              {ot.category?.name || 'Service'}
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                    <button
+                      type="submit"
+                      className="w-full px-4 py-2.5 text-sm text-m4m-purple font-medium text-center hover:bg-purple-50 border-t border-gray-100 transition-colors"
+                    >
+                      See all results for &quot;{searchQuery}&quot; →
+                    </button>
+                  </div>
+                )}
               </div>
             </form>
 

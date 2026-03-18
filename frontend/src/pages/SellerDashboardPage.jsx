@@ -1669,9 +1669,9 @@ export default function SellerDashboardPage() {
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4 text-sm">
                         <div>
-                          <p className="text-xs text-m4m-gray-500">Seller Level</p>
+                          <p className="text-xs text-m4m-gray-500">Level</p>
                           <p className="mt-0.5 text-lg font-semibold text-m4m-black">{sellerLevel}</p>
-                          <p className="text-[11px] text-m4m-gray-400">Seller Level = completed orders ÷ 2</p>
+                          <p className="text-[11px] text-m4m-gray-400">Level = completed orders ÷ 2</p>
                         </div>
                         <div>
                           <p className="text-xs text-m4m-gray-500">Completed orders</p>
