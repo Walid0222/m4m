@@ -143,24 +143,16 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
           )}
         </div>
 
-        {/* Bottom row: price + button (hide price when sold out) */}
-        <div className={`mt-auto pt-1 flex items-center ${isOutOfStock ? 'justify-end' : 'justify-between'}`}>
-          {!isOutOfStock && (
-            <p className="flex items-baseline gap-1 text-base font-semibold text-m4m-purple">
-              {Math.round(Number(product.price || 0))} <span className="text-xs text-gray-500">MAD</span>
-            </p>
-          )}
-          {isOutOfStock ? (
-            <span className="px-2 py-1 rounded text-xs font-semibold bg-gray-100 text-gray-400 cursor-not-allowed select-none" aria-disabled="true">
-              {t('product.out_of_stock')}
+        {/* Bottom row: price + optional sold-out badge (card itself remains clickable) */}
+        <div className="mt-auto pt-1 flex items-center justify-between">
+          <p className="flex items-baseline gap-1 text-base font-semibold text-m4m-purple">
+            {Math.round(Number(product.price || 0))}{' '}
+            <span className="text-xs text-gray-500">MAD</span>
+          </p>
+          {isOutOfStock && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold">
+              {t('product.sold_out')}
             </span>
-          ) : (
-            <Link
-              to={`/product/${id}`}
-              className="px-2 py-1 rounded text-xs font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
-            >
-              {t('product.buy')}
-            </Link>
           )}
         </div>
       </article>
@@ -184,11 +176,6 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
             {is_pinned && (
               <span className="px-2 py-0.5 rounded-lg bg-amber-400/95 text-amber-900 text-[10px] font-semibold uppercase tracking-wide w-fit">
                 {t('common.featured') || 'Featured'}
-              </span>
-            )}
-            {isOutOfStock && (
-              <span className="px-2 py-0.5 rounded-lg bg-red-500/90 text-white text-[10px] font-semibold uppercase tracking-wide w-fit">
-                {t('product.out_of_stock')}
               </span>
             )}
             {!isOutOfStock && isInstant && (
@@ -290,7 +277,7 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
             <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-green-500' : 'bg-gray-300'}`} />
             {online ? t('product.online') : t('product.offline')}
           </span>
-          {isVerified && <VerifiedBadge />}
+          {/* Verified badge intentionally only shown on image corner to reduce clutter */}
           <SellerSalesBadge completedSales={completedSales} />
           {sellerLevel != null && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 text-indigo-700">
@@ -311,27 +298,16 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
           )}
         </div>
 
-        {/* Price and Buy button: same line when available; sold out shows only grey button */}
-        <div className={`mt-auto pt-3 flex items-center gap-2 border-t border-gray-100 ${isOutOfStock ? 'justify-end' : 'justify-between'}`}>
-          {!isOutOfStock && (
-            <p className={`flex items-baseline gap-1 text-m4m-purple ${priceTextClass} font-semibold`}>
-              {Math.round(Number(product.price || 0))} <span className="text-xs text-gray-500">MAD</span>
-            </p>
-          )}
-          {isOutOfStock ? (
-            <span
-              className="flex-shrink-0 px-4 py-2 rounded-lg font-semibold bg-gray-100 text-gray-400 cursor-not-allowed select-none"
-              aria-disabled="true"
-            >
+        {/* Price + optional sold-out badge; card itself is the primary click target */}
+        <div className="mt-auto pt-3 flex items-center gap-2 border-t border-gray-100 justify-between">
+          <p className={`flex items-baseline gap-1 text-m4m-purple ${priceTextClass} font-semibold`}>
+            {Math.round(Number(product.price || 0))}{' '}
+            <span className="text-xs text-gray-500">MAD</span>
+          </p>
+          {isOutOfStock && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-semibold">
               {t('product.sold_out')}
             </span>
-          ) : (
-            <Link
-              to={`/product/${id}`}
-              className={`flex-shrink-0 px-4 py-2 rounded-lg font-semibold ${buyButtonTextClass} bg-m4m-purple text-white hover:bg-m4m-purple-dark active:bg-m4m-purple-dark transition-colors`}
-            >
-              {t('product.buy')}
-            </Link>
           )}
         </div>
       </div>
