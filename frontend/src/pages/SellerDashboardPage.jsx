@@ -320,6 +320,7 @@ export default function SellerDashboardPage() {
   const { t } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
+  const [productSearchQuery, setProductSearchQuery] = useState('');
   const [orders, setOrders] = useState([]);
   const [walletBalance, setWalletBalance] = useState(null);
   const [escrowData, setEscrowData] = useState(null);
@@ -386,6 +387,7 @@ export default function SellerDashboardPage() {
   const [offerTypes, setOfferTypes] = useState([]);
   const [serviceRequestModalOpen, setServiceRequestModalOpen] = useState(false);
   const [serviceRequests, setServiceRequests] = useState([]);
+  const [isRequestsOpen, setIsRequestsOpen] = useState(false);
   const [serviceRequestForm, setServiceRequestForm] = useState({ service_name: '', category_id: '', description: '' });
   const [serviceRequestSubmitting, setServiceRequestSubmitting] = useState(false);
   const [serviceRequestError, setServiceRequestError] = useState('');
@@ -409,6 +411,12 @@ export default function SellerDashboardPage() {
       }).length,
     [serviceRequests]
   );
+
+  const filteredProducts = useMemo(() => {
+    const q = (productSearchQuery || '').trim().toLowerCase();
+    if (!q) return products;
+    return (products || []).filter((p) => (p.name || '').toLowerCase().includes(q));
+  }, [products, productSearchQuery]);
 
   const fetchProducts = useCallback(async (options = { showLoading: true }) => {
     if (!getToken() || !user?.is_seller) return;
@@ -1753,8 +1761,11 @@ export default function SellerDashboardPage() {
 
         {section === 'products' && (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-              <h1 className="text-xl font-bold text-m4m-black">Products</h1>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold text-m4m-black">Products</h1>
+                <p className="text-sm text-m4m-gray-500 mt-1">Manage your listings</p>
+              </div>
               <button
                 type="button"
                 onClick={openAddProduct}
@@ -1765,6 +1776,32 @@ export default function SellerDashboardPage() {
                 </svg>
                 Add Product
               </button>
+            </div>
+
+            {/* Product search (client-side) */}
+            <div className="mb-6">
+              <div className="relative">
+                <svg
+                  className="w-4 h-4 text-m4m-gray-400 absolute left-4 top-1/2 -translate-y-1/2"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.35-4.35" />
+                </svg>
+                <input
+                  type="text"
+                  value={productSearchQuery}
+                  onChange={(e) => setProductSearchQuery(e.target.value)}
+                  placeholder="Search products..."
+                  className="w-full px-4 py-2.5 pl-11 rounded-xl bg-white border border-gray-200 shadow-sm text-sm font-medium text-m4m-gray-700 focus:ring-2 focus:ring-m4m-purple/30 focus:border-m4m-purple outline-none transition-all duration-200 hover:border-m4m-purple/40"
+                />
+              </div>
             </div>
 
             {addProductOpen && (
@@ -2203,22 +2240,51 @@ export default function SellerDashboardPage() {
 
             {/* Your service requests */}
             {serviceRequests.length > 0 && (
-              <div className="rounded-xl border border-m4m-gray-200 bg-white p-4 md:p-6 shadow-sm mb-6">
-                <h3 className="text-base font-semibold text-m4m-black mb-3">Your service requests</h3>
+              <div className="rounded-xl border border-m4m-gray-200 bg-white p-4 md:p-6 shadow-sm mb-6 transition-all duration-200 hover:shadow-md">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h3 className="text-base font-semibold text-m4m-black transition-colors duration-200">Your service requests</h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsRequestsOpen((o) => !o)}
+                    className="p-2 rounded-xl hover:bg-m4m-purple/5 transition-all duration-200"
+                    aria-label={isRequestsOpen ? 'Collapse service requests' : 'Expand service requests'}
+                  >
+                    <svg
+                      className={`w-5 h-5 text-m4m-purple/70 transition-transform duration-200 ${isRequestsOpen ? 'rotate-180' : 'rotate-0'}`}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="M6 9l6 6 6-6" />
+                    </svg>
+                  </button>
+                </div>
                 <p className="text-xs text-m4m-gray-500 mb-3">See <button type="button" onClick={() => setSection('service-requests')} className="text-m4m-purple hover:underline">My Service Requests</button> for full details and admin notes.</p>
-                <ul className="space-y-2">
-                  {serviceRequests.map((sr) => (
-                    <li key={sr.id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-m4m-gray-100 last:border-0">
-                      <div>
-                        <span className="font-medium text-m4m-black">{sr.service_name}</span>
-                        {sr.category && <span className="text-m4m-gray-500 text-sm ml-2">({sr.category.name})</span>}
-                      </div>
-                      <span className={`text-sm font-medium px-2.5 py-1 rounded-full ${sr.status === 'approved' ? 'bg-green-100 text-green-800' : sr.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
-                        {sr.status}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="border-t border-m4m-gray-100 pt-3 mt-3">
+                  <div
+                    className={`overflow-hidden transition-[max-height] duration-200 ease-in-out ${isRequestsOpen ? 'max-h-96' : 'max-h-0'}`}
+                  >
+                    {isRequestsOpen && (
+                      <ul className="space-y-2">
+                        {serviceRequests.map((sr) => (
+                          <li key={sr.id} className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-m4m-gray-100 last:border-0">
+                            <div>
+                              <span className="font-medium text-m4m-black">{sr.service_name}</span>
+                              {sr.category && <span className="text-m4m-gray-500 text-sm ml-2">({sr.category.name})</span>}
+                            </div>
+                            <span className={`text-sm font-medium px-2.5 py-1 rounded-full ${sr.status === 'approved' ? 'bg-green-100 text-green-800' : sr.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                              {sr.status}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -2593,13 +2659,18 @@ export default function SellerDashboardPage() {
               <div className="rounded-xl border border-m4m-gray-200 bg-white p-8 text-center text-m4m-gray-500">
                 You have no products yet.
               </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="rounded-xl border border-m4m-gray-200 bg-white p-8 text-center text-m4m-gray-500">
+                No results found
+              </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {products.map((p) => (
-                  <div
-                    key={p.id}
-                    className="rounded-xl border border-m4m-gray-200 bg-white p-4 shadow-sm flex flex-col"
-                  >
+              <div className="bg-white rounded-2xl shadow-sm p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {filteredProducts.map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-xl border border-m4m-gray-200 bg-white p-4 shadow-sm flex flex-col transition-all duration-200 hover:shadow-md"
+                    >
                     {p.images?.[0] ? (
                       <div className="aspect-[4/3] rounded-lg overflow-hidden bg-m4m-gray-100 mb-3">
                         <img src={p.images[0]} alt="" className="w-full h-full object-cover" />
@@ -2662,8 +2733,9 @@ export default function SellerDashboardPage() {
                         Delete
                       </button>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </>
