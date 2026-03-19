@@ -423,7 +423,7 @@ export default function Navbar() {
   const showVacationBanner = user?.is_seller && (user?.vacation_mode === true || user?.vacation_mode === 1);
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+    <header className="bg-white border-b border-gray-200 shadow-sm">
       {/* Vacation mode banner for sellers */}
       {showVacationBanner && (
         <div className="bg-amber-100 border-b border-amber-200">
