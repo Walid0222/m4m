@@ -47,6 +47,7 @@ import {
   createAdminOfferType,
   updateAdminOfferType,
   deleteAdminOfferType,
+  getAdminAffiliates,
   paginatedItems,
 } from '../services/api';
 
@@ -62,6 +63,7 @@ const TABS = [
   { id: 'services', label: 'Service Management' },
   { id: 'coupons', label: 'Coupons' },
   { id: 'announcements', label: 'Announcements' },
+  { id: 'affiliates', label: 'Affiliates' },
   { id: 'support', label: 'Support Chat' },
   { id: 'marketplace-settings', label: 'Marketplace' },
 ];
@@ -2249,6 +2251,193 @@ function CouponsPanel() {
   );
 }
 
+/* ── Affiliates ─────────────────────────────────────────────────────────────── */
+function AffiliatesPanel() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError('');
+    getAdminAffiliates()
+      .then((res) => {
+        if (!cancelled) setData(res || null);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e?.message || 'Failed to load affiliate data.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-20 rounded-xl bg-gray-100 animate-pulse" />
+          ))}
+        </div>
+        <div className="h-48 rounded-xl bg-gray-100 animate-pulse" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm">
+        {error}
+      </div>
+    );
+  }
+
+  const d = data || {};
+  const formatMAD = (v) => (typeof v === 'number' ? v.toFixed(2) : '0.00');
+
+  return (
+    <div>
+      <h2 className="text-base font-semibold text-gray-900 mb-4">Affiliate Overview</h2>
+
+      {/* Stats cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-green-50 text-green-600 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .843-3 1.882 0 1.04 1.343 1.882 3 1.882s3 .843 3 1.882c0 1.04-1.343 1.882-3 1.882m0-7.528V6m0 9.528V18m0 3c5.523 0 10-3.134 10-7s-4.477-7-10-7S2 7.134 2 11s4.477 7 10 7z" /></svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Total Commissions Paid</p>
+            <p className="text-xl font-semibold text-gray-900">{formatMAD(d.total_commissions_paid)} MAD</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Pending Commissions</p>
+            <p className="text-xl font-semibold text-gray-900">{formatMAD(d.total_pending_commissions)} MAD</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Orders with Referral</p>
+            <p className="text-xl font-semibold text-gray-900">{d.total_orders_with_referral ?? 0}</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Total Referral Codes</p>
+            <p className="text-xl font-semibold text-gray-900">{d.total_referral_codes ?? 0}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Affiliates */}
+      <h3 className="text-sm font-semibold text-gray-900 mb-2">Top Affiliates</h3>
+      <div className="overflow-x-auto rounded-xl border border-gray-200 mb-6">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              {['User', 'Email', 'Total Earned', 'Orders Count'].map((h) => (
+                <th key={h} className="px-4 py-3 text-left font-semibold text-gray-600">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {(d.top_affiliates || []).length === 0 ? (
+              <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-500">No affiliates yet.</td></tr>
+            ) : (
+              (d.top_affiliates || []).map((a, i) => (
+                <tr key={a.user_id ?? i}>
+                  <td className="px-4 py-3 font-medium text-gray-900">{a.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">{a.email ?? '—'}</td>
+                  <td className="px-4 py-3 font-medium">{formatMAD(a.total_earned)} MAD</td>
+                  <td className="px-4 py-3">{a.orders_count ?? 0}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Referral Codes */}
+      <h3 className="text-sm font-semibold text-gray-900 mb-2">Referral Codes</h3>
+      <div className="overflow-x-auto rounded-xl border border-gray-200 mb-6">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              {['Code', 'Owner', 'Uses', 'Total Earned', 'Status', 'Created At'].map((h) => (
+                <th key={h} className="px-4 py-3 text-left font-semibold text-gray-600">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {(d.referral_codes || []).length === 0 ? (
+              <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-500">No referral codes yet.</td></tr>
+            ) : (
+              (d.referral_codes || []).map((c, i) => (
+                <tr key={c.code ?? i}>
+                  <td className="px-4 py-3 font-mono font-medium text-gray-900">{c.code ?? '—'}</td>
+                  <td className="px-4 py-3">{c.owner_name ?? '—'}</td>
+                  <td className="px-4 py-3">{c.uses ?? 0}</td>
+                  <td className="px-4 py-3 font-medium">{formatMAD(c.total_earned)} MAD</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${(c.status || 'active') === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>{c.status ?? 'active'}</span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">{c.created_at ? new Date(c.created_at).toLocaleString() : '—'}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Attributions */}
+      <h3 className="text-sm font-semibold text-gray-900 mb-2">Attributions</h3>
+      <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
+          <thead className="bg-gray-50">
+            <tr>
+              {['Order ID', 'Code', 'Buyer', 'Affiliate', 'Amount', 'Status', 'Date'].map((h) => (
+                <th key={h} className="px-4 py-3 text-left font-semibold text-gray-600">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-100">
+            {(d.attributions || []).length === 0 ? (
+              <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-500">No attributions yet.</td></tr>
+            ) : (
+              (d.attributions || []).map((a, i) => (
+                <tr key={`${a.order_id}-${a.created_at}-${i}`}>
+                  <td className="px-4 py-3 font-medium text-gray-900">{a.order_id ?? '—'}</td>
+                  <td className="px-4 py-3 font-mono text-gray-700">{a.referral_code ?? '—'}</td>
+                  <td className="px-4 py-3">{a.buyer_id ?? '—'}</td>
+                  <td className="px-4 py-3">{a.affiliate_id ?? '—'}</td>
+                  <td className="px-4 py-3 font-medium">{formatMAD(a.affiliate_amount)} MAD</td>
+                  <td className="px-4 py-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${a.status === 'paid' ? 'bg-green-100 text-green-700' : a.status === 'refunded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{a.status ?? 'pending'}</span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">{a.created_at ? new Date(a.created_at).toLocaleString() : '—'}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* ── Announcements ──────────────────────────────────────────────────────────── */
 function AnnouncementsPanel() {
   const [announcements, setAnnouncements] = useState([]);
@@ -2503,7 +2692,7 @@ function MarketplaceSettingsPanel() {
 }
 
 /* ── Main admin page ──────────────────────────────────────────────────────── */
-const VALID_ADMIN_TABS = ['overview', 'deposits', 'escrow', 'withdrawals', 'reports', 'disputes', 'verification', 'service-requests', 'services', 'coupons', 'announcements', 'support', 'marketplace-settings'];
+const VALID_ADMIN_TABS = ['overview', 'deposits', 'escrow', 'withdrawals', 'reports', 'disputes', 'verification', 'service-requests', 'services', 'coupons', 'announcements', 'affiliates', 'support', 'marketplace-settings'];
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
@@ -2744,7 +2933,7 @@ export default function AdminDashboardPage() {
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {TABS.filter((t) =>
-              ['services', 'coupons', 'announcements', 'marketplace-settings'].includes(t.id)
+              ['services', 'coupons', 'announcements', 'affiliates', 'marketplace-settings'].includes(t.id)
             ).map((t) => (
               <TabButton
                 key={t.id}
@@ -2771,6 +2960,7 @@ export default function AdminDashboardPage() {
         {activeTab === 'services' && <ServiceManagementPanel />}
         {activeTab === 'coupons' && <CouponsPanel />}
         {activeTab === 'announcements' && <AnnouncementsPanel />}
+        {activeTab === 'affiliates' && <AffiliatesPanel />}
         {activeTab === 'support' && (
           <div className="flex flex-col gap-3 h-full">
             <div>

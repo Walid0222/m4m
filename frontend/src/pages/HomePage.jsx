@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
-import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star, Grid2X2, History } from 'lucide-react';
+import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star, Grid2X2, History, Share2 } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import ServiceCard from '../components/ServiceCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -1131,6 +1131,42 @@ export default function HomePage() {
       </div>
 
       <div id="marketplace" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        {/* Affiliate promotion - homepage only */}
+        {!isMarketplaceOnly && (
+          <section className="mb-6 md:mb-8">
+            <Link
+              to="/affiliate/dashboard"
+              className="block rounded-xl shadow-lg overflow-hidden bg-gradient-to-br from-purple-600 via-m4m-purple to-blue-600 hover:shadow-xl transition-shadow focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:ring-offset-2"
+            >
+              <div className="relative px-4 sm:px-6 md:px-8 py-6 sm:py-8 text-center">
+                <div className="absolute inset-0 opacity-10">
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-white rounded-full blur-2xl" />
+                  <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full blur-2xl" />
+                </div>
+                <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6">
+                  <div className="flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                    <Share2 className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-lg sm:text-xl font-bold text-white mb-1">
+                      {t('home.affiliate_title')}
+                    </h2>
+                    <p className="text-sm sm:text-base text-white/90">
+                      {t('home.affiliate_subtitle')}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-white text-m4m-purple hover:bg-white/95 transition-colors">
+                    {t('home.affiliate_cta')}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    </svg>
+                  </span>
+                </div>
+              </div>
+            </Link>
+          </section>
+        )}
+
         {/* Categories / services - homepage only */}
         {!isMarketplaceOnly && services.length > 0 && (
           <section className="mb-6 md:mb-8">

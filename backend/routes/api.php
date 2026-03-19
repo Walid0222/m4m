@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\AdminReportController;
 use App\Http\Controllers\Api\Admin\AdminServiceController;
 use App\Http\Controllers\Api\Admin\AdminServiceRequestController;
 use App\Http\Controllers\Api\Admin\AdminSellerController;
+use App\Http\Controllers\Api\Admin\AdminAffiliateController;
 use App\Http\Controllers\Api\Admin\AdminStatsController;
 use App\Http\Controllers\Api\Admin\AdminSupportController;
 use App\Http\Controllers\Api\Admin\AdminVerificationController;
@@ -185,6 +186,7 @@ Route::prefix('v1')->group(function () {
 
             // Affiliate / referral
             Route::get('/affiliate/dashboard', [AffiliateController::class, 'dashboard']);
+            Route::post('/referral-code/create', [AffiliateController::class, 'createReferralCode']);
 
             // Disputes (buyer, seller, admin)
             Route::post('/disputes',          [DisputeController::class, 'store']);
@@ -333,6 +335,9 @@ Route::prefix('v1')->group(function () {
         Route::get('/platform-earnings',  [AdminStatsController::class, 'platformEarnings']);
         Route::get('/admin-logs',         [AdminStatsController::class, 'adminLogs']);
         Route::get('/security-logs',      [AdminStatsController::class, 'securityLogs']);
+
+        // Affiliates (referral system)
+        Route::get('/affiliates', [AdminAffiliateController::class, 'index']);
 
         // Coupons
         Route::get('/coupons',    [AdminCouponController::class, 'index']);

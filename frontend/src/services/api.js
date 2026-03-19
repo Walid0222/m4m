@@ -457,6 +457,10 @@ export function getAdminStats() {
   return api.get('/admin/stats').then(unwrap);
 }
 
+export const getAdminAffiliates = () => {
+  return api.get('/admin/affiliates').then(unwrap);
+};
+
 // --- Admin coupons ---
 
 export function getAdminCoupons() {
@@ -794,6 +798,10 @@ export function sendSupportMessage(body) {
 
 export const getAffiliateDashboard = () => {
   return api.get('/affiliate/dashboard').then(unwrap);
+};
+
+export const createReferralCode = () => {
+  return api.post('/referral-code/create').then(unwrap);
 };
 
 /**

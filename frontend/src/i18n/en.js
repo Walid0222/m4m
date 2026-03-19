@@ -52,6 +52,9 @@ const en = {
   "home.trust_instant_desc": "Many products delivered automatically",
   "home.flash_deals_title": "Flash Deals",
   "home.flash_deals_subtitle": "Limited-time discounts on popular products",
+  "home.affiliate_title": "Earn money by sharing links",
+  "home.affiliate_subtitle": "Invite friends and earn commission on every order",
+  "home.affiliate_cta": "Start earning",
   "home.show_all_services": "Show all services →",
   "home.show_all_games": "Show all games →",
 
@@ -73,6 +76,7 @@ const en = {
   "nav.disputes": "Disputes",
   "nav.my_disputes": "My Disputes",
   "nav.settings": "Settings",
+  "nav.affiliate_dashboard": "Affiliate Dashboard",
   "nav.seller_dashboard": "Seller Dashboard",
   "nav.admin_panel": "Admin Panel",
   "nav.no_notifications_short": "No notifications.",

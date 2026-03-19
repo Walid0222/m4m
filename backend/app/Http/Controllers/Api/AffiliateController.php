@@ -7,9 +7,51 @@ use App\Models\ReferralCode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class AffiliateController extends Controller
 {
+    /**
+     * Create or return existing referral code for the authenticated user.
+     * POST /referral-code/create
+     */
+    public function createReferralCode(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $existing = ReferralCode::where('owner_user_id', $user->id)->first();
+        if ($existing) {
+            return $this->success([
+                'code' => $existing->code,
+                'created' => false,
+            ]);
+        }
+
+        $attempts = 0;
+        $maxAttempts = 20;
+        do {
+            $length = random_int(6, 8);
+            $code = strtoupper(Str::random($length));
+            $exists = ReferralCode::where('code', $code)->exists();
+            $attempts++;
+        } while ($exists && $attempts < $maxAttempts);
+
+        if ($exists) {
+            return $this->error('Could not generate unique code. Please try again.', 500);
+        }
+
+        $referralCode = ReferralCode::create([
+            'owner_user_id' => $user->id,
+            'code' => $code,
+            'status' => 'active',
+        ]);
+
+        return $this->success([
+            'code' => $referralCode->code,
+            'created' => true,
+        ]);
+    }
+
     /**
      * Affiliate / referral dashboard (aggregated stats).
      *
