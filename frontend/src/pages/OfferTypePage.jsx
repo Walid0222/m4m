@@ -153,54 +153,82 @@ export default function OfferTypePage() {
   const serviceOfferTypes = data.service_offer_types || [];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8 bg-gray-50">
 
-      {serviceOfferTypes.length > 1 && (
-        <OfferTypeTabs currentSlug={offerType.slug} offerTypes={serviceOfferTypes} />
-      )}
+      {/* Premium compact hero */}
+      <div className="relative bg-gradient-to-br from-white via-purple-50 to-indigo-100/60 rounded-3xl shadow-sm border border-purple-100/80 p-4 sm:p-5 lg:p-6 space-y-3 overflow-hidden backdrop-blur-sm">
+        <div aria-hidden className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-16 -left-16 w-56 h-56 bg-purple-100/50 rounded-full blur-3xl" />
+          <div className="absolute -bottom-20 -right-20 w-56 h-56 bg-indigo-100/40 rounded-full blur-3xl" />
+        </div>
 
-      <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{offerType.name}</h1>
-      {offerType.description && (
-        <p className="text-gray-600 mb-6 max-w-2xl">{offerType.description}</p>
-      )}
+        <div className="relative space-y-4">
+          {serviceOfferTypes.length > 1 && (
+            <div className="pt-1">
+              <OfferTypeTabs currentSlug={offerType.slug} offerTypes={serviceOfferTypes} />
+            </div>
+          )}
 
-      {/* Sticky search + sort bar */}
-      <div className="py-4 mb-6">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <input
-              type="text"
-              placeholder="Search offers..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full max-w-md border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:border-transparent"
-            />
+          <div className="space-y-2">
+            <div className="text-xs uppercase tracking-wide text-gray-400">
+              Offer type
+            </div>
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-gray-900">
+              {offerType.name}
+            </h1>
+            {offerType.description && (
+              <p className="text-sm text-gray-600 max-w-xl leading-relaxed">
+                {offerType.description}
+              </p>
+            )}
+
+            {/* Meta row */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/90 border border-gray-200 shadow-sm text-xs font-medium text-gray-700 hover:shadow-md transition-all duration-200">
+                {sortedProducts.length} seller{sortedProducts.length !== 1 ? 's' : ''} found
+              </span>
+              <span className="text-xs text-gray-500">
+                Compare trusted offers instantly
+              </span>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-            <select
-              value={sortField}
-              onChange={(e) => setSortField(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:border-transparent"
-            >
-              <option value="sales">Most sells</option>
-              <option value="price">Price</option>
-              <option value="rating">Rating</option>
-              <option value="delivery">Delivery time</option>
-              <option value="new">Newest</option>
-            </select>
-            <select
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:border-transparent"
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
+
+          {/* Search + sort (inside hero) */}
+          <div className="border-t border-white/40 pt-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <input
+                  type="text"
+                  placeholder="Search offers..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-sm px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 hover:border-m4m-purple/40 focus:ring-2 focus:ring-m4m-purple/30 focus:border-m4m-purple"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+                <select
+                  value={sortField}
+                  onChange={(e) => setSortField(e.target.value)}
+                  className="rounded-xl border border-gray-200 bg-white shadow-sm px-3 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 hover:border-m4m-purple/40 focus:ring-2 focus:ring-m4m-purple/30 focus:border-m4m-purple"
+                >
+                  <option value="sales">Most sells</option>
+                  <option value="price">Price</option>
+                  <option value="rating">Rating</option>
+                  <option value="delivery">Delivery time</option>
+                  <option value="new">Newest</option>
+                </select>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="rounded-xl border border-gray-200 bg-white shadow-sm px-3 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 hover:border-m4m-purple/40 focus:ring-2 focus:ring-m4m-purple/30 focus:border-m4m-purple"
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
-        <p className="text-xs sm:text-sm text-gray-500 mt-2">
-          {sortedProducts.length} seller{sortedProducts.length !== 1 ? 's' : ''} offering this service
-        </p>
       </div>
 
       {/* Grid / empty state */}
@@ -211,15 +239,27 @@ export default function OfferTypePage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {paginatedOffers.map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                isFavorited={favoriteIds.includes(Number(p.id))}
-                onToggleFavorite={user ? () => handleToggleFavorite(p.id) : undefined}
-              />
-            ))}
+          <div className="bg-white rounded-2xl shadow-sm p-4 mt-5">
+            <div
+              className="
+                grid
+                grid-cols-2
+                sm:grid-cols-2
+                md:grid-cols-3
+                lg:grid-cols-4
+                gap-4
+                md:gap-6
+              "
+            >
+              {paginatedOffers.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  isFavorited={favoriteIds.includes(Number(p.id))}
+                  onToggleFavorite={user ? () => handleToggleFavorite(p.id) : undefined}
+                />
+              ))}
+            </div>
           </div>
 
           {/* Pagination */}
