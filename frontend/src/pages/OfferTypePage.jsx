@@ -195,35 +195,37 @@ export default function OfferTypePage() {
 
           {/* Search + sort (inside hero) */}
           <div className="border-t border-white/40 pt-3">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
-              <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar px-1">
+              <div className="flex-1 min-w-[120px]">
                 <input
                   type="text"
                   placeholder="Search offers..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-sm px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none transition-all duration-200 hover:border-m4m-purple/40 focus:ring-2 focus:ring-m4m-purple/30 focus:border-m4m-purple"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200"
                 />
               </div>
-              <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm">
+              <div className="relative z-20">
                 <select
                   value={sortField}
                   onChange={(e) => setSortField(e.target.value)}
-                  className="rounded-xl border border-gray-200 bg-white shadow-sm px-3 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 hover:border-m4m-purple/40 focus:ring-2 focus:ring-m4m-purple/30 focus:border-m4m-purple"
+                  className="px-2 py-2 text-xs rounded-lg border border-gray-200 min-w-[90px]"
                 >
-                  <option value="sales">Most sells</option>
-                  <option value="price">Price</option>
-                  <option value="rating">Rating</option>
-                  <option value="delivery">Delivery time</option>
-                  <option value="new">Newest</option>
+                    <option value="sales">Most sells</option>
+                    <option value="price">Price</option>
+                    <option value="rating">Rating</option>
+                    <option value="delivery">Delivery time</option>
+                    <option value="new">Newest</option>
                 </select>
+              </div>
+              <div className="relative z-20">
                 <select
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value)}
-                  className="rounded-xl border border-gray-200 bg-white shadow-sm px-3 py-2.5 text-sm text-gray-800 outline-none transition-all duration-200 hover:border-m4m-purple/40 focus:ring-2 focus:ring-m4m-purple/30 focus:border-m4m-purple"
+                  className="px-2 py-2 text-xs rounded-lg border border-gray-200 min-w-[80px]"
                 >
-                  <option value="asc">Ascending</option>
-                  <option value="desc">Descending</option>
+                    <option value="asc">Asc</option>
+                    <option value="desc">Desc</option>
                 </select>
               </div>
             </div>
@@ -233,13 +235,13 @@ export default function OfferTypePage() {
 
       {/* Grid / empty state */}
       {Array.isArray(sortedProducts) && sortedProducts.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
+        <div className="relative px-3 py-2 text-center">
           <p className="text-gray-500 mb-2">No offers found</p>
           <p className="text-xs text-gray-400">Try adjusting your search or sort options.</p>
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-2xl shadow-sm p-4 mt-5">
+          <div className="relative mt-5 px-2 py-2">
             <div
               className="
                 grid

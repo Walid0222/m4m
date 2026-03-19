@@ -320,7 +320,7 @@ export default function SellerProfilePage() {
       ) : products.length === 0 ? (
         <section>
           <h2 className="text-lg font-semibold text-m4m-black mb-4">Listed products</h2>
-          <div className="rounded-xl border border-m4m-gray-200 bg-white p-12 text-center">
+          <div className="relative px-3 py-2 text-center">
             <p className="text-m4m-gray-500">No products listed yet.</p>
           </div>
         </section>

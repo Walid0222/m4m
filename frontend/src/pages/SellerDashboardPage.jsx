@@ -2656,16 +2656,16 @@ export default function SellerDashboardPage() {
                 ))}
               </div>
             ) : products.length === 0 ? (
-              <div className="rounded-xl border border-m4m-gray-200 bg-white p-8 text-center text-m4m-gray-500">
+              <div className="relative px-3 py-2 text-center text-m4m-gray-500">
                 You have no products yet.
               </div>
             ) : filteredProducts.length === 0 ? (
-              <div className="rounded-xl border border-m4m-gray-200 bg-white p-8 text-center text-m4m-gray-500">
+              <div className="relative px-3 py-2 text-center text-m4m-gray-500">
                 No results found
               </div>
             ) : (
-              <div className="bg-white rounded-2xl shadow-sm p-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="relative px-2 py-2">
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {filteredProducts.map((p) => (
                     <div
                       key={p.id}

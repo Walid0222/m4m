@@ -1215,7 +1215,7 @@ export default function HomePage() {
                 </button>
               </div>
             </div>
-            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-3 md:p-5">
+            <div className="relative">
               <div className="relative">
                 <div
                   className="pointer-events-none absolute left-0 top-0 h-full w-8 bg-gradient-to-r from-white to-transparent z-10"
@@ -1289,7 +1289,7 @@ export default function HomePage() {
                 {t('common.see_all')}
               </Link>
             </div>
-            <div className="rounded-2xl border border-m4m-gray-200 bg-white p-3 md:p-5">
+            <div className="relative">
               <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
                 {trendingLoading
                   ? [1, 2, 3, 4].map((i) => (
