@@ -25,7 +25,13 @@ export function LanguageProvider({ children }) {
 
   const t = (key) => {
     const dict = dictionaries[language] || dictionaries.en;
-    return dict[key] || dictionaries.en[key] || key;
+    const value = dict[key] ?? dictionaries.en[key] ?? '';
+    // Optional debug aid: warns only when the key is missing from both dictionaries.
+    if (value === '' && !(dict[key] ?? dictionaries.en[key])) {
+      // eslint-disable-next-line no-console
+      console.warn('Missing i18n key:', key);
+    }
+    return value;
   };
 
   return (

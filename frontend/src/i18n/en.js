@@ -156,6 +156,7 @@ const en = {
   "common.loading": "…",
   "common.dismiss": "Dismiss",
   "common.see_all": "See all",
+  "common.featured": "Featured",
 
   // wallet
   "wallet.title": "Wallet",
@@ -566,6 +567,7 @@ const en = {
   "product.works_linux": "Works on Linux",
   "product.global_access": "Global access",
   "product.instant_delivery": "Instant delivery",
+  "product.manual_delivery": "Manual delivery",
   "product.assurance_30": "30-day assurance",
 
   // report

@@ -8,7 +8,7 @@ import { getSellerSalesBadge, getBuyerPurchaseBadge } from '../lib/sellerBadge';
 export function VerifiedBadge({ size = 'sm' }) {
   const cls = size === 'lg'
     ? 'px-2.5 py-1 text-xs gap-1'
-    : 'px-1.5 py-0.5 text-[10px] gap-0.5';
+    : 'px-1 py-0.5 text-[9px] sm:text-[10px] gap-0.5';
   return (
     <span className={`inline-flex items-center rounded-full bg-blue-100 text-blue-700 font-semibold ${cls}`}>
       <svg className={size === 'lg' ? 'w-4 h-4' : 'w-3 h-3'} fill="currentColor" viewBox="0 0 20 20">

@@ -225,8 +225,10 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
             )}
           </div>
         {isVerified && (
-          <span className="absolute top-2 right-2 z-10">
-            <VerifiedBadge />
+          <span className="absolute top-2 right-2 z-10 max-w-[40%]">
+            <div className="scale-[0.9] sm:scale-100 origin-top-right">
+              <VerifiedBadge />
+            </div>
           </span>
         )}
         {onToggleFavorite && (
