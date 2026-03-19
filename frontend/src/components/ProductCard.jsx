@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Zap, Star, ShoppingCart, AlertCircle } from 'lucide-react';
 import { isSellerOnline } from '../lib/sellerOnline';
 import { VerifiedBadge, SellerSalesBadge } from './SellerBadges';
@@ -22,6 +22,7 @@ import { useLanguage } from '../contexts/LanguageContext';
  */
 export default function ProductCard({ product, isFavorited = false, onToggleFavorite, compact = false }) {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const { id, name, price, seller, stock, is_pinned } = product;
   const [sellerAvatarError, setSellerAvatarError] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -55,10 +56,36 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
     seller?.is_verified_seller === 1;
   const sellerLevel = typeof seller?.seller_level === 'number' ? seller.seller_level : null;
 
+  const handleCardClick = (e) => {
+    const target = e.target;
+    if (target && typeof target.closest === 'function') {
+      // If user clicked a nested interactive element (links / buttons), let it handle navigation.
+      if (target.closest('a') || target.closest('button')) return;
+    }
+    if (id == null) return;
+    navigate(`/product/${id}`);
+  };
+
+  const handleCardKeyDown = (e) => {
+    if (e.key !== 'Enter') return;
+    const target = e.target;
+    if (target && typeof target.closest === 'function') {
+      if (target.closest('a') || target.closest('button')) return;
+    }
+    if (id == null) return;
+    navigate(`/product/${id}`);
+  };
+
   // Compact marketplace-style card for horizontal carousels
   if (compact) {
     return (
-      <article className="w-[160px] h-[220px] flex flex-col border border-gray-200 rounded-xl bg-white p-2 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5">
+      <article
+        onClick={handleCardClick}
+        onKeyDown={handleCardKeyDown}
+        role="button"
+        tabIndex={0}
+        className="cursor-pointer w-full h-[220px] flex flex-col border border-gray-200 rounded-xl bg-white p-2 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
+      >
         <Link to={`/product/${id}`} className="relative block">
           {/* Badges overlay (featured / stock / instant / low stock) */}
           <div className="absolute inset-x-1 top-1 z-10 flex justify-between items-start text-[10px] font-semibold">
@@ -167,7 +194,13 @@ export default function ProductCard({ product, isFavorited = false, onToggleFavo
   const imageWrapperClass = 'relative aspect-[4/3] w-full overflow-hidden rounded-t-xl bg-gray-100 flex items-center justify-center flex-shrink-0';
 
   return (
-    <article className="h-full bg-white rounded-xl border border-gray-200 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-1 overflow-hidden flex flex-col group">
+    <article
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      role="button"
+      tabIndex={0}
+      className="cursor-pointer h-full bg-white rounded-xl border border-gray-200 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-1 overflow-hidden flex flex-col group"
+    >
       {/* Product image + overlay badges + favorite/verified badges */}
       <Link to={`/product/${id}`} className="block flex-shrink-0">
         <div className={imageWrapperClass}>

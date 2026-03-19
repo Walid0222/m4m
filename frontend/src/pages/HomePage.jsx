@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
@@ -121,6 +121,7 @@ export default function HomePage() {
   const [trending, setTrending] = useState([]);
   const [services, setServices] = useState([]);
   const [recentlyViewed, setRecentlyViewed] = useState([]);
+  const [recentlyViewedLoading, setRecentlyViewedLoading] = useState(false);
   const [search, setSearch] = useState(searchFromUrl);
   const [searchInput, setSearchInput] = useState(searchFromUrl);
   const [paginationMeta, setPaginationMeta] = useState({ currentPage: 1, lastPage: 1, total: 0 });
@@ -219,7 +220,37 @@ export default function HomePage() {
         } catch {
           parsed = null;
         }
-        const ids = Array.isArray(parsed) ? parsed : [];
+        const items = Array.isArray(parsed) ? parsed : [];
+
+        const THREE_DAYS_MS = 72 * 60 * 60 * 1000;
+        const now = Date.now();
+
+        // One-time cleanup on initial read:
+        // Convert ids-only legacy entries into objects, then drop expired ones.
+        const cleanedEntries = [];
+        const seen = new Set();
+        for (const item of items) {
+          let id;
+          let viewedAt;
+          if (item && typeof item === 'object') {
+            id = Number(item.id);
+            viewedAt = Number(item.viewedAt);
+          } else {
+            id = Number(item);
+            viewedAt = NaN;
+          }
+
+          if (!Number.isFinite(id) || seen.has(id)) continue;
+          // Missing/invalid viewedAt for legacy data => treat as "now" to avoid surprising expiry.
+          const ts = Number.isFinite(viewedAt) ? viewedAt : now;
+          if (now - ts >= THREE_DAYS_MS) continue;
+
+          seen.add(id);
+          cleanedEntries.push({ id, viewedAt: ts });
+        }
+
+        const ids = cleanedEntries.map((e) => e.id);
+
         if (!ids.length) {
           if (!cancelled) {
             setRecentlyViewed([]);
@@ -228,23 +259,12 @@ export default function HomePage() {
           return;
         }
 
-        const normalizedIds = [];
-        const seen = new Set();
-        ids.forEach((v) => {
-          const n = Number(v);
-          if (!Number.isNaN(n) && !seen.has(n)) {
-            seen.add(n);
-            normalizedIds.push(n);
-          }
-        });
+        // Persist the cleaned list so we don't reprocess expired items later.
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedEntries));
 
-        if (!normalizedIds.length) {
-          if (!cancelled) {
-            setRecentlyViewed([]);
-            setRecentlyViewedLoading(false);
-          }
-          return;
-        }
+        const normalizedIds = [];
+        // (cleanedEntries already dedupes + maintains order)
+        normalizedIds.push(...ids);
 
         const results = await Promise.all(
           normalizedIds.map((id) =>
@@ -301,6 +321,30 @@ export default function HomePage() {
     []
   );
 
+  const handleClearRecentlyViewed = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.confirm('Clear all recently viewed items?')) return;
+    try {
+      const STORAGE_KEY = 'recently_viewed_products';
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore (e.g. private mode / storage errors)
+    }
+    setRecentlyViewed([]);
+    setRecentlyViewedLoading(false);
+  }, []);
+
+  const sliderRef = useRef(null);
+  const scrollRecentlyViewed = (direction) => {
+    const el = sliderRef.current;
+    if (!el) return;
+    const amount = 240;
+    el.scrollBy({
+      left: direction === 'left' ? -amount : amount,
+      behavior: 'smooth',
+    });
+  };
+
   // Debounced search: after user stops typing, update search and URL (reset to page 1)
   useEffect(() => {
     const trimmed = searchInput.trim();
@@ -327,7 +371,6 @@ export default function HomePage() {
   const [sort, setSort] = useState(searchParams.get('sort') || 'best_selling');
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [trendingLoading, setTrendingLoading] = useState(false);
-  const [recentlyViewedLoading, setRecentlyViewedLoading] = useState(false);
 
   // Pagination: page from URL
   const [page, setPage] = useState(() => Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1));
@@ -1156,30 +1199,70 @@ export default function HomePage() {
                   {t('home.browse_filter')}
                 </p>
               </div>
-              <Link
-                to="/recently-viewed"
-                className="text-sm font-medium text-m4m-purple hover:underline"
-              >
-                {t('common.see_all')}
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/recently-viewed"
+                  className="text-sm font-medium text-m4m-purple hover:underline"
+                >
+                  {t('common.see_all')}
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleClearRecentlyViewed}
+                  className="text-xs text-gray-500 hover:text-m4m-purple transition"
+                >
+                  Clear all
+                </button>
+              </div>
             </div>
             <div className="rounded-2xl border border-m4m-gray-200 bg-white p-3 md:p-5">
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5">
-                {recentlyViewedLoading
-                  ? [1, 2, 3, 4].map((i) => (
-                      <div
-                        key={i}
-                        className="h-full min-h-[320px] rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 animate-pulse"
-                      />
-                    ))
-                  : recentlyViewed.map((product) => (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        isFavorited={favoriteIds.includes(Number(product.id))}
-                        onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
-                      />
-                    ))}
+              <div className="relative">
+                <div
+                  className="pointer-events-none absolute left-0 top-0 h-full w-8 bg-gradient-to-r from-white to-transparent z-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => scrollRecentlyViewed('left')}
+                  className="absolute left-1 top-1/2 -translate-y-1/2 z-20 bg-white shadow-md rounded-full w-8 h-8 flex items-center justify-center"
+                  aria-label="Scroll recently viewed left"
+                >
+                  ←
+                </button>
+                <div
+                  className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-white to-transparent z-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => scrollRecentlyViewed('right')}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 z-20 bg-white shadow-md rounded-full w-8 h-8 flex items-center justify-center"
+                  aria-label="Scroll recently viewed right"
+                >
+                  →
+                </button>
+                <div
+                  ref={sliderRef}
+                  className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 no-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-4"
+                >
+                  {recentlyViewedLoading
+                    ? [1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          className="snap-start flex-shrink-0 w-[180px] sm:w-[220px] md:w-[240px] lg:w-[260px] h-full min-h-[320px] rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 animate-pulse"
+                        />
+                      ))
+                    : recentlyViewed.map((product) => (
+                        <div
+                          key={product.id}
+                          className="snap-start flex-shrink-0 w-[180px] sm:w-[220px] md:w-[240px] lg:w-[260px]"
+                        >
+                          <ProductCard
+                            product={product}
+                            isFavorited={favoriteIds.includes(Number(product.id))}
+                            onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
+                          />
+                        </div>
+                      ))}
+                </div>
               </div>
             </div>
           </section>

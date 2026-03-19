@@ -470,8 +470,8 @@ export default function Navbar() {
           {/* LEFT: Logo */}
           <div className="flex items-center gap-3 flex-shrink-0">
             <Link to="/" onClick={closeAll} className="text-xl font-bold text-m4m-purple">
-              M4M
-            </Link>
+          M4M
+        </Link>
           </div>
 
           {/* CENTER: search with autocomplete */}
@@ -1077,7 +1077,7 @@ export default function Navbar() {
                   Log in
                 </Link>
               )}
-            </nav>
+        </nav>
           </div>
         )}
       </div>

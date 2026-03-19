@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import { getProduct, getFavoriteIds, toggleFavorite, getToken } from '../services/api';
@@ -39,6 +39,64 @@ export default function RecentlyViewedPage() {
     }
   }, []);
 
+  const handleClearRecentlyViewed = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!window.confirm('Clear all recently viewed items?')) return;
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore (e.g. private mode / storage errors)
+    }
+    setProducts([]);
+    setLoading(false);
+  }, []);
+
+  const sliderRef = useRef(null);
+  const scrollRecentlyViewed = (direction) => {
+    const el = sliderRef.current;
+    if (!el) return;
+    const amount = 240;
+    el.scrollBy({
+      left: direction === 'left' ? -amount : amount,
+      behavior: 'smooth',
+    });
+  };
+
+  useEffect(() => {
+    if (loading || products.length === 0) return;
+    const el = sliderRef.current;
+    if (!el) return;
+
+    let intervalId;
+    const amount = 240;
+
+    const tick = () => {
+      el.scrollBy({ left: amount, behavior: 'smooth' });
+    };
+
+    const stop = () => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = undefined;
+    };
+    const start = () => {
+      stop();
+      intervalId = setInterval(tick, 3000);
+    };
+
+    const onMouseEnter = () => stop();
+    const onMouseLeave = () => start();
+
+    el.addEventListener('mouseenter', onMouseEnter);
+    el.addEventListener('mouseleave', onMouseLeave);
+    start();
+
+    return () => {
+      stop();
+      el.removeEventListener('mouseenter', onMouseEnter);
+      el.removeEventListener('mouseleave', onMouseLeave);
+    };
+  }, [loading, products.length]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -55,20 +113,45 @@ export default function RecentlyViewedPage() {
         } catch {
           parsed = null;
         }
-        const ids = Array.isArray(parsed) ? parsed : [];
-        const normalizedIds = [];
+        const items = Array.isArray(parsed) ? parsed : [];
+
+        const THREE_DAYS_MS = 72 * 60 * 60 * 1000;
+        const now = Date.now();
+
+        // One-time cleanup on initial read.
+        // Supports legacy ids-only format and the new { id, viewedAt } format.
+        const cleanedEntries = [];
         const seen = new Set();
-        ids.forEach((v) => {
-          const n = Number(v);
-          if (!Number.isNaN(n) && !seen.has(n)) {
-            seen.add(n);
-            normalizedIds.push(n);
+        for (const item of items) {
+          let id;
+          let viewedAt;
+          if (item && typeof item === 'object') {
+            id = Number(item.id);
+            viewedAt = Number(item.viewedAt);
+          } else {
+            id = Number(item);
+            viewedAt = NaN;
           }
-        });
+
+          if (!Number.isFinite(id) || seen.has(id)) continue;
+          // Missing/invalid viewedAt for legacy data => treat as "now" to avoid surprising expiry.
+          const ts = Number.isFinite(viewedAt) ? viewedAt : now;
+          if (now - ts >= THREE_DAYS_MS) continue;
+
+          seen.add(id);
+          cleanedEntries.push({ id, viewedAt: ts });
+        }
+
+        const normalizedIds = cleanedEntries.map((e) => e.id);
+
         if (!normalizedIds.length) {
           if (!cancelled) setProducts([]);
           return;
         }
+
+        // Persist the cleaned list.
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedEntries));
+
         const results = await Promise.all(
           normalizedIds.map((id) => getProduct(id, { record_view: 0 }).catch(() => null))
         );
@@ -97,21 +180,24 @@ export default function RecentlyViewedPage() {
             Products you opened recently on M4M
           </p>
         </div>
-        <Link
-          to="/marketplace"
-          className="text-sm font-medium text-m4m-purple hover:underline"
-        >
-          Browse marketplace
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            to="/marketplace"
+            className="text-sm font-medium text-m4m-purple hover:underline"
+          >
+            Browse marketplace
+          </Link>
+          <button
+            type="button"
+            onClick={handleClearRecentlyViewed}
+            className="text-xs text-gray-500 hover:text-m4m-purple transition"
+          >
+            Clear all
+          </button>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-[340px] rounded-xl border border-gray-200 bg-gray-50 animate-pulse" />
-          ))}
-        </div>
-      ) : products.length === 0 ? (
+      {products.length === 0 && !loading ? (
         <div className="rounded-2xl border border-gray-200 bg-white py-16 text-center">
           <p className="text-gray-500">No recently viewed products.</p>
           <Link
@@ -122,15 +208,55 @@ export default function RecentlyViewedPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-          {products.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              isFavorited={favoriteIds.includes(Number(product.id))}
-              onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
-            />
-          ))}
+        <div className="relative">
+          <div
+            className="pointer-events-none absolute left-0 top-0 h-full w-8 bg-gradient-to-r from-white to-transparent z-10"
+          />
+          <button
+            type="button"
+            onClick={() => scrollRecentlyViewed('left')}
+            className="absolute left-1 top-1/2 -translate-y-1/2 z-20 bg-white shadow-md rounded-full w-8 h-8 flex items-center justify-center"
+            aria-label="Scroll recently viewed left"
+          >
+            ←
+          </button>
+
+          <div
+            ref={sliderRef}
+            className="flex gap-4 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 no-scrollbar [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-4"
+          >
+            {loading
+              ? [...Array(5)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="snap-start flex-shrink-0 w-[180px] sm:w-[220px] md:w-[240px] lg:w-[260px] h-full min-h-[320px] rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 animate-pulse"
+                  />
+                ))
+              : products.map((product) => (
+                  <div
+                    key={product.id}
+                    className="snap-start flex-shrink-0 w-[180px] sm:w-[220px] md:w-[240px] lg:w-[260px]"
+                  >
+                    <ProductCard
+                      product={product}
+                      isFavorited={favoriteIds.includes(Number(product.id))}
+                      onToggleFavorite={user ? () => handleToggleFavorite(product.id) : undefined}
+                    />
+                  </div>
+                ))}
+          </div>
+
+          <div
+            className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-white to-transparent z-10"
+          />
+          <button
+            type="button"
+            onClick={() => scrollRecentlyViewed('right')}
+            className="absolute right-1 top-1/2 -translate-y-1/2 z-20 bg-white shadow-md rounded-full w-8 h-8 flex items-center justify-center"
+            aria-label="Scroll recently viewed right"
+          >
+            →
+          </button>
         </div>
       )}
     </div>

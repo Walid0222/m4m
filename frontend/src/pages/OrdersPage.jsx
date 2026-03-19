@@ -302,8 +302,8 @@ export default function OrdersPage() {
                   onChatSeller={handleChatSeller}
                   chattingSellerId={chattingSellerId}
                 />
-              ))}
-            </ul>
+          ))}
+        </ul>
           )}
         </>
       )}

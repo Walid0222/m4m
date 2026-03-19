@@ -351,21 +351,39 @@ export default function ProductPage() {
     try {
       const STORAGE_KEY = 'recently_viewed_products';
       const raw = localStorage.getItem(STORAGE_KEY);
-      let existing = [];
+      let existingItems = [];
       if (raw) {
         try {
           const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) existing = parsed;
+          if (Array.isArray(parsed)) existingItems = parsed;
         } catch {
-          existing = [];
+          existingItems = [];
         }
       }
+
       const idNum = Number(productId);
-      const deduped = existing
-        .map((v) => Number(v))
-        .filter((v) => !Number.isNaN(v) && v !== idNum);
-      deduped.unshift(idNum);
-      const limited = deduped.slice(0, 10);
+      const now = Date.now();
+
+      // Backward compatible parsing:
+      // - Old format: [1,2,3] (ids only)
+      // - New format: [{ id: 1, viewedAt: 123 }, ...]
+      const dedupedEntries = (existingItems || [])
+        .map((item) => {
+          if (item && typeof item === 'object') {
+            const entryId = Number(item.id);
+            const viewedAt = Number(item.viewedAt);
+            return {
+              id: entryId,
+              viewedAt: Number.isFinite(viewedAt) ? viewedAt : now,
+            };
+          }
+          const entryId = Number(item);
+          return { id: entryId, viewedAt: now };
+        })
+        .filter((entry) => Number.isFinite(entry.id) && entry.id !== idNum);
+
+      dedupedEntries.unshift({ id: idNum, viewedAt: now });
+      const limited = dedupedEntries.slice(0, 10);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(limited));
     } catch {
       // ignore storage errors (e.g. private mode)
