@@ -813,7 +813,7 @@ function ServiceRequestsPanel() {
       setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: 'approved' } : r));
       setFlash({ type: 'success', text: 'Request approved. New offer type created.' });
       setConfirm(null);
-    } catch {
+      } catch {
       setFlash({ type: 'error', text: 'Approve failed.' });
     }
   };
@@ -834,7 +834,7 @@ function ServiceRequestsPanel() {
       setFlash({ type: 'success', text: 'Request rejected.' });
     } catch {
       setFlash({ type: 'error', text: 'Reject failed.' });
-    } finally {
+      } finally {
       setRejectSubmitting(false);
     }
   };
@@ -1602,9 +1602,9 @@ function SupportChatPanel({ adminUser }) {
             </div>
           ) : (
             userThreads.map((t) => (
-              <button
+                          <button
                 key={t.userId}
-                type="button"
+                            type="button"
                 onClick={() => openThread(t)}
                 className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-start gap-2.5 ${
                   selectedUserId === t.userId
@@ -1637,7 +1637,7 @@ function SupportChatPanel({ adminUser }) {
                     {t.lastMsg?.body?.substring(0, 30)}{t.lastMsg?.body?.length > 30 ? '…' : ''}
                   </p>
                 </div>
-              </button>
+                          </button>
             ))
           )}
         </div>
@@ -1763,15 +1763,15 @@ function SupportChatPanel({ adminUser }) {
                   placeholder={`Reply to ${selectedThread?.userName || 'user'} as M4M Support…`}
                   className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-gray-50 focus:bg-white transition-colors"
                 />
-                <button
-                  type="button"
+                          <button
+                            type="button"
                   onClick={sendReply}
                   disabled={!replyText.trim()}
                   className="px-4 py-2.5 rounded-xl bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-                >
+                          >
                   Send
-                </button>
-              </div>
+                          </button>
+                        </div>
               <p className="text-[10px] text-gray-400 mt-1.5 px-1">
                 Replying as <span className="font-medium">{adminUser?.name || 'M4M Support'}</span> · Enter to send
               </p>

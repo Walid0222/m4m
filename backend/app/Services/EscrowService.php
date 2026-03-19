@@ -6,6 +6,7 @@ use App\Models\AdminLog;
 use App\Models\BuyerStat;
 use App\Models\Order;
 use App\Models\PlatformWallet;
+use App\Models\ReferralAttribution;
 use App\Models\SellerStat;
 use App\Models\User;
 use App\Models\Wallet;
@@ -312,7 +313,73 @@ class EscrowService
 
             // Credit platform wallet (only when payout was actually executed above)
             if ($platformFee > 0) {
-                PlatformWallet::singleton()->credit($platformFee);
+                $attribution = ReferralAttribution::where('order_id', $lockedOrder->id)->lockForUpdate()->first();
+
+                // If no referral (or already paid/refunded), platform keeps full commission.
+                if (! $attribution || $attribution->status !== 'pending') {
+                    PlatformWallet::singleton()->credit($platformFee);
+                } else {
+                    // Affiliate gets 50% of the *platform fee after coupon logic*.
+                    $affiliateAmount = round($platformFee * 0.5, 2);
+                    $platformNet     = round($platformFee - $affiliateAmount, 2);
+
+                    $referralCode = $attribution->referralCode()->first();
+                    $affiliateUserId = $referralCode?->owner_user_id;
+
+                    if (! $affiliateUserId) {
+                        // Fallback: keep full fee if the affiliate owner cannot be resolved.
+                        PlatformWallet::singleton()->credit($platformFee);
+                    } else {
+                        $affiliate = User::find($affiliateUserId);
+                        if (! $affiliate) {
+                            PlatformWallet::singleton()->credit($platformFee);
+                        } else {
+                            $affiliateWallet = $this->getOrCreateWallet($affiliate);
+                            $affiliateWallet = Wallet::whereKey($affiliateWallet->id)->lockForUpdate()->first();
+
+                            if (! $affiliateWallet) {
+                                PlatformWallet::singleton()->credit($platformFee);
+                            } else {
+                                $alreadyPaid = $affiliateWallet->transactions()
+                                    ->where('type', 'affiliate_commission')
+                                    ->where('reference_type', Order::class)
+                                    ->where('reference_id', $lockedOrder->id)
+                                    ->exists();
+
+                                if (! $alreadyPaid) {
+                                    $affiliateWallet->increment('balance', $affiliateAmount);
+                                    $affiliateWallet->transactions()->create([
+                                        'type'           => 'affiliate_commission',
+                                        'status'         => 'completed',
+                                        'amount'         => $affiliateAmount,
+                                        'balance_after'  => (float) $affiliateWallet->fresh()->balance,
+                                        'reference_type' => Order::class,
+                                        'reference_id'   => $lockedOrder->id,
+                                        'description'    => "Affiliate commission for order #{$lockedOrder->order_number}",
+                                    ]);
+                                }
+
+                                // Update attribution only after we know affiliate is handled safely.
+                                $attribution->update([
+                                    'status'                => 'paid',
+                                    'paid_at'               => now(),
+                                    'platform_fee_amount'  => $platformFee,
+                                    'affiliate_amount'     => $affiliateAmount,
+                                    'platform_net_amount'  => $platformNet,
+                                ]);
+
+                                // Credit platform with its remaining share (idempotency via attribution + affiliate txn type).
+                                if (! $alreadyPaid && $platformNet > 0) {
+                                    PlatformWallet::singleton()->credit($platformNet);
+                                } elseif ($alreadyPaid) {
+                                    // Affiliate already credited earlier; assume platform credit already happened too.
+                                } elseif ($platformNet <= 0) {
+                                    // No net platform amount to credit after rounding.
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Mark escrow released on order (strict pending_release -> released transition)
@@ -417,7 +484,73 @@ class EscrowService
 
             // Credit platform wallet only when seller payout was actually executed
             if ($payoutExecuted && $platformFee > 0) {
-                PlatformWallet::singleton()->credit($platformFee);
+                $attribution = ReferralAttribution::where('order_id', $lockedOrder->id)->lockForUpdate()->first();
+
+                // If no referral (or already paid/refunded), platform keeps full commission.
+                if (! $attribution || $attribution->status !== 'pending') {
+                    PlatformWallet::singleton()->credit($platformFee);
+                } else {
+                    // Affiliate gets 50% of the *platform fee after coupon logic*.
+                    $affiliateAmount = round($platformFee * 0.5, 2);
+                    $platformNet     = round($platformFee - $affiliateAmount, 2);
+
+                    $referralCode = $attribution->referralCode()->first();
+                    $affiliateUserId = $referralCode?->owner_user_id;
+
+                    if (! $affiliateUserId) {
+                        // Fallback: keep full fee if the affiliate owner cannot be resolved.
+                        PlatformWallet::singleton()->credit($platformFee);
+                    } else {
+                        $affiliate = User::find($affiliateUserId);
+                        if (! $affiliate) {
+                            PlatformWallet::singleton()->credit($platformFee);
+                        } else {
+                            $affiliateWallet = $this->getOrCreateWallet($affiliate);
+                            $affiliateWallet = Wallet::whereKey($affiliateWallet->id)->lockForUpdate()->first();
+
+                            if (! $affiliateWallet) {
+                                PlatformWallet::singleton()->credit($platformFee);
+                            } else {
+                                $alreadyPaid = $affiliateWallet->transactions()
+                                    ->where('type', 'affiliate_commission')
+                                    ->where('reference_type', Order::class)
+                                    ->where('reference_id', $lockedOrder->id)
+                                    ->exists();
+
+                                if (! $alreadyPaid) {
+                                    $affiliateWallet->increment('balance', $affiliateAmount);
+                                    $affiliateWallet->transactions()->create([
+                                        'type'           => 'affiliate_commission',
+                                        'status'         => 'completed',
+                                        'amount'         => $affiliateAmount,
+                                        'balance_after'  => (float) $affiliateWallet->fresh()->balance,
+                                        'reference_type' => Order::class,
+                                        'reference_id'   => $lockedOrder->id,
+                                        'description'    => "Affiliate commission for order #{$lockedOrder->order_number}",
+                                    ]);
+                                }
+
+                                // Update attribution only after we know affiliate is handled safely.
+                                $attribution->update([
+                                    'status'                => 'paid',
+                                    'paid_at'               => now(),
+                                    'platform_fee_amount'  => $platformFee,
+                                    'affiliate_amount'     => $affiliateAmount,
+                                    'platform_net_amount'  => $platformNet,
+                                ]);
+
+                                // Credit platform with its remaining share (idempotency via attribution + affiliate txn type).
+                                if (! $alreadyPaid && $platformNet > 0) {
+                                    PlatformWallet::singleton()->credit($platformNet);
+                                } elseif ($alreadyPaid) {
+                                    // Affiliate already credited earlier; assume platform credit already happened too.
+                                } elseif ($platformNet <= 0) {
+                                    // No net platform amount to credit after rounding.
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             $lockedOrder->update([
@@ -500,6 +633,15 @@ class EscrowService
                 'escrow_status' => 'refunded',
                 'status'        => Order::STATUS_CANCELLED,
             ]);
+
+            // If a referral was pending, mark it refunded (affiliate is paid only on escrow release).
+            $attribution = ReferralAttribution::where('order_id', $lockedOrder->id)->lockForUpdate()->first();
+            if ($attribution && $attribution->status === 'pending') {
+                $attribution->update([
+                    'status'      => 'refunded',
+                    'refunded_at' => now(),
+                ]);
+            }
         });
     }
 

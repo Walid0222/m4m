@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\AccountDelivery;
 use App\Models\Coupon;
+use App\Models\ReferralAttribution;
+use App\Models\ReferralCode;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductAccount;
@@ -15,6 +17,7 @@ use App\Services\SecurityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 
 class OrderController extends Controller
@@ -212,7 +215,21 @@ class OrderController extends Controller
             $discountAmount = round($subtotal * ($percent / 100), 2);
         }
 
+        // Optional referral code applied at checkout (non-fatal).
+        // If invalid, it is ignored silently.
+        // Important: actual validation + max_uses enforcement is done inside the DB transaction.
+        $referralCodeStr = null;
+        $rawReferralCode = $request->input('referral_code');
+        if (is_string($rawReferralCode) && trim($rawReferralCode) !== '') {
+            $referralCodeStr = strtoupper(trim($rawReferralCode));
+        }
+
         $finalTotal = max(0.0, round($subtotal - $discountAmount, 2));
+
+        // Lightweight abuse protection for referral attribution.
+        // We compute outside the DB transaction, but enforce silently inside it.
+        $buyerId = $buyer->id;
+        $ip = $request->ip() ?: 'unknown';
 
         $user   = $request->user();
         $wallet = $user->wallet ?? $user->wallet()->create(['balance' => 0]);
@@ -226,7 +243,7 @@ class OrderController extends Controller
         $buyerNote = $validated['buyer_note'] ?? null;
 
         try {
-            $order = DB::transaction(function () use ($user, $finalTotal, $subtotal, $orderLineItems, $autoConfirmHours, $coupon, $buyerNote) {
+            $order = DB::transaction(function () use ($user, $finalTotal, $subtotal, $orderLineItems, $autoConfirmHours, $coupon, $buyerNote, $referralCodeStr, $buyer, $buyerId, $ip) {
             do {
                 $orderNumber = 'M4M-' . strtoupper(Str::random(6));
             } while (Order::where('order_number', $orderNumber)->exists());
@@ -245,6 +262,58 @@ class OrderController extends Controller
                 'escrow_status' => 'held',
                 'buyer_note'    => $buyerNote,
             ]);
+
+            if ($referralCodeStr) {
+                // Lock the referral code row to avoid race conditions with max_uses.
+                $referralCode = ReferralCode::where('code', $referralCodeStr)
+                    ->lockForUpdate()
+                    ->first();
+
+                $isActive = $referralCode && (($referralCode->status ?? 'active') === 'active');
+                $isNotExpired = $referralCode && ! ($referralCode->expires_at && $referralCode->expires_at->isPast());
+                $isNotSelf = $referralCode && ((int) $referralCode->owner_user_id !== (int) $buyer->id);
+
+                if ($isActive && $isNotExpired && $isNotSelf) {
+                    // 1) Prevent same buyer from reusing the same referral.
+                    $alreadyAttributed = ReferralAttribution::where('buyer_user_id', $buyerId)
+                        ->where('referral_code_id', $referralCode->id)
+                        ->exists();
+
+                    if ($alreadyAttributed) {
+                        // Silent ignore.
+                    } else {
+                        // 2) Basic rate limit per IP for referral usage attempts.
+                        // Key format: referral:{code}:{ip}
+                        $rateKey = sprintf('referral:%s:%s', $referralCodeStr, $ip);
+                        $maxAttempts = 5;
+                        $decaySeconds = 3600; // 1 hour
+
+                        if (RateLimiter::tooManyAttempts($rateKey, $maxAttempts)) {
+                            // Silent ignore.
+                        } else {
+                            RateLimiter::hit($rateKey, $decaySeconds);
+
+                            // Enforce max_uses and snapshot share percent in the attribution.
+                            $maxUses = $referralCode->max_uses;
+                            $uses     = $referralCode->uses ?? 0;
+
+                            if (! ($maxUses !== null && (int) $uses >= (int) $maxUses)) {
+                                $affiliateSharePercentUsed = (int) $referralCode->affiliate_share_percent;
+                                $referralCode->increment('uses');
+
+                                ReferralAttribution::create([
+                                    'referral_code_id' => (int) $referralCode->id,
+                                    'order_id' => $order->id,
+                                    'buyer_user_id' => $user->id,
+                                    'status' => 'pending',
+                                    'affiliate_share_percent_used' => $affiliateSharePercentUsed,
+                                    'pending_at' => now(),
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
 
             $isInstant          = false;
             $allDeliveryContent = [];

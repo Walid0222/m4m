@@ -18,6 +18,7 @@ import AuthPage from './pages/AuthPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import SellerDashboardPage from './pages/SellerDashboardPage';
+import AffiliateDashboardPage from './pages/AffiliateDashboardPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import UserProfilePage from './pages/UserProfilePage';
@@ -89,6 +90,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <OrderDetailPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="affiliate/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <AffiliateDashboardPage />
                     </ProtectedRoute>
                   }
                 />

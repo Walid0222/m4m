@@ -232,10 +232,11 @@ export function pinProduct(productId) {
   return api.post(`/products/${productId}/pin`).then(unwrap);
 }
 
-export function createOrder(items, couponCode, buyerNote) {
+export function createOrder(items, couponCode, buyerNote, referralCode) {
   const body = { items };
   if (couponCode) body.coupon_code = couponCode;
   if (buyerNote != null && buyerNote !== '') body.buyer_note = buyerNote;
+  if (referralCode) body.referral_code = referralCode;
   return api.post('/orders', body).then(unwrap);
 }
 
@@ -788,6 +789,12 @@ export function getSupportMessages() {
 export function sendSupportMessage(body) {
   return api.post('/support/messages', { body }).then(unwrap);
 }
+
+// --- Affiliate / referral ---
+
+export const getAffiliateDashboard = () => {
+  return api.get('/affiliate/dashboard').then(unwrap);
+};
 
 /**
  * Helper: get items array from Laravel paginated response.

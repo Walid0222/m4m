@@ -486,6 +486,21 @@ export default function ProductPage() {
     if (!product) return;
     setBuying(true);
     try {
+      let referralCode = null;
+      try {
+        const ref = localStorage.getItem('m4m_referral_code');
+        const expRaw = localStorage.getItem('m4m_referral_expiry');
+        const exp = expRaw ? Number(expRaw) : null;
+        if (ref && exp && Number.isFinite(exp) && exp < Date.now()) {
+          localStorage.removeItem('m4m_referral_code');
+          localStorage.removeItem('m4m_referral_expiry');
+        } else if (ref) {
+          referralCode = ref;
+        }
+      } catch {
+        // ignore localStorage errors (private mode / restricted storage)
+      }
+
       const wallet = await getWallet();
       const balance = Number(wallet?.balance ?? 0);
       const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
@@ -494,7 +509,12 @@ export default function ProductPage() {
       const discount = pct > 0 ? Math.max(0, Math.min(subtotal, (subtotal * pct) / 100)) : 0;
       const total = Math.max(0, subtotal - discount);
       if (balance < total) { setError('Insufficient wallet balance.'); setBuying(false); return; }
-      await createOrder([{ product_id: product.id, quantity }], couponInfo ? couponCode.trim() : null, buyerNote?.trim() || null);
+      await createOrder(
+        [{ product_id: product.id, quantity }],
+        couponInfo ? couponCode.trim() : null,
+        buyerNote?.trim() || null,
+        referralCode
+      );
       setProduct((prev) => prev ? { ...prev, stock: Math.max(0, Number(prev.stock ?? 0) - quantity) } : prev);
       // Immediately refresh wallet balance in the Navbar
       try {

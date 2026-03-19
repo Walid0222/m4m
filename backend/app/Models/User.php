@@ -244,6 +244,18 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Favorite::class);
     }
 
+    /** Referral codes owned by this user. */
+    public function referralCodes(): HasMany
+    {
+        return $this->hasMany(ReferralCode::class, 'owner_user_id');
+    }
+
+    /** Referral attributions where this user is the buyer. */
+    public function referralAttributions(): HasMany
+    {
+        return $this->hasMany(ReferralAttribution::class, 'buyer_user_id');
+    }
+
     /**
      * Send the password reset notification with a SPA frontend URL.
      */

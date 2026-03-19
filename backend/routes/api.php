@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\Admin\WalletSettingsController as AdminWalletSettin
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\ConversationController;
+use App\Http\Controllers\Api\AffiliateController;
 use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\DepositRequestController;
 use App\Http\Controllers\Api\DisputeController;
@@ -181,6 +182,9 @@ Route::prefix('v1')->group(function () {
 
             // Coupon preview (apply at checkout)
             Route::post('/coupons/preview', [CouponController::class, 'preview']);
+
+            // Affiliate / referral
+            Route::get('/affiliate/dashboard', [AffiliateController::class, 'dashboard']);
 
             // Disputes (buyer, seller, admin)
             Route::post('/disputes',          [DisputeController::class, 'store']);
