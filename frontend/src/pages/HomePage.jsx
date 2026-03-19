@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
-import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star } from 'lucide-react';
+import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star, Grid2X2, History } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import ServiceCard from '../components/ServiceCard';
 import { useAuth } from '../contexts/AuthContext';
@@ -1136,7 +1136,11 @@ export default function HomePage() {
           <section className="mb-6 md:mb-8">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div>
-                <h2 className="text-lg font-semibold text-m4m-black">{t('home.categories')}</h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <Grid2X2 className="w-5 h-5 text-purple-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">{t('home.categories')}</h2>
+                </div>
+                <div className="h-[2px] w-10 bg-purple-500 rounded mb-4"></div>
                 <p className="text-sm text-m4m-gray-500">
                   {t('home.browse_filter')}
                 </p>
@@ -1194,7 +1198,11 @@ export default function HomePage() {
           <section className="mb-6 md:mb-8">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div>
-                <h2 className="text-lg font-semibold text-m4m-black">{t('home.recently_viewed')}</h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <History className="w-5 h-5 text-purple-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">{t('home.recently_viewed')}</h2>
+                </div>
+                <div className="h-[2px] w-10 bg-purple-500 rounded mb-4"></div>
                 <p className="text-sm text-m4m-gray-500">
                   {t('home.browse_filter')}
                 </p>
@@ -1274,10 +1282,13 @@ export default function HomePage() {
           <section className="mb-6 md:mb-8">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div>
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-m4m-black">
-                  <Flame className="w-4 h-4 text-m4m-purple" />
-                  {t('home.flash_deals_title')}
-                </h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <Flame className="w-5 h-5 text-purple-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    {t('home.flash_deals_title')}
+                  </h2>
+                </div>
+                <div className="h-[2px] w-10 bg-purple-500 rounded mb-4"></div>
                 <p className="text-sm text-m4m-gray-500">
                   {t('home.flash_deals_subtitle')}
                 </p>

@@ -4,6 +4,7 @@ import { getAnnouncements } from '../services/api';
 export default function AnnouncementBanner() {
   const [announcements, setAnnouncements] = useState([]);
   const [isVisible, setIsVisible] = useState(true);
+  const [isClosing, setIsClosing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -20,7 +21,11 @@ export default function AnnouncementBanner() {
   if (announcements.length === 0 || !isVisible) return null;
 
   return (
-    <div className="relative pr-12 w-full bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 text-amber-950">
+    <div
+      className={`relative pr-12 w-full bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 text-amber-950 transition-all duration-300 ease-in-out
+        ${isClosing ? 'opacity-0 -translate-y-3' : 'opacity-100 translate-y-0'}
+      `}
+    >
       <div className="w-full px-4 py-2.5 sm:py-3 text-center">
         {announcements.map((a) => (
           <div key={a.id} className="py-1 sm:py-0.5 first:pt-0 last:pb-0">
@@ -35,7 +40,10 @@ export default function AnnouncementBanner() {
       </div>
       <button
         type="button"
-        onClick={() => setIsVisible(false)}
+        onClick={() => {
+          setIsClosing(true);
+          setTimeout(() => setIsVisible(false), 300);
+        }}
         aria-label="Close announcement"
         className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-black/10 hover:bg-black/20 text-black font-semibold text-sm transition hover:scale-105 active:scale-95"
       >
