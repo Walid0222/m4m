@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
@@ -28,7 +28,7 @@ function useWalletData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     if (!getToken()) {
       setError('Please log in to view your wallet.');
       setLoading(false);
@@ -52,9 +52,9 @@ function useWalletData() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => { refresh(); }, [refresh]);
   return { balance, deposits, withdrawals, loading, error, refresh };
 }
 
