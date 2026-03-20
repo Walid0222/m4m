@@ -59,5 +59,43 @@ class DebugEscrowController extends Controller
             'referral_attribution' => $attribution?->status ?? null,
         ], 'Debug release executed. TEMP endpoint; remove after testing.');
     }
+
+    /**
+     * SAFE TEMP endpoint: force-release the latest order only.
+     *
+     * This endpoint is for testing only and must be removed before production.
+     *
+     * POST /api/v1/debug/force-release-latest
+     */
+    public function forceReleaseLatest(Request $request, EscrowService $escrow): JsonResponse
+    {
+        try {
+            $order = Order::latest()->first();
+            if (! $order) {
+                return $this->error('No orders found.', 404);
+            }
+
+            if ($order->escrow_status !== 'held') {
+                return $this->success([
+                    'order_id' => $order->id,
+                    'escrow_status' => $order->escrow_status,
+                    'message' => 'Order not eligible',
+                ], 'Latest order not eligible for force release.', 422);
+            }
+
+            $escrow->forceReleaseForDisputeResolution($order);
+            $order->refresh();
+
+            return $this->success([
+                'order_id' => $order->id,
+                'escrow_status' => $order->escrow_status,
+                'message' => 'Force released successfully',
+            ]);
+        } catch (\Throwable $e) {
+            return $this->error('Force release failed.', 500, [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
 }
 

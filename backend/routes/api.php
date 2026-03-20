@@ -191,6 +191,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/debug/release-latest-order', [DebugEscrowController::class, 'releaseLatestHeldOrder'])
                 ->middleware('admin');
 
+            // ─── SAFE Debug (testing only) ─────────────────────────────────────
+            // TEMP: force-release only the latest order when it is eligible (`escrow_status=held`).
+            // IMPORTANT: this route must be removed before production.
+            Route::post('/debug/force-release-latest', [DebugEscrowController::class, 'forceReleaseLatest'])
+                ->middleware('admin');
+
             // Affiliate / referral
             Route::get('/affiliate/dashboard', [AffiliateController::class, 'dashboard']);
             Route::post('/referral-code/create', [AffiliateController::class, 'createReferralCode']);
