@@ -171,7 +171,7 @@ export default function UserProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-      {/* Profile header */}
+        {/* Profile header */}
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden mb-5">
         <div className="p-6 md:p-8 bg-gradient-to-br from-purple-50 to-white border-b border-gray-100">
           <div className="flex items-center gap-5">
@@ -416,7 +416,7 @@ export default function UserProfilePage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Confirm new password</label>
               <input type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} placeholder="Repeat new password" className="w-full px-4 py-3 rounded-xl border border-gray-200 text-gray-900 focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none" required minLength={8} />
-            </div>
+          </div>
             <button type="submit" disabled={pwSubmitting} className="w-full py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors">
               {pwSubmitting ? 'Changing…' : 'Change password'}
             </button>

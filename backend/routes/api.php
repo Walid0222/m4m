@@ -141,7 +141,7 @@ Route::prefix('v1')->group(function () {
         // All marketplace features require a verified email.
         Route::middleware('verified.email')->group(function () {
 
-            // Wallet & funds
+        // Wallet & funds
             Route::get('/wallet',                                        [WalletController::class, 'show']);
             Route::get('/wallet/transactions',                           [WalletController::class, 'transactions']);
             Route::get('/wallet/settings',                               [WalletSettingsController::class, 'show']);
@@ -175,7 +175,7 @@ Route::prefix('v1')->group(function () {
 
             // Orders (buyer) — banned users cannot place orders
             Route::middleware('not.banned')->group(function () {
-                Route::post('/orders', [OrderController::class, 'store']);
+        Route::post('/orders', [OrderController::class, 'store']);
             });
             Route::get('/orders',                              [OrderController::class, 'index']);
             Route::get('/orders/{order}',                      [OrderController::class, 'show']);

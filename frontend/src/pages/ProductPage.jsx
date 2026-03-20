@@ -803,7 +803,7 @@ export default function ProductPage() {
                     <p className="text-xs font-semibold text-red-600 uppercase tracking-wide">
                       Limited-time flash deal
                     </p>
-                  </div>
+        </div>
                 ) : (
                   <p className="text-3xl font-bold text-gray-900">
                     {Math.round(Number(product.price || 0))} <span className="text-xl font-semibold text-gray-500">MAD</span>

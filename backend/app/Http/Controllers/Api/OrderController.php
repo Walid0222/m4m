@@ -172,8 +172,8 @@ class OrderController extends Controller
                     return $this->error("This product is currently out of stock.", 422);
                 }
             } else {
-                if ($product->stock < $qty) {
-                    return $this->error("Insufficient stock for product: {$product->name}. Available: {$product->stock}", 422);
+            if ($product->stock < $qty) {
+                return $this->error("Insufficient stock for product: {$product->name}. Available: {$product->stock}", 422);
                 }
             }
 
@@ -366,7 +366,7 @@ class OrderController extends Controller
                         'unit_price'  => $oi['unit_price'],
                         'total_price' => $oi['total_price'],
                     ]);
-                    Product::where('id', $oi['product_id'])->decrement('stock', $oi['quantity']);
+                Product::where('id', $oi['product_id'])->decrement('stock', $oi['quantity']);
                 }
             }
 
