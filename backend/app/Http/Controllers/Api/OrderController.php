@@ -4,11 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\AccountDelivery;
 use App\Models\Coupon;
-use App\Models\ReferralAttribution;
-use App\Models\ReferralCode;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductAccount;
+use App\Models\ReferralAttribution;
+use App\Models\ReferralCode;
 use App\Notifications\NewOrderNotification;
 use App\Notifications\OrderCompletedNotification;
 use App\Notifications\OrderDeliveredNotification;
@@ -95,7 +95,7 @@ class OrderController extends Controller
 
         DB::transaction(function () use ($order) {
             $order->update([
-                'status'       => Order::STATUS_COMPLETED,
+                'status' => Order::STATUS_COMPLETED,
                 'completed_at' => now(),
             ]);
 
@@ -122,15 +122,15 @@ class OrderController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'items'              => ['required', 'array', 'min:1'],
+            'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:products,id'],
-            'items.*.quantity'   => ['required', 'integer', 'min:1'],
-            'buyer_note'         => ['nullable', 'string', 'max:2000'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'buyer_note' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $items      = $validated['items'];
+        $items = $validated['items'];
         $productIds = array_column($items, 'product_id');
-        $products   = Product::whereIn('id', $productIds)->where('status', 'active')->get()->keyBy('id');
+        $products = Product::whereIn('id', $productIds)->where('status', 'active')->get()->keyBy('id');
 
         // Prevent users from purchasing their own products
         $buyer = $request->user();
@@ -141,7 +141,7 @@ class OrderController extends Controller
         }
 
         $orderLineItems = [];
-        $subtotal       = 0.0;
+        $subtotal = 0.0;
 
         // Vacation mode: reject if any product's seller is in vacation mode
         $sellerIds = collect($items)
@@ -169,11 +169,11 @@ class OrderController extends Controller
                     ->count();
 
                 if ($available < $qty) {
-                    return $this->error("This product is currently out of stock.", 422);
+                    return $this->error('This product is currently out of stock.', 422);
                 }
             } else {
-            if ($product->stock < $qty) {
-                return $this->error("Insufficient stock for product: {$product->name}. Available: {$product->stock}", 422);
+                if ($product->stock < $qty) {
+                    return $this->error("Insufficient stock for product: {$product->name}. Available: {$product->stock}", 422);
                 }
             }
 
@@ -181,22 +181,28 @@ class OrderController extends Controller
             $lineTotal = round($unitPrice * $qty, 2);
 
             $orderLineItems[] = [
-                'product'     => $product,
-                'product_id'  => $product->id,
-                'quantity'    => $qty,
-                'unit_price'  => $unitPrice,
+                'product' => $product,
+                'product_id' => $product->id,
+                'quantity' => $qty,
+                'unit_price' => $unitPrice,
                 'total_price' => $lineTotal,
             ];
             $subtotal += $lineTotal;
         }
 
-        // Optional coupon code applied at checkout
-        $coupon         = null;
-        $discountAmount = 0.0;
-        $rawCode        = $request->input('coupon_code');
+        // First product's seller — used for commission tier (must match EscrowService payout tiers).
+        $sellerIdForCommission = (int) $orderLineItems[0]['product']->user_id;
+        $commissionPctForCap = $this->commissionPercentForSeller($sellerIdForCommission);
+
+        // Optional coupon code applied at checkout (discount capped at platform commission on subtotal).
+        $coupon = null;
+        $requestedDiscount = 0.0;
+        $appliedDiscount = 0.0;
+        $discountCapped = false;
+        $rawCode = $request->input('coupon_code');
 
         if (is_string($rawCode) && trim($rawCode) !== '') {
-            $code   = strtoupper(trim($rawCode));
+            $code = strtoupper(trim($rawCode));
             $coupon = Coupon::where('code', $code)->first();
 
             if (! $coupon) {
@@ -212,7 +218,10 @@ class OrderController extends Controller
             }
 
             $percent = max(0, min(100, (int) $coupon->discount_percent));
-            $discountAmount = round($subtotal * ($percent / 100), 2);
+            $requestedDiscount = round($subtotal * ($percent / 100), 2);
+            $baseCommission = round($subtotal * ($commissionPctForCap / 100), 2);
+            $appliedDiscount = min($requestedDiscount, $baseCommission);
+            $discountCapped = $requestedDiscount > $appliedDiscount;
         }
 
         // Optional referral code applied at checkout (non-fatal).
@@ -224,14 +233,14 @@ class OrderController extends Controller
             $referralCodeStr = strtoupper(trim($rawReferralCode));
         }
 
-        $finalTotal = max(0.0, round($subtotal - $discountAmount, 2));
+        $finalTotal = max(0.0, round($subtotal - $appliedDiscount, 2));
 
         // Lightweight abuse protection for referral attribution.
         // We compute outside the DB transaction, but enforce silently inside it.
         $buyerId = $buyer->id;
         $ip = $request->ip() ?: 'unknown';
 
-        $user   = $request->user();
+        $user = $request->user();
         $wallet = $user->wallet ?? $user->wallet()->create(['balance' => 0]);
 
         if ((float) $wallet->balance < $finalTotal) {
@@ -243,192 +252,192 @@ class OrderController extends Controller
         $buyerNote = $validated['buyer_note'] ?? null;
 
         try {
-            $order = DB::transaction(function () use ($user, $finalTotal, $subtotal, $orderLineItems, $autoConfirmHours, $coupon, $buyerNote, $referralCodeStr, $buyer, $buyerId, $ip) {
-            do {
-                $orderNumber = 'M4M-' . strtoupper(Str::random(6));
-            } while (Order::where('order_number', $orderNumber)->exists());
+            $order = DB::transaction(function () use ($user, $finalTotal, $orderLineItems, $autoConfirmHours, $coupon, $buyerNote, $referralCodeStr, $buyer, $buyerId, $ip) {
+                do {
+                    $orderNumber = 'M4M-'.strtoupper(Str::random(6));
+                } while (Order::where('order_number', $orderNumber)->exists());
 
-            $firstProduct = $orderLineItems[0]['product'];
-            $sellerId     = $firstProduct->user_id;
-            $deliveryType = $firstProduct->delivery_type ?? 'manual';
+                $firstProduct = $orderLineItems[0]['product'];
+                $sellerId = $firstProduct->user_id;
+                $deliveryType = $firstProduct->delivery_type ?? 'manual';
 
-            $order = $user->orders()->create([
-                'order_number'  => $orderNumber,
-                'seller_id'     => $sellerId,
-                'delivery_type' => $deliveryType,
-                'status'        => Order::STATUS_PROCESSING,
-                'total_amount'  => $finalTotal,
-                'escrow_amount' => $finalTotal,
-                'escrow_status' => 'held',
-                'buyer_note'    => $buyerNote,
-            ]);
+                $order = $user->orders()->create([
+                    'order_number' => $orderNumber,
+                    'seller_id' => $sellerId,
+                    'delivery_type' => $deliveryType,
+                    'status' => Order::STATUS_PROCESSING,
+                    'total_amount' => $finalTotal,
+                    'escrow_amount' => $finalTotal,
+                    'escrow_status' => 'held',
+                    'buyer_note' => $buyerNote,
+                ]);
 
-            if ($referralCodeStr) {
-                // Lock the referral code row to avoid race conditions with max_uses.
-                $referralCode = ReferralCode::where('code', $referralCodeStr)
-                    ->lockForUpdate()
-                    ->first();
+                if ($referralCodeStr) {
+                    // Lock the referral code row to avoid race conditions with max_uses.
+                    $referralCode = ReferralCode::where('code', $referralCodeStr)
+                        ->lockForUpdate()
+                        ->first();
 
-                $isActive = $referralCode && (($referralCode->status ?? 'active') === 'active');
-                $isNotExpired = $referralCode && ! ($referralCode->expires_at && $referralCode->expires_at->isPast());
-                $isNotSelf = $referralCode && ((int) $referralCode->owner_user_id !== (int) $buyer->id);
+                    $isActive = $referralCode && (($referralCode->status ?? 'active') === 'active');
+                    $isNotExpired = $referralCode && ! ($referralCode->expires_at && $referralCode->expires_at->isPast());
+                    $isNotSelf = $referralCode && ((int) $referralCode->owner_user_id !== (int) $buyer->id);
 
-                if ($isActive && $isNotExpired && $isNotSelf) {
-                    // 1) Prevent same buyer from reusing the same referral.
-                    $alreadyAttributed = ReferralAttribution::where('buyer_user_id', $buyerId)
-                        ->where('referral_code_id', $referralCode->id)
-                        ->exists();
+                    if ($isActive && $isNotExpired && $isNotSelf) {
+                        // 1) Prevent same buyer from reusing the same referral.
+                        $alreadyAttributed = ReferralAttribution::where('buyer_user_id', $buyerId)
+                            ->where('referral_code_id', $referralCode->id)
+                            ->exists();
 
-                    if ($alreadyAttributed) {
-                        // Silent ignore.
-                    } else {
-                        // 2) Basic rate limit per IP for referral usage attempts.
-                        // Key format: referral:{code}:{ip}
-                        $rateKey = sprintf('referral:%s:%s', $referralCodeStr, $ip);
-                        $maxAttempts = 5;
-                        $decaySeconds = 3600; // 1 hour
-
-                        if (RateLimiter::tooManyAttempts($rateKey, $maxAttempts)) {
+                        if ($alreadyAttributed) {
                             // Silent ignore.
                         } else {
-                            RateLimiter::hit($rateKey, $decaySeconds);
+                            // 2) Basic rate limit per IP for referral usage attempts.
+                            // Key format: referral:{code}:{ip}
+                            $rateKey = sprintf('referral:%s:%s', $referralCodeStr, $ip);
+                            $maxAttempts = 5;
+                            $decaySeconds = 3600; // 1 hour
 
-                            // Enforce max_uses and snapshot share percent in the attribution.
-                            $maxUses = $referralCode->max_uses;
-                            $uses     = $referralCode->uses ?? 0;
+                            if (RateLimiter::tooManyAttempts($rateKey, $maxAttempts)) {
+                                // Silent ignore.
+                            } else {
+                                RateLimiter::hit($rateKey, $decaySeconds);
 
-                            if (! ($maxUses !== null && (int) $uses >= (int) $maxUses)) {
-                                $affiliateSharePercentUsed = (int) $referralCode->affiliate_share_percent;
-                                $referralCode->increment('uses');
+                                // Enforce max_uses and snapshot share percent in the attribution.
+                                $maxUses = $referralCode->max_uses;
+                                $uses = $referralCode->uses ?? 0;
 
-                                ReferralAttribution::create([
-                                    'referral_code_id' => (int) $referralCode->id,
-                                    'order_id' => $order->id,
-                                    'buyer_user_id' => $user->id,
-                                    'status' => 'pending',
-                                    'affiliate_share_percent_used' => $affiliateSharePercentUsed,
-                                    'pending_at' => now(),
-                                ]);
+                                if (! ($maxUses !== null && (int) $uses >= (int) $maxUses)) {
+                                    $affiliateSharePercentUsed = (int) $referralCode->affiliate_share_percent;
+                                    $referralCode->increment('uses');
+
+                                    ReferralAttribution::create([
+                                        'referral_code_id' => (int) $referralCode->id,
+                                        'order_id' => $order->id,
+                                        'buyer_user_id' => $user->id,
+                                        'status' => 'pending',
+                                        'affiliate_share_percent_used' => $affiliateSharePercentUsed,
+                                        'pending_at' => now(),
+                                    ]);
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            $isInstant          = false;
-            $allDeliveryContent = [];
+                $isInstant = false;
+                $allDeliveryContent = [];
 
-            foreach ($orderLineItems as $oi) {
-                $product     = $oi['product'];
-                $credentials = null;
+                foreach ($orderLineItems as $oi) {
+                    $product = $oi['product'];
+                    $credentials = null;
 
-                if ($product->delivery_type === 'instant') {
-                    // Pull accounts from product_accounts table
-                    $accounts = ProductAccount::where('product_id', $product->id)
-                        ->where('status', ProductAccount::STATUS_AVAILABLE)
-                        ->lockForUpdate()
-                        ->take($oi['quantity'])
-                        ->get();
+                    if ($product->delivery_type === 'instant') {
+                        // Pull accounts from product_accounts table
+                        $accounts = ProductAccount::where('product_id', $product->id)
+                            ->where('status', ProductAccount::STATUS_AVAILABLE)
+                            ->lockForUpdate()
+                            ->take($oi['quantity'])
+                            ->get();
 
-                    if ($accounts->count() < $oi['quantity']) {
-                        throw new \RuntimeException("Out of stock for product: {$product->name}");
-                    }
+                        if ($accounts->count() < $oi['quantity']) {
+                            throw new \RuntimeException("Out of stock for product: {$product->name}");
+                        }
 
-                    $credLines = $accounts->pluck('account_data')->toArray();
-                    $credentials = implode("\n", $credLines);
+                        $credLines = $accounts->pluck('account_data')->toArray();
+                        $credentials = implode("\n", $credLines);
 
-                    // Create the order item first so we have its ID
-                    $orderItem = $order->orderItems()->create([
-                        'product_id'           => $oi['product_id'],
-                        'quantity'             => $oi['quantity'],
-                        'unit_price'           => $oi['unit_price'],
-                        'total_price'          => $oi['total_price'],
-                        'delivery_credentials' => $credentials,
-                    ]);
-
-                    // Mark accounts as sold and link to order item
-                    ProductAccount::whereIn('id', $accounts->pluck('id'))
-                        ->update([
-                            'status'        => ProductAccount::STATUS_SOLD,
-                            'order_item_id' => $orderItem->id,
+                        // Create the order item first so we have its ID
+                        $orderItem = $order->orderItems()->create([
+                            'product_id' => $oi['product_id'],
+                            'quantity' => $oi['quantity'],
+                            'unit_price' => $oi['unit_price'],
+                            'total_price' => $oi['total_price'],
+                            'delivery_credentials' => $credentials,
                         ]);
 
-                    // Sync product stock
-                    $product->decrement('stock', $oi['quantity']);
+                        // Mark accounts as sold and link to order item
+                        ProductAccount::whereIn('id', $accounts->pluck('id'))
+                            ->update([
+                                'status' => ProductAccount::STATUS_SOLD,
+                                'order_item_id' => $orderItem->id,
+                            ]);
 
-                    $allDeliveryContent[] = $credentials;
-                    $isInstant = true;
-                } else {
-                    // Manual delivery
-                    $order->orderItems()->create([
-                        'product_id'  => $oi['product_id'],
-                        'quantity'    => $oi['quantity'],
-                        'unit_price'  => $oi['unit_price'],
-                        'total_price' => $oi['total_price'],
+                        // Sync product stock
+                        $product->decrement('stock', $oi['quantity']);
+
+                        $allDeliveryContent[] = $credentials;
+                        $isInstant = true;
+                    } else {
+                        // Manual delivery
+                        $order->orderItems()->create([
+                            'product_id' => $oi['product_id'],
+                            'quantity' => $oi['quantity'],
+                            'unit_price' => $oi['unit_price'],
+                            'total_price' => $oi['total_price'],
+                        ]);
+                        Product::where('id', $oi['product_id'])->decrement('stock', $oi['quantity']);
+                    }
+                }
+
+                // If a coupon was used, increment its usage counter
+                if ($coupon) {
+                    $coupon->increment('uses');
+                }
+
+                // Increment orders_last_3_days for each product (for Trending/Hot badges)
+                $productIds = array_unique(array_column($orderLineItems, 'product_id'));
+                foreach ($productIds as $pid) {
+                    $p = Product::find($pid);
+                    if ($p) {
+                        $p = $p->ensureActivityWindow();
+                        $p->increment('orders_last_3_days');
+                    }
+                }
+
+                // Escrow hold — debit buyer wallet (lock row and re-check balance)
+                $wallet = $user->wallet ?? $user->wallet()->create(['balance' => 0]);
+                $wallet = $user->wallet()->lockForUpdate()->first();
+                if (! $wallet) {
+                    throw new \RuntimeException('INSUFFICIENT_WALLET_BALANCE');
+                }
+
+                if ((float) $wallet->balance < $finalTotal) {
+                    throw new \RuntimeException('INSUFFICIENT_WALLET_BALANCE');
+                }
+
+                $wallet->decrement('balance', $finalTotal);
+                $wallet->transactions()->create([
+                    'type' => 'purchase_hold',
+                    'status' => 'hold',
+                    'amount' => -$finalTotal,
+                    'balance_after' => (float) $wallet->fresh()->balance,
+                    'reference_type' => Order::class,
+                    'reference_id' => $order->id,
+                    'description' => "Escrow hold for order #{$orderNumber}",
+                ]);
+
+                // Instant delivery → delivered immediately
+                if ($isInstant) {
+                    $deliveryContent = implode("\n---\n", $allDeliveryContent);
+                    $deliveredAt = now();
+                    $order->update([
+                        'status' => Order::STATUS_DELIVERED,
+                        'delivered_at' => $deliveredAt,
+                        'delivery_content' => $deliveryContent,
+                        'auto_confirm_at' => $deliveredAt->copy()->addHours($autoConfirmHours),
                     ]);
-                Product::where('id', $oi['product_id'])->decrement('stock', $oi['quantity']);
+
+                    // Log delivery for audit / dispute purposes
+                    AccountDelivery::create([
+                        'order_id' => $order->id,
+                        'product_account_id' => null,
+                        'account_data' => $deliveryContent,
+                        'delivered_at' => $deliveredAt,
+                    ]);
                 }
-            }
 
-            // If a coupon was used, increment its usage counter
-            if ($coupon) {
-                $coupon->increment('uses');
-            }
-
-            // Increment orders_last_3_days for each product (for Trending/Hot badges)
-            $productIds = array_unique(array_column($orderLineItems, 'product_id'));
-            foreach ($productIds as $pid) {
-                $p = Product::find($pid);
-                if ($p) {
-                    $p = $p->ensureActivityWindow();
-                    $p->increment('orders_last_3_days');
-                }
-            }
-
-            // Escrow hold — debit buyer wallet (lock row and re-check balance)
-            $wallet = $user->wallet ?? $user->wallet()->create(['balance' => 0]);
-            $wallet = $user->wallet()->lockForUpdate()->first();
-            if (! $wallet) {
-                throw new \RuntimeException('INSUFFICIENT_WALLET_BALANCE');
-            }
-
-            if ((float) $wallet->balance < $finalTotal) {
-                throw new \RuntimeException('INSUFFICIENT_WALLET_BALANCE');
-            }
-
-            $wallet->decrement('balance', $finalTotal);
-            $wallet->transactions()->create([
-                'type'           => 'purchase_hold',
-                'status'         => 'hold',
-                'amount'         => -$finalTotal,
-                'balance_after'  => (float) $wallet->fresh()->balance,
-                'reference_type' => Order::class,
-                'reference_id'   => $order->id,
-                'description'    => "Escrow hold for order #{$orderNumber}",
-            ]);
-
-            // Instant delivery → delivered immediately
-            if ($isInstant) {
-                $deliveryContent = implode("\n---\n", $allDeliveryContent);
-                $deliveredAt     = now();
-                $order->update([
-                    'status'          => Order::STATUS_DELIVERED,
-                    'delivered_at'    => $deliveredAt,
-                    'delivery_content'=> $deliveryContent,
-                    'auto_confirm_at' => $deliveredAt->copy()->addHours($autoConfirmHours),
-                ]);
-
-                // Log delivery for audit / dispute purposes
-                AccountDelivery::create([
-                    'order_id'           => $order->id,
-                    'product_account_id' => null,
-                    'account_data'       => $deliveryContent,
-                    'delivered_at'       => $deliveredAt,
-                ]);
-            }
-
-            return $order;
-        });
+                return $order;
+            });
         } catch (\RuntimeException $e) {
             if ($e->getMessage() === 'INSUFFICIENT_WALLET_BALANCE') {
                 return $this->error('Insufficient wallet balance.', 422);
@@ -453,12 +462,40 @@ class OrderController extends Controller
         }
 
         SecurityLogService::log($user, 'purchase', $request, [
-            'order_id'     => $order->id,
+            'order_id' => $order->id,
             'order_number' => $order->order_number,
-            'amount'       => $finalTotal,
+            'amount' => $finalTotal,
         ]);
 
-        return $this->success($this->orderPayload($order->fresh(['orderItems.product'])), 'Order placed successfully.', 201);
+        $payload = $this->orderPayload($order->fresh(['orderItems.product']));
+        $payload['requested_discount'] = round($requestedDiscount, 2);
+        $payload['applied_discount'] = round($appliedDiscount, 2);
+        $payload['discount_capped'] = $discountCapped;
+
+        return $this->success($payload, 'Order placed successfully.', 201);
+    }
+
+    /**
+     * Progressive commission % by seller completed orders — must stay in sync with
+     * {@see EscrowService::processScheduledRelease()} and {@see EscrowService::forceReleaseForDisputeResolution()}.
+     */
+    private function commissionPercentForSeller(int $sellerId): float
+    {
+        $completedOrders = Order::where('seller_id', $sellerId)
+            ->where('status', Order::STATUS_COMPLETED)
+            ->count();
+
+        if ($completedOrders >= 100) {
+            return 8.0;
+        }
+        if ($completedOrders >= 20) {
+            return 10.0;
+        }
+        if ($completedOrders >= 10) {
+            return 12.0;
+        }
+
+        return 15.0;
     }
 
     // ─── Helper: build safe order payload ────────────────────────────────────
@@ -470,7 +507,7 @@ class OrderController extends Controller
      */
     private function orderPayload(Order $order): array
     {
-        $data                     = $order->toArray();
+        $data = $order->toArray();
         $data['delivery_content'] = $order->delivery_content;
 
         // Also attach credentials per order item
@@ -478,6 +515,7 @@ class OrderController extends Controller
         $data['order_items'] = $items->map(function ($item) {
             $arr = $item->toArray();
             $arr['delivery_credentials'] = $item->delivery_credentials;
+
             return $arr;
         })->values()->toArray();
 

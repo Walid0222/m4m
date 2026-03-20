@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\AffiliateController;
 use App\Http\Controllers\Api\CouponController;
+use App\Http\Controllers\Api\DebugEscrowController;
 use App\Http\Controllers\Api\DepositRequestController;
 use App\Http\Controllers\Api\DisputeController;
 use App\Http\Controllers\Api\DisputeEvidenceController;
@@ -183,6 +184,12 @@ Route::prefix('v1')->group(function () {
 
             // Coupon preview (apply at checkout)
             Route::post('/coupons/preview', [CouponController::class, 'preview']);
+
+            // ─── Debug (testing only) ─────────────────────────────────────────
+            // TEMP: releases the latest order escrow immediately for payout testing.
+            // IMPORTANT: this route must be removed once testing is complete.
+            Route::post('/debug/release-latest-order', [DebugEscrowController::class, 'releaseLatestHeldOrder'])
+                ->middleware('admin');
 
             // Affiliate / referral
             Route::get('/affiliate/dashboard', [AffiliateController::class, 'dashboard']);

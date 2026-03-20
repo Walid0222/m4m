@@ -367,8 +367,14 @@ export function toggleFavorite(productId) {
 
 // --- Coupons (buyer-facing) ---
 
-export function previewCoupon(code) {
-  return api.post('/coupons/preview', { code }).then(unwrap);
+export function previewCoupon(code, { productId, quantity } = {}) {
+  const body = { coupon_code: code };
+  if (productId) body.product_id = productId;
+  if (quantity) body.quantity = quantity;
+  // Backward compatible fallback (backend still accepts `code`).
+  // This also helps if the backend keeps older validation.
+  body.code = code;
+  return api.post('/coupons/preview', body).then(unwrap);
 }
 
 export function removeFavorite(productId) {

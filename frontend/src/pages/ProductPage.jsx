@@ -52,6 +52,24 @@ function wasProductViewedRecently(productId) {
   return (Date.now() - ts) < VIEW_COOLDOWN_MS;
 }
 
+/** Commission tiers — must match backend OrderController::commissionPercentForSeller */
+function commissionPercentForSeller(completedOrders) {
+  const n = Number(completedOrders) || 0;
+  if (n >= 100) return 8;
+  if (n >= 20) return 10;
+  if (n >= 10) return 12;
+  return 15;
+}
+
+function formatMAD(value) {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) return '0';
+  const rounded = Math.round(n);
+  // Show cents only when needed; avoids ugly trailing ".00".
+  if (Math.abs(n - rounded) < 1e-9) return String(rounded);
+  return n.toFixed(2);
+}
+
 const FEATURE_ICONS = {
   mac: { label: 'Works on Mac', icon: <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg> },
   linux: { label: 'Works on Linux', icon: <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489.109.699.439 1.304.968 1.754.177.15.359.283.546.408-.584 1.12-.99 2.376-.993 3.627-.006 1.773 1.175 3.225 2.99 3.308 1.804.083 2.876-1.196 3.393-2.645.17-.478.279-.988.322-1.521.026-.318.05-.636.065-.954.01-.233.014-.47.014-.704 0-.237-.004-.47-.013-.703-.002-.06.002-.119.013-.178.072-.367.272-.705.583-.963.328-.271.732-.422 1.2-.422.463 0 .861.149 1.188.42.314.257.515.598.589.966.011.06.015.12.013.18-.009.233-.013.466-.013.7 0 .234.004.467.014.697.016.317.039.636.065.955.043.532.153 1.043.322 1.52.517 1.45 1.589 2.728 3.393 2.645 1.815-.083 2.996-1.535 2.99-3.308-.003-1.25-.408-2.507-.993-3.628.187-.125.37-.258.547-.408.529-.45.859-1.055.968-1.754.123-.805-.009-1.657-.287-2.489-.589-1.771-1.831-3.47-2.716-4.521-.75-1.067-.974-1.928-1.05-3.02-.065-1.491 1.056-5.965-3.17-6.298-.165-.013-.325-.021-.48-.021z"/></svg> },
@@ -71,6 +89,7 @@ function PurchaseConfirmModal({
   onApplyCoupon,
   couponError,
   discountAmount,
+  discountCapped = false,
   subtotal,
   finalTotal,
   isCheckingCoupon,
@@ -138,7 +157,7 @@ function PurchaseConfirmModal({
           </div>
           <div className="flex justify-between text-xs text-gray-600 border-t border-gray-200 pt-2 mt-2">
             <span>{t('product.subtotal')}</span>
-            <span className="font-medium text-gray-900">{Math.round(Number(subtotal || 0))} MAD</span>
+            <span className="font-medium text-gray-900">{formatMAD(subtotal)} MAD</span>
           </div>
           <div className="flex items-center justify-between gap-2 text-xs">
             <div className="flex flex-col">
@@ -171,13 +190,20 @@ function PurchaseConfirmModal({
           {discountAmount > 0 && (
             <div className="flex justify-between text-xs text-green-700 mt-1">
               <span>{t('product.coupon_discount')}</span>
-              <span>-{Math.round(Number(discountAmount || 0))} MAD</span>
+              <span>-{formatMAD(discountAmount)} MAD</span>
             </div>
           )}
           <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
             <span className="font-semibold text-gray-900">{t('product.final_total')}</span>
-            <span className="font-bold text-gray-900">{Math.round(Number(finalTotal || 0))} MAD</span>
+            <span className="font-bold text-gray-900">{formatMAD(finalTotal)} MAD</span>
           </div>
+          {Number(discountAmount || 0) > 0 && (
+            <p className="text-xs text-green-600 mt-1.5">
+              {discountCapped
+                ? `You saved ${formatMAD(discountAmount)} MAD (maximum allowed for this order)`
+                : `You saved ${formatMAD(discountAmount)} MAD`}
+            </p>
+          )}
           {onBuyerNoteChange && (
             <div className="mt-3 pt-3 border-t border-gray-200">
               <label className="block text-xs font-medium text-gray-700 mb-1">{t('product.order_note')}</label>
@@ -233,6 +259,7 @@ export default function ProductPage() {
   const [favToggling, setFavToggling] = useState(false);
   const [couponCode, setCouponCode] = useState('');
   const [couponInfo, setCouponInfo] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
   const [couponError, setCouponError] = useState('');
   const [couponChecking, setCouponChecking] = useState(false);
   const [buyerNote, setBuyerNote] = useState('');
@@ -470,11 +497,16 @@ export default function ProductPage() {
     setCouponError('');
     try {
       const { previewCoupon } = await import('../services/api');
-      const info = await previewCoupon(couponCode.trim());
+      const info = await previewCoupon(couponCode.trim(), {
+        productId: product?.id,
+        quantity,
+      });
       setCouponInfo(info);
+      setPreviewData(info);
       setCouponError('');
     } catch (err) {
       setCouponInfo(null);
+      setPreviewData(null);
       setCouponError(err.message || 'Invalid or expired coupon.');
     } finally {
       setCouponChecking(false);
@@ -504,10 +536,13 @@ export default function ProductPage() {
       const wallet = await getWallet();
       const balance = Number(wallet?.balance ?? 0);
       const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
-      const subtotal = baseUnitPrice * quantity;
+      const sub = baseUnitPrice * quantity;
       const pct = couponInfo?.discount_percent ?? 0;
-      const discount = pct > 0 ? Math.max(0, Math.min(subtotal, (subtotal * pct) / 100)) : 0;
-      const total = Math.max(0, subtotal - discount);
+      const requested = pct && sub > 0 ? Math.round((sub * (pct / 100)) * 100) / 100 : 0;
+      const completedOrders = product?.seller?.completed_sales ?? product?.seller?.completedSales ?? 0;
+      const baseCommission = Math.round((sub * (commissionPercentForSeller(completedOrders) / 100)) * 100) / 100;
+      const applied = Math.min(requested, baseCommission);
+      const total = Math.max(0, sub - applied);
       if (balance < total) { setError('Insufficient wallet balance.'); setBuying(false); return; }
       await createOrder(
         [{ product_id: product.id, quantity }],
@@ -646,27 +681,53 @@ export default function ProductPage() {
             setCouponError('');
             // Clear applied coupon info when code changes
             setCouponInfo(null);
+            setPreviewData(null);
           }}
           onApplyCoupon={handleApplyCoupon}
           couponError={couponError}
-          discountAmount={(() => {
-            const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
-            const subtotal = baseUnitPrice * quantity;
-            const pct = couponInfo?.discount_percent ?? 0;
-            if (!pct || subtotal <= 0) return 0;
-            return Math.max(0, Math.min(subtotal, (subtotal * pct) / 100));
-          })()}
-          subtotal={(() => {
-            const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
-            return baseUnitPrice * quantity;
-          })()}
-          finalTotal={(() => {
-            const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
-            const subtotal = baseUnitPrice * quantity;
-            const pct = couponInfo?.discount_percent ?? 0;
-            const discount = pct ? Math.max(0, Math.min(subtotal, (subtotal * pct) / 100)) : 0;
-            return Math.max(0, subtotal - discount);
-          })()}
+          discountAmount={previewData?.applied_discount != null
+            ? Number(previewData.applied_discount)
+            : (() => {
+                const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
+                const sub = baseUnitPrice * quantity;
+                const pct = couponInfo?.discount_percent ?? 0;
+                const requested = pct && sub > 0 ? Math.round((sub * (pct / 100)) * 100) / 100 : 0;
+                const completedOrders = product?.seller?.completed_sales ?? product?.seller?.completedSales ?? 0;
+                const cpct = commissionPercentForSeller(completedOrders);
+                const baseCommission = Math.round((sub * (cpct / 100)) * 100) / 100;
+                return Math.min(requested, baseCommission);
+              })()}
+          subtotal={previewData?.subtotal != null
+            ? Number(previewData.subtotal)
+            : (() => {
+                const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
+                return baseUnitPrice * quantity;
+              })()}
+          finalTotal={previewData?.final_total != null
+            ? Number(previewData.final_total)
+            : (() => {
+                const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
+                const sub = baseUnitPrice * quantity;
+                const pct = couponInfo?.discount_percent ?? 0;
+                const requested = pct && sub > 0 ? Math.round((sub * (pct / 100)) * 100) / 100 : 0;
+                const completedOrders = product?.seller?.completed_sales ?? product?.seller?.completedSales ?? 0;
+                const cpct = commissionPercentForSeller(completedOrders);
+                const baseCommission = Math.round((sub * (cpct / 100)) * 100) / 100;
+                const applied = Math.min(requested, baseCommission);
+                return Math.max(0, sub - applied);
+              })()}
+          discountCapped={previewData?.discount_capped != null
+            ? !!previewData.discount_capped
+            : (() => {
+                const baseUnitPrice = Number(product.effective_price ?? product.price ?? 0);
+                const sub = baseUnitPrice * quantity;
+                const pct = couponInfo?.discount_percent ?? 0;
+                const requested = pct && sub > 0 ? Math.round((sub * (pct / 100)) * 100) / 100 : 0;
+                if (requested <= 0) return false;
+                const completedOrders = product?.seller?.completed_sales ?? product?.seller?.completedSales ?? 0;
+                const baseCommission = Math.round((sub * (commissionPercentForSeller(completedOrders) / 100)) * 100) / 100;
+                return requested > baseCommission;
+              })()}
           isCheckingCoupon={couponChecking}
           buyerNote={buyerNote}
           onBuyerNoteChange={setBuyerNote}
