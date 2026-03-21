@@ -1,5 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigationType } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  Scale,
+  Wallet,
+  ArrowDownToLine,
+  Flag,
+  ShieldCheck,
+  CircleDot,
+  Package,
+  Tag,
+  Megaphone,
+  Users,
+  MessageCircle,
+  Settings,
+  Menu,
+  X,
+} from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { useAuth } from '../contexts/AuthContext';
 import { useRefresh } from '../contexts/RefreshContext';
@@ -52,20 +69,20 @@ import {
 } from '../services/api';
 
 const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'escrow', label: 'Escrow Monitoring' },
-  { id: 'deposits', label: 'Deposits' },
-  { id: 'withdrawals', label: 'Withdrawals' },
-  { id: 'reports', label: 'Reports' },
-  { id: 'disputes', label: 'Disputes' },
-  { id: 'verification', label: 'Verifications' },
-  { id: 'service-requests', label: 'Service requests' },
-  { id: 'services', label: 'Service Management' },
-  { id: 'coupons', label: 'Coupons' },
-  { id: 'announcements', label: 'Announcements' },
-  { id: 'affiliates', label: 'Affiliates' },
-  { id: 'support', label: 'Support Chat' },
-  { id: 'marketplace-settings', label: 'Marketplace' },
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'escrow', label: 'Escrow Monitoring', icon: Scale },
+  { id: 'deposits', label: 'Deposits', icon: Wallet },
+  { id: 'withdrawals', label: 'Withdrawals', icon: ArrowDownToLine },
+  { id: 'reports', label: 'Reports', icon: Flag },
+  { id: 'disputes', label: 'Disputes', icon: Scale },
+  { id: 'verification', label: 'Verifications', icon: ShieldCheck },
+  { id: 'service-requests', label: 'Service requests', icon: CircleDot },
+  { id: 'services', label: 'Service Management', icon: Package },
+  { id: 'coupons', label: 'Coupons', icon: Tag },
+  { id: 'announcements', label: 'Announcements', icon: Megaphone },
+  { id: 'affiliates', label: 'Affiliates', icon: Users },
+  { id: 'support', label: 'Support Chat', icon: MessageCircle },
+  { id: 'marketplace-settings', label: 'Marketplace', icon: Settings },
 ];
 
 const REPORT_FILTER_OPTIONS = [
@@ -1454,6 +1471,8 @@ function SupportChatPanel({ adminUser }) {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const navigationType = useNavigationType();
+
 
   // Load all threads: try API first, fall back to localStorage
   const loadAllThreads = useCallback(async () => {
@@ -1508,8 +1527,13 @@ function SupportChatPanel({ adminUser }) {
 
   // Auto-scroll
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [threadMessages]);
+    if (navigationType === 'POP') return;
+  
+    messagesEndRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'end'
+    });
+  }, [threadMessages, navigationType]);
 
   // Focus input when thread selected
   useEffect(() => {
@@ -2696,7 +2720,7 @@ const VALID_ADMIN_TABS = ['overview', 'deposits', 'escrow', 'withdrawals', 'repo
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState(() => (VALID_ADMIN_TABS.includes(tabFromUrl) ? tabFromUrl : 'overview'));
   const [refreshToken, setRefreshToken] = useState(0);
@@ -2715,6 +2739,7 @@ export default function AdminDashboardPage() {
     openDisputes: 0,
     unreadSupportMessages: 0,
   });
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (VALID_ADMIN_TABS.includes(tabFromUrl)) setActiveTab(tabFromUrl);
@@ -2753,6 +2778,12 @@ export default function AdminDashboardPage() {
     };
   }, [refreshToken, user?.is_admin]);
 
+  useEffect(() => {
+    if (!user?.is_admin) return;
+    if (!tick) return;
+    setRefreshToken((t) => t + 1);
+  }, [tick, user?.is_admin]);
+
   if (!getToken()) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-12 text-center text-gray-500">
@@ -2760,12 +2791,6 @@ export default function AdminDashboardPage() {
       </div>
     );
   }
-
-  useEffect(() => {
-    if (!user?.is_admin) return;
-    if (!tick) return;
-    setRefreshToken((t) => t + 1);
-  }, [tick, user?.is_admin]);
 
   const getBadgeForTab = (id) => {
     if (!user?.is_admin) return 0;
@@ -2775,207 +2800,210 @@ export default function AdminDashboardPage() {
     if (id === 'verification') return pendingCounts.verification || 0;
     if (id === 'service-requests') return pendingCounts['service-requests'] || 0;
     if (id === 'reports') return pendingCounts.reports || 0;
+    if (id === 'support') return adminStats?.unreadSupportMessages ?? 0;
     return 0;
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Manage deposits, withdrawals, reports, disputes and verifications.
-            {user?.name && <span className="ml-1 text-m4m-purple font-medium">({user.name})</span>}
+    <div className="flex min-h-screen">
+      {/* Mobile overlay */}
+      {isSidebarOpen && (
+        <button
+          type="button"
+          onClick={() => setIsSidebarOpen(false)}
+          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          aria-label="Close menu"
+        />
+      )}
+
+      <aside
+        className={`fixed md:static inset-y-0 left-0 z-50 md:z-auto w-64 border-r border-gray-200 bg-white md:shrink-0 flex flex-col transform transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
+        <div className="p-4 border-b border-gray-200">
+          <p className="text-sm text-gray-500 mt-0.5">
+            {user?.name ? (
+              <span className="text-m4m-purple font-medium">{user.name}</span>
+            ) : (
+              'Admin'
+            )}
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs">
-          <button
-            type="button"
-            onClick={() => setRefreshToken((t) => t + 1)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+        <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {TABS.map((t) => {
+            const { id, label, icon: Icon } = t;
+            const isActive = activeTab === id;
+            const badgeCount = getBadgeForTab(id);
+            const showBadge = !isActive && Number(badgeCount) > 0;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => {
+                  setActiveTab(id);
+                  setSearchParams({ tab: id }, { replace: true });
+                  setIsSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-colors ${
+                  isActive ? 'bg-m4m-purple text-white' : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {Icon && <Icon className="w-5 h-5 shrink-0" aria-hidden />}
+                <span className="flex-1 flex items-center gap-2 truncate">
+                  {label}
+                  {showBadge && (
+                    <span className="min-w-[18px] h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 flex-shrink-0 transition-opacity duration-200">
+                      {badgeCount > 99 ? '99+' : badgeCount}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+        <div className="p-4 border-t border-gray-200">
+          <Link
+            to="/"
+            className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-m4m-purple transition-colors"
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19A9 9 0 0119 5" />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Refresh
-          </button>
+            Back to Marketplace
+          </Link>
         </div>
-      </div>
+      </aside>
 
-      {/* Overview metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Deposits Pending */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .843-3 1.882 0 1.04 1.343 1.882 3 1.882s3 .843 3 1.882c0 1.04-1.343 1.882-3 1.882m0-7.528V6m0 9.528V18m0 3c5.523 0 10-3.134 10-7s-4.477-7-10-7S2 7.134 2 11s4.477 7 10 7z" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Deposits pending</p>
-            <p className="text-xl font-semibold text-gray-900">
-              {adminStats?.pendingDeposits ?? '—'}
-            </p>
-          </div>
-        </div>
-
-        {/* Withdrawals Pending */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .843-3 1.882 0 1.04 1.343 1.882 3 1.882s3 .843 3 1.882C15 14.686 13.657 15.529 12 15.529m0-7.529V4m0 11.529V20m8-8a8 8 0 11-16 0 8 8 0 0116 0z" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Withdrawals pending</p>
-            <p className="text-xl font-semibold text-gray-900">
-              {adminStats?.pendingWithdrawals ?? '—'}
-            </p>
-          </div>
-        </div>
-
-        {/* Open Disputes */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m6 2v-2M4 11h16M5 19h14a1 1 0 00.96-.73l2-7A1 1 0 0021 10H3a1 1 0 00-.96 1.27l2 7A1 1 0 005 19zm7-9V5a2 2 0 114 0v5" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Open disputes</p>
-            <p className="text-xl font-semibold text-gray-900">
-              {adminStats?.openDisputes ?? '—'}
-            </p>
-          </div>
-        </div>
-
-        {/* Unread Support Messages */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M21 12a9 9 0 11-18 0 9 9 0 018.25-8.96A7 7 0 0120 10v1.5a2.5 2.5 0 01-2.5 2.5H17l-2 2v-2h-1" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Unread support messages</p>
-            <p className="text-xl font-semibold text-gray-900">
-              {adminStats?.unreadSupportMessages ?? '—'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs grouped by category (visual only) */}
-      <div className="space-y-4 mb-7">
-        {/* Support & Operations */}
-        <section>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Support &amp; Operations
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {TABS.filter((t) => ['overview', 'support'].includes(t.id)).map((t) => (
-              <TabButton
-                key={t.id}
-                {...t}
-                active={activeTab === t.id}
-                onClick={setActiveTab}
-                badgeCount={getBadgeForTab(t.id)}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* Finance */}
-        <section>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Finance
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {TABS.filter((t) =>
-              ['deposits', 'withdrawals', 'escrow', 'reports'].includes(t.id)
-            ).map((t) => (
-              <TabButton
-                key={t.id}
-                {...t}
-                active={activeTab === t.id}
-                onClick={setActiveTab}
-                badgeCount={getBadgeForTab(t.id)}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* Moderation */}
-        <section>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Moderation
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {TABS.filter((t) => ['disputes', 'verification', 'service-requests'].includes(t.id)).map(
-              (t) => (
-                <TabButton
-                  key={t.id}
-                  {...t}
-                  active={activeTab === t.id}
-                  onClick={setActiveTab}
-                  badgeCount={getBadgeForTab(t.id)}
-                />
-              )
-            )}
-          </div>
-        </section>
-
-        {/* Platform */}
-        <section>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Platform
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {TABS.filter((t) =>
-              ['services', 'coupons', 'announcements', 'affiliates', 'marketplace-settings'].includes(t.id)
-            ).map((t) => (
-              <TabButton
-                key={t.id}
-                {...t}
-                active={activeTab === t.id}
-                onClick={setActiveTab}
-                badgeCount={getBadgeForTab(t.id)}
-              />
-            ))}
-          </div>
-        </section>
-      </div>
-
-      {/* Panel */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 md:p-6">
-        {activeTab === 'overview' && <OverviewPanel />}
-        {activeTab === 'deposits' && <DepositsPanel />}
-        {activeTab === 'escrow' && <EscrowPanel />}
-        {activeTab === 'withdrawals' && <WithdrawalsPanel />}
-        {activeTab === 'reports' && <ReportsPanel />}
-        {activeTab === 'disputes' && <DisputesPanel />}
-        {activeTab === 'verification' && <VerificationPanel />}
-        {activeTab === 'service-requests' && <ServiceRequestsPanel />}
-        {activeTab === 'services' && <ServiceManagementPanel />}
-        {activeTab === 'coupons' && <CouponsPanel />}
-        {activeTab === 'announcements' && <AnnouncementsPanel />}
-        {activeTab === 'affiliates' && <AffiliatesPanel />}
-        {activeTab === 'support' && (
-          <div className="flex flex-col gap-3 h-full">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Support Inbox</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Manage conversations with buyers and sellers.
+      <main className="flex-1 min-h-0 overflow-y-auto p-6 bg-gray-50">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen((o) => !o)}
+                className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-200 transition-colors"
+                aria-label="Toggle menu"
+              >
+                {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+              <p className="text-gray-500 text-sm mt-1">
+                Manage deposits, withdrawals, reports, disputes and verifications.
+                {user?.name && <span className="ml-1 text-m4m-purple font-medium">({user.name})</span>}
               </p>
+              </div>
             </div>
-            <div className="flex-1 min-h-0">
-              <SupportChatPanel adminUser={user} />
+            <div className="flex items-center gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => setRefreshToken((t) => t + 1)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v6h6M20 20v-6h-6" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19A9 9 0 0119 5" />
+                </svg>
+                Refresh
+              </button>
             </div>
           </div>
-        )}
-        {activeTab === 'marketplace-settings' && <MarketplaceSettingsPanel />}
-      </div>
+
+          {/* Overview metrics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Deposits Pending */}
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .843-3 1.882 0 1.04 1.343 1.882 3 1.882s3 .843 3 1.882c0 1.04-1.343 1.882-3 1.882m0-7.528V6m0 9.528V18m0 3c5.523 0 10-3.134 10-7s-4.477-7-10-7S2 7.134 2 11s4.477 7 10 7z" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Deposits pending</p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {adminStats?.pendingDeposits ?? '—'}
+                </p>
+              </div>
+            </div>
+
+            {/* Withdrawals Pending */}
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .843-3 1.882 0 1.04 1.343 1.882 3 1.882s3 .843 3 1.882C15 14.686 13.657 15.529 12 15.529m0-7.529V4m0 11.529V20m8-8a8 8 0 11-16 0 8 8 0 0116 0z" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Withdrawals pending</p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {adminStats?.pendingWithdrawals ?? '—'}
+                </p>
+              </div>
+            </div>
+
+            {/* Open Disputes */}
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m6 2v-2M4 11h16M5 19h14a1 1 0 00.96-.73l2-7A1 1 0 0021 10H3a1 1 0 00-.96 1.27l2 7A1 1 0 005 19zm7-9V5a2 2 0 114 0v5" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Open disputes</p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {adminStats?.openDisputes ?? '—'}
+                </p>
+              </div>
+            </div>
+
+            {/* Unread Support Messages */}
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M21 12a9 9 0 11-18 0 9 9 0 018.25-8.96A7 7 0 0120 10v1.5a2.5 2.5 0 01-2.5 2.5H17l-2 2v-2h-1" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Unread support messages</p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {adminStats?.unreadSupportMessages ?? '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Panel */}
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 md:p-6">
+            {activeTab === 'overview' && <OverviewPanel />}
+            {activeTab === 'deposits' && <DepositsPanel />}
+            {activeTab === 'escrow' && <EscrowPanel />}
+            {activeTab === 'withdrawals' && <WithdrawalsPanel />}
+            {activeTab === 'reports' && <ReportsPanel />}
+            {activeTab === 'disputes' && <DisputesPanel />}
+            {activeTab === 'verification' && <VerificationPanel />}
+            {activeTab === 'service-requests' && <ServiceRequestsPanel />}
+            {activeTab === 'services' && <ServiceManagementPanel />}
+            {activeTab === 'coupons' && <CouponsPanel />}
+            {activeTab === 'announcements' && <AnnouncementsPanel />}
+            {activeTab === 'affiliates' && <AffiliatesPanel />}
+            {activeTab === 'support' && (
+              <div className="flex flex-col gap-3 h-full">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Support Inbox</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Manage conversations with buyers and sellers.
+                  </p>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <SupportChatPanel adminUser={user} />
+                </div>
+              </div>
+            )}
+            {activeTab === 'marketplace-settings' && <MarketplaceSettingsPanel />}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

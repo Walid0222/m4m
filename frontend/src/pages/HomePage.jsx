@@ -3,6 +3,7 @@ import { useSearchParams, useLocation, Link } from 'react-router-dom';
 import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star, Grid2X2, History, Share2 } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import ServiceCard from '../components/ServiceCard';
+import FAQSection from '../components/FAQSection';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import {
@@ -1032,6 +1033,7 @@ export default function HomePage() {
       {isMarketplaceOnly ? (
         <div id="marketplace" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
           {marketplaceCatalog}
+          <FAQSection />
         </div>
       ) : (
       <>
@@ -1283,7 +1285,7 @@ export default function HomePage() {
           <section className="mb-6 md:mb-8">
             <Link
               to="/affiliate/dashboard"
-              className="block rounded-xl shadow-lg overflow-hidden bg-gradient-to-br from-purple-600 via-m4m-purple to-blue-600 hover:shadow-xl transition-shadow focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:ring-offset-2"
+              className="block rounded-xl shadow-lg overflow-hidden bg-gradient-to-br from-purple-950 via-m4m-purple to-blue-950 hover:shadow-xl transition-shadow focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:ring-offset-2"
             >
               <div className="relative px-4 sm:px-6 md:px-8 py-6 sm:py-8 text-center">
                 <div className="absolute inset-0 opacity-10">
@@ -1313,7 +1315,7 @@ export default function HomePage() {
             </Link>
           </section>
         )}
-        
+
         {/* Flash Deals - homepage only */}
         {!isMarketplaceOnly && (trendingLoading || trending.length > 0) && (
           <section className="mb-6 md:mb-8">
@@ -1359,6 +1361,7 @@ export default function HomePage() {
           </section>
         )}
 
+        <FAQSection />
       </div>
     </>
     )}

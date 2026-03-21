@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation, Outlet } from 'react-router-dom';
+import ScrollManager from './ScrollManager';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import RecentSalesPopup from './RecentSalesPopup';
@@ -29,13 +30,14 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-m4m-gray-50 flex flex-col">
+      <ScrollManager />
       <div className="sticky top-0 z-[60] w-full bg-white shadow-sm">
         <AnnouncementBanner />
         <EmailVerificationBanner />
         <Navbar />
       </div>
       <AdminWarningBanner />
-      <main className="flex-1">
+      <main className="flex-1 animate-pageFade">
         <Outlet />
       </main>
       <Footer />

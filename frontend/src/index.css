@@ -62,8 +62,35 @@ button {
   animation: wizard-step-fade-in 0.25s ease-out;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes pageFade {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-pageFade {
+  animation: pageFade 0.35s ease;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wizard-step-animate {
+    animation: none;
+  }
+  .animate-pageFade {
     animation: none;
   }
 }
