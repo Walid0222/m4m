@@ -37,6 +37,8 @@ const arOverrides = {
   "home.max": "الحد الأقصى",
   "home.filters": "الفلاتر",
   "home.categories": "الفئات",
+  "home.categories.title": "استكشف الفئات",
+  "home.categories.subtitle": "اكتشف أفضل الخدمات والألعاب الموثوقة من آلاف المشترين",
   "home.recently_viewed": "شوهدت مؤخراً",
   "home.stats_products": "المنتجات",
   "home.stats_sellers": "البائعون",

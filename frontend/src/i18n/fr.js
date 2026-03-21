@@ -37,6 +37,8 @@ const frOverrides = {
   "home.max": "Max",
   "home.filters": "Filtres",
   "home.categories": "Catégories",
+  "home.categories.title": "Explorer les catégories",
+  "home.categories.subtitle": "Découvrez les meilleurs services et jeux approuvés par des milliers d'acheteurs",
   "home.recently_viewed": "Récemment consultés",
   "home.stats_products": "Produits",
   "home.stats_sellers": "Vendeurs",

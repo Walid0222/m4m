@@ -37,6 +37,8 @@ const en = {
   "home.max": "Max",
   "home.filters": "Filters",
   "home.categories": "Categories",
+  "home.categories.title": "Explore Categories",
+  "home.categories.subtitle": "Discover top services and games trusted by thousands of buyers",
   "home.recently_viewed": "Recently Viewed",
   "home.stats_products": "Products",
   "home.stats_sellers": "Sellers",

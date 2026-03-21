@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
-import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star, Grid2X2, History, Share2 } from 'lucide-react';
+import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star, History, Share2, LayoutGrid } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
-import ServiceCard from '../components/ServiceCard';
 import FAQSection from '../components/FAQSection';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -1137,63 +1136,113 @@ export default function HomePage() {
 
         {/* Categories / services - homepage only */}
         {!isMarketplaceOnly && services.length > 0 && (
-          <section className="mb-6 md:mb-8">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <div>
+          <section className="mb-10 md:mb-14">
+            <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <Grid2X2 className="w-5 h-5 text-purple-500" />
-                  <h2 className="text-lg font-semibold text-gray-900">{t('home.categories')}</h2>
+                  <LayoutGrid className="w-5 h-5 text-m4m-purple" />
+                  <h2 className="text-lg font-semibold text-m4m-black">
+                    {t('home.categories.title')}
+                  </h2>
                 </div>
-                <div className="h-[2px] w-10 bg-purple-500 rounded mb-4"></div>
-                <p className="text-sm text-m4m-gray-500">
-                  {t('home.browse_filter')}
+                <div className="h-[2px] w-10 bg-m4m-purple rounded mb-4"></div>
+                <p className="text-sm text-m4m-gray-500 mb-6">
+                  {t('home.categories.subtitle')}
                 </p>
               </div>
-              <Link
-                to="/marketplace"
-                className="text-sm font-medium text-m4m-purple hover:underline"
-              >
-                {t('common.see_all')}
-              </Link>
-            </div>
 
-            {/* Mobile: compact 4-column grid */}
-            <div className="grid grid-cols-4 gap-3 sm:hidden">
-              {(services || []).slice(0, 8).map((svc) => (
-                <Link key={svc.id} to={`/service/${svc.slug}`} className="flex justify-center">
-                  <ServiceCard service={svc} />
-                </Link>
-              ))}
-            </div>
-
-            {/* Tablet / desktop: keep grouped layout */}
-            <div className="hidden sm:grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-              {Object.entries(groupedServices).map(([groupName, items]) => {
-                if (!items || items.length === 0) return null;
-                return (
-                  <div key={groupName} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-m4m-gray-800 tracking-wide uppercase">
-                        {groupName}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mt-6">
+                {/* SERVICES block */}
+                {groupedServices.Services?.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-m4m-black">
+                        SERVICES
                       </h3>
-                      <button
-                        type="button"
-                        className="text-[11px] font-medium text-m4m-purple hover:underline"
-                      >
-                        {groupName === 'Services' ? t('home.show_all_services') : t('home.show_all_games')}
-                      </button>
+                      <Link to="/marketplace" className="text-sm text-m4m-purple hover:underline">
+                        Show all →
+                      </Link>
                     </div>
-                    <div className="grid grid-cols-4 lg:grid-cols-7 gap-3">
-                      {items.map((svc) => (
-                        <Link key={svc.id} to={`/service/${svc.slug}`} className="flex justify-center">
-                          <ServiceCard service={svc} />
-                        </Link>
-                      ))}
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {groupedServices.Services.map((svc) => {
+                        const slug = (svc.slug || '').toLowerCase();
+                        const iconSrc = svc.icon && typeof svc.icon === 'string' && svc.icon.startsWith('/services/')
+                          ? svc.icon
+                          : (slug ? `/services/${slug}.svg` : '/services/default.svg');
+                        return (
+                          <Link
+                            key={svc.id}
+                            to={`/service/${svc.slug}`}
+                            className="group relative cursor-pointer rounded-2xl border border-m4m-gray-200 bg-white p-3 flex flex-col items-center justify-center text-center transition-all duration-200 hover:shadow-sm hover:-translate-y-[1px] block"
+                          >
+                            <div className="w-10 h-10 mb-2 flex items-center justify-center rounded-xl bg-m4m-purple/10">
+                              <img
+                                src={iconSrc}
+                                alt=""
+                                className="w-6 h-6 object-contain"
+                                onError={(e) => {
+                                  if (!e.currentTarget.dataset.fb) {
+                                    e.currentTarget.dataset.fb = '1';
+                                    e.currentTarget.src = '/services/default.svg';
+                                  }
+                                }}
+                              />
+                            </div>
+                            <p className="text-xs font-semibold text-m4m-black truncate w-full">
+                              {svc.name}
+                            </p>
+                          </Link>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                )}
+
+                {/* GAMES block */}
+                {groupedServices.Games?.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-m4m-black">
+                        GAMES
+                      </h3>
+                      <Link to="/marketplace" className="text-sm text-m4m-purple hover:underline">
+                        Show all →
+                      </Link>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {groupedServices.Games.map((svc) => {
+                        const slug = (svc.slug || '').toLowerCase();
+                        const iconSrc = svc.icon && typeof svc.icon === 'string' && svc.icon.startsWith('/services/')
+                          ? svc.icon
+                          : (slug ? `/services/${slug}.svg` : '/services/default.svg');
+                        return (
+                          <Link
+                            key={svc.id}
+                            to={`/service/${svc.slug}`}
+                            className="group relative cursor-pointer rounded-2xl border border-m4m-gray-200 bg-white p-3 flex flex-col items-center justify-center text-center transition-all duration-200 hover:shadow-sm hover:-translate-y-[1px] block"
+                          >
+                            <div className="w-10 h-10 mb-2 flex items-center justify-center rounded-xl bg-m4m-purple/10">
+                              <img
+                                src={iconSrc}
+                                alt=""
+                                className="w-6 h-6 object-contain"
+                                onError={(e) => {
+                                  if (!e.currentTarget.dataset.fb) {
+                                    e.currentTarget.dataset.fb = '1';
+                                    e.currentTarget.src = '/services/default.svg';
+                                  }
+                                }}
+                              />
+                            </div>
+                            <p className="text-xs font-semibold text-m4m-black truncate w-full">
+                              {svc.name}
+                            </p>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
           </section>
         )}
 
