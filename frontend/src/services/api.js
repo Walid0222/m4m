@@ -198,6 +198,11 @@ export function getPublicSellerStats(id) {
   return api.get(`/sellers/${id}/stats`).then(unwrap);
 }
 
+/** Returns full paginated body { data, current_page, last_page, total, per_page } (not unwrap — meta required). */
+export function getReviews(params = {}) {
+  return api.get('/reviews', { params }).then((res) => res.data);
+}
+
 export function createReview(productId, { order_id, rating, comment }) {
   return api.post(`/products/${productId}/reviews`, { order_id, rating, comment }).then((res) => {
     const data = res.data?.data !== undefined ? res.data.data : res.data;

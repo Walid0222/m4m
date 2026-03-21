@@ -113,6 +113,7 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/sellers/{seller}',              [SellerProfileController::class, 'show']);
     Route::get('/sellers/{seller}/stats',        [StatsController::class, 'publicSellerStats']);
+    Route::get('/reviews',                       [ReviewController::class, 'index']);
 
     // Announcements
     Route::get('/announcements', [AnnouncementController::class, 'index']);
