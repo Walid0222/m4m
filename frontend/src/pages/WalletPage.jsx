@@ -406,8 +406,11 @@ export default function WalletPage() {
                 ?
               </button>
               <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 bg-black/80 text-white text-[11px] rounded-xl px-3 py-2 shadow-lg z-30 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity text-left leading-relaxed">
-                Money you can withdraw immediately. This includes earnings from completed orders that have passed the security holding period.
-                <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-black/80" />
+              {isSeller
+    ? "Money you can withdraw immediately. This includes earnings from completed orders that have passed the security holding period."
+    : "Your payments are held securely until the order is completed and confirmed. This protects both buyers and sellers."
+  }
+                  <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-black/80" />
               </div>
             </div>
           </div>
@@ -653,7 +656,12 @@ export default function WalletPage() {
               ℹ
             </button>
             <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 bg-gray-900 text-white text-xs rounded-xl px-3 py-2.5 shadow-lg z-50 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity text-center leading-relaxed">
-              M4M marketplace takes a <strong>10% commission</strong> from each completed order. The remaining 90% is credited to your wallet as a seller payout.
+            <div className="tooltip">
+  {isSeller
+    ? "M4M marketplace takes a 10% commission from each completed order. The remaining 90% is credited to your wallet as a seller payout."
+    : "Payments are held in escrow until you receive your order. If there is an issue, you can open a dispute for protection."
+  }
+</div>
               <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-gray-900" />
             </div>
           </div>

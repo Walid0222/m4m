@@ -186,13 +186,15 @@ export default function HomePage() {
   }, [isMarketplaceOnly]);
 
   // Load services for homepage "Browse by service" (homepage only)
+  // Backend returns featured services, or all if none featured
   useEffect(() => {
     if (isMarketplaceOnly) return;
     let cancelled = false;
-    getServices()
+    getServices({ featured: 1 })
       .then((data) => {
-        if (!cancelled && Array.isArray(data)) setServices(data);
-        else if (!cancelled && data?.data) setServices(data.data);
+        if (cancelled) return;
+        const list = Array.isArray(data) ? data : (data?.data ?? []);
+        setServices(list);
       })
       .catch(() => { if (!cancelled) setServices([]); });
     return () => { cancelled = true; };
@@ -585,46 +587,43 @@ export default function HomePage() {
       Services: [],
       Games: [],
     };
-
+  
     (services || []).forEach((svc) => {
-      const slug = (svc.slug || svc.name || '').toLowerCase();
-      const serviceSlugs = [
-        'chatgpt',
-        'discord',
-        'instagram',
-        'netflix',
-        'spotify',
-        'tiktok',
-        'youtube',
-        'canva',
-        'figma',
-        'adobe',
-        'disney-plus',
-        'primevideo',
-      ];
-      const gameSlugs = [
-        'fortnite',
-        'pubg',
-        'playstation',
-        'steam',
-        'xbox',
-        'roblox',
-        'minecraft',
-        'riotgames',
-        'ubisoft',
-        'nintendo',
-      ];
-
-      if (serviceSlugs.some((k) => slug.includes(k))) {
-        groups.Services.push(svc);
-      } else if (gameSlugs.some((k) => slug.includes(k))) {
+      // 🎮 Gaming category = id 2
+      if (Number(svc.category_id) === 2) {
         groups.Games.push(svc);
+      } else {
+        groups.Services.push(svc);
       }
     });
-
+  
     return groups;
   }, [services]);
 
+  function getServiceImage(svc) {
+    if (!svc || typeof svc !== 'object') {
+      return '/services/default.svg';
+    }
+
+    const slug = (svc.slug || '').toLowerCase();
+
+    const homepageImg = typeof svc.homepage_image === 'string' ? svc.homepage_image.trim() : '';
+    const isValidUrlOrPath = homepageImg &&
+      (homepageImg.startsWith('http://') || homepageImg.startsWith('https://') || homepageImg.startsWith('/'));
+    if (isValidUrlOrPath) {
+      return homepageImg;
+    }
+
+    if (typeof svc.icon === 'string' && svc.icon.startsWith('/services/')) {
+      return svc.icon;
+    }
+  
+    if (slug) {
+      return `/services/${slug}.svg`;
+    }
+  
+    return '/services/default.svg';
+  }
   const marketplaceCatalog = (
     <>
       <section className="mb-6 md:mb-8">
@@ -1026,7 +1025,7 @@ export default function HomePage() {
       </section>
     </>
   );
-
+  
   return (
     <div className="min-h-screen bg-m4m-gray-50">
       {isMarketplaceOnly ? (
@@ -1164,17 +1163,14 @@ export default function HomePage() {
                     </div>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       {groupedServices.Services.map((svc) => {
-                        const slug = (svc.slug || '').toLowerCase();
-                        const iconSrc = svc.icon && typeof svc.icon === 'string' && svc.icon.startsWith('/services/')
-                          ? svc.icon
-                          : (slug ? `/services/${slug}.svg` : '/services/default.svg');
+                        const iconSrc = getServiceImage(svc);
                         return (
                           <Link
                             key={svc.id}
                             to={`/service/${svc.slug}`}
                             className="group relative cursor-pointer rounded-2xl border border-m4m-gray-200 bg-white p-3 flex flex-col items-center justify-center text-center transition-all duration-200 hover:shadow-sm hover:-translate-y-[1px] block"
                           >
-                            <div className="w-10 h-10 mb-2 flex items-center justify-center rounded-xl bg-m4m-purple/10">
+                            <div className="w-10 h-10 mb-2 flex items-center justify-center rounded-xl bg-m4m-purple/10 overflow-hidden">
                               <img
                                 src={iconSrc}
                                 alt=""
@@ -1211,16 +1207,14 @@ export default function HomePage() {
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       {groupedServices.Games.map((svc) => {
                         const slug = (svc.slug || '').toLowerCase();
-                        const iconSrc = svc.icon && typeof svc.icon === 'string' && svc.icon.startsWith('/services/')
-                          ? svc.icon
-                          : (slug ? `/services/${slug}.svg` : '/services/default.svg');
+                        const iconSrc = getServiceImage(svc);
                         return (
                           <Link
                             key={svc.id}
                             to={`/service/${svc.slug}`}
                             className="group relative cursor-pointer rounded-2xl border border-m4m-gray-200 bg-white p-3 flex flex-col items-center justify-center text-center transition-all duration-200 hover:shadow-sm hover:-translate-y-[1px] block"
                           >
-                            <div className="w-10 h-10 mb-2 flex items-center justify-center rounded-xl bg-m4m-purple/10">
+                            <div className="w-10 h-10 mb-2 flex items-center justify-center rounded-xl bg-m4m-purple/10 overflow-hidden">
                               <img
                                 src={iconSrc}
                                 alt=""

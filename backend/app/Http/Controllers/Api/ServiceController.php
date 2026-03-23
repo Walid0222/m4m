@@ -10,12 +10,22 @@ class ServiceController extends Controller
 {
     /**
      * GET /services — list all services (for homepage grid).
+     * Optional: ?featured=1 — returns only featured services ordered by display_order (no fallback).
      */
     public function index(Request $request): JsonResponse
     {
-        $services = Service::query()
-            ->orderBy('name')
-            ->get();
+        if ($request->boolean('featured')) {
+            $services = Service::query()
+                ->where('is_featured', true)
+                ->orderByRaw('display_order IS NULL, display_order ASC')
+                ->orderBy('name')
+                ->limit(50)
+                ->get();
+
+            return $this->success($services);
+        }
+
+        $services = Service::query()->orderBy('name')->limit(50)->get();
 
         return $this->success($services);
     }

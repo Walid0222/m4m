@@ -27,8 +27,11 @@ class AdminServiceController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'icon' => ['nullable', 'string', 'max:50'],
+            'icon' => ['nullable', 'string', 'max:255'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'is_featured' => ['nullable', 'boolean'],
+            'display_order' => ['nullable', 'integer'],
+            'homepage_image' => ['nullable', 'string', 'max:500'],
         ]);
 
         $slug = Str::slug($validated['name']);
@@ -43,6 +46,9 @@ class AdminServiceController extends Controller
             'slug' => $slug,
             'icon' => $validated['icon'] ?? null,
             'category_id' => $validated['category_id'] ?? null,
+            'is_featured' => $validated['is_featured'] ?? false,
+            'display_order' => $validated['display_order'] ?? null,
+            'homepage_image' => $validated['homepage_image'] ?? null,
         ]);
 
         return $this->success($service, 'Service created.', 201);
@@ -61,8 +67,11 @@ class AdminServiceController extends Controller
 
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
-            'icon' => ['nullable', 'string', 'max:50'],
+            'icon' => ['nullable', 'string', 'max:255'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'is_featured' => ['nullable', 'boolean'],
+            'display_order' => ['nullable', 'integer'],
+            'homepage_image' => ['nullable', 'string', 'max:500'],
         ]);
 
         if (isset($validated['name'])) {

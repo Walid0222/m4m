@@ -1037,7 +1037,7 @@ function ServiceManagementPanel() {
   const [form, setForm] = useState({ name: '', category_id: '', service_id: '', description: '', status: 'active' });
   const [submitting, setSubmitting] = useState(false);
   const [servicesEditingId, setServicesEditingId] = useState(null);
-  const [serviceForm, setServiceForm] = useState({ name: '', icon: '', category_id: '' });
+  const [serviceForm, setServiceForm] = useState({ name: '', icon: '', category_id: '', is_featured: false, display_order: '', homepage_image: '' });
   const [serviceCreateOpen, setServiceCreateOpen] = useState(false);
   const [confirm, setConfirm] = useState(null); // { type: 'offer'|'service', item }
 
@@ -1148,9 +1148,12 @@ function ServiceManagementPanel() {
         name: serviceForm.name.trim(),
         icon: serviceForm.icon.trim() || undefined,
         category_id: serviceForm.category_id ? parseInt(serviceForm.category_id, 10) : null,
+        is_featured: !!serviceForm.is_featured,
+        display_order: serviceForm.display_order !== '' && serviceForm.display_order != null ? parseInt(serviceForm.display_order, 10) : null,
+        homepage_image: serviceForm.homepage_image?.trim() || null,
       });
       setServiceCreateOpen(false);
-      setServiceForm({ name: '', icon: '', category_id: '' });
+      setServiceForm({ name: '', icon: '', category_id: '', is_featured: false, display_order: '', homepage_image: '' });
       load();
       setFlash({ type: 'success', text: 'Service added.' });
     } catch {
@@ -1168,6 +1171,9 @@ function ServiceManagementPanel() {
         name: serviceForm.name.trim(),
         icon: serviceForm.icon.trim() || undefined,
         category_id: serviceForm.category_id ? parseInt(serviceForm.category_id, 10) : null,
+        is_featured: !!serviceForm.is_featured,
+        display_order: serviceForm.display_order !== '' && serviceForm.display_order != null ? parseInt(serviceForm.display_order, 10) : null,
+        homepage_image: serviceForm.homepage_image?.trim() || null,
       });
       setServicesEditingId(null);
       load();
@@ -1212,12 +1218,12 @@ function ServiceManagementPanel() {
       <section className="mb-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <h2 className="text-base font-semibold text-gray-900">Services</h2>
-          <button type="button" onClick={() => { setServiceCreateOpen(true); setServiceForm({ name: '', icon: '', category_id: '' }); }} className="px-4 py-2 rounded-xl text-sm font-semibold bg-m4m-purple text-white hover:bg-purple-600">Add service</button>
+          <button type="button" onClick={() => { setServiceCreateOpen(true); setServiceForm({ name: '', icon: '', category_id: '', is_featured: false, display_order: '', homepage_image: '' }); }} className="px-4 py-2 rounded-xl text-sm font-semibold bg-m4m-purple text-white hover:bg-purple-600">Add service</button>
         </div>
         {serviceCreateOpen && (
           <div className="rounded-xl border border-gray-200 bg-white p-4 mb-4 flex flex-wrap items-end gap-3">
             <input type="text" value={serviceForm.name} onChange={(e) => setServiceForm((f) => ({ ...f, name: e.target.value }))} placeholder="Service name" className="px-3 py-2 rounded-lg border border-gray-200 text-sm w-48" />
-            <input type="text" value={serviceForm.icon} onChange={(e) => setServiceForm((f) => ({ ...f, icon: e.target.value }))} placeholder="Icon (emoji)" className="px-3 py-2 rounded-lg border border-gray-200 text-sm w-24" />
+            <input type="text" value={serviceForm.icon} onChange={(e) => setServiceForm((f) => ({ ...f, icon: e.target.value }))} placeholder="Icon (path)" className="px-3 py-2 rounded-lg border border-gray-200 text-sm w-24" />
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Category</label>
               <select value={serviceForm.category_id} onChange={(e) => setServiceForm((f) => ({ ...f, category_id: e.target.value }))} className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white w-40">
@@ -1227,6 +1233,12 @@ function ServiceManagementPanel() {
                 ))}
               </select>
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!serviceForm.is_featured} onChange={(e) => setServiceForm((f) => ({ ...f, is_featured: e.target.checked }))} className="rounded border-gray-300" />
+              Featured
+            </label>
+            <input type="number" value={serviceForm.display_order} onChange={(e) => setServiceForm((f) => ({ ...f, display_order: e.target.value }))} placeholder="Order" className="px-3 py-2 rounded-lg border border-gray-200 text-sm w-20" />
+            <input type="text" value={serviceForm.homepage_image} onChange={(e) => setServiceForm((f) => ({ ...f, homepage_image: e.target.value }))} placeholder="Homepage image URL" className="px-3 py-2 rounded-lg border border-gray-200 text-sm w-40" />
             <button type="button" onClick={handleServiceCreate} disabled={submitting || !serviceForm.name.trim()} className="px-3 py-2 rounded-lg text-sm bg-m4m-purple text-white disabled:opacity-60">Create</button>
             <button type="button" onClick={() => setServiceCreateOpen(false)} className="px-3 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Cancel</button>
           </div>
@@ -1235,17 +1247,25 @@ function ServiceManagementPanel() {
           {services.map((svc) => (
             <div key={svc.id} className="rounded-xl border border-gray-200 bg-white p-3 flex items-center justify-between gap-2">
               {servicesEditingId === svc.id ? (
-                <div className="flex-1 min-w-0 flex flex-wrap gap-2 items-center">
-                  <input type="text" value={serviceForm.name} onChange={(e) => setServiceForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-0 px-2 py-1.5 rounded border border-gray-200 text-sm" />
-                  <input type="text" value={serviceForm.icon} onChange={(e) => setServiceForm((f) => ({ ...f, icon: e.target.value }))} placeholder="Icon" className="w-12 px-2 py-1.5 rounded border border-gray-200 text-sm" />
-                  <select value={serviceForm.category_id} onChange={(e) => setServiceForm((f) => ({ ...f, category_id: e.target.value }))} className="px-2 py-1.5 rounded border border-gray-200 text-sm bg-white min-w-0">
+                <div className="flex-1 min-w-0 flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-center">
+                  <input type="text" value={serviceForm.name} onChange={(e) => setServiceForm((f) => ({ ...f, name: e.target.value }))} className="flex-1 min-w-0 px-2 py-1.5 rounded border border-gray-200 text-sm" placeholder="Name" />
+                  <input type="text" value={serviceForm.icon} onChange={(e) => setServiceForm((f) => ({ ...f, icon: e.target.value }))} placeholder="Icon" className="w-20 px-2 py-1.5 rounded border border-gray-200 text-sm" />
+                  <select value={serviceForm.category_id} onChange={(e) => setServiceForm((f) => ({ ...f, category_id: e.target.value }))} className="px-2 py-1.5 rounded border border-gray-200 text-sm bg-white min-w-0 w-32">
                     <option value="">None</option>
                     {categories.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
-                  <button type="button" onClick={handleServiceUpdate} disabled={submitting} className="text-sm text-m4m-purple font-medium">Save</button>
-                  <button type="button" onClick={() => setServicesEditingId(null)} className="text-sm text-gray-500">Cancel</button>
+                  <label className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                    <input type="checkbox" checked={!!serviceForm.is_featured} onChange={(e) => setServiceForm((f) => ({ ...f, is_featured: e.target.checked }))} className="rounded border-gray-300" />
+                    Featured
+                  </label>
+                  <input type="number" value={serviceForm.display_order} onChange={(e) => setServiceForm((f) => ({ ...f, display_order: e.target.value }))} placeholder="Order" className="w-16 px-2 py-1.5 rounded border border-gray-200 text-sm" />
+                  <input type="text" value={serviceForm.homepage_image} onChange={(e) => setServiceForm((f) => ({ ...f, homepage_image: e.target.value }))} placeholder="Homepage image" className="flex-1 min-w-0 px-2 py-1.5 rounded border border-gray-200 text-sm" />
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button type="button" onClick={handleServiceUpdate} disabled={submitting} className="text-sm text-m4m-purple font-medium">Save</button>
+                    <button type="button" onClick={() => setServicesEditingId(null)} className="text-sm text-gray-500">Cancel</button>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -1259,7 +1279,7 @@ function ServiceManagementPanel() {
                   </span>
                   <span className="font-medium text-gray-900 truncate text-sm">{svc.name}</span>
                   <div className="flex gap-1 flex-shrink-0">
-                    <button type="button" onClick={() => { setServicesEditingId(svc.id); setServiceForm({ name: svc.name || '', icon: svc.icon || '', category_id: svc.category_id != null ? String(svc.category_id) : '' }); }} className="p-1 text-gray-500 hover:bg-gray-100 rounded text-xs">Edit</button>
+                    <button type="button" onClick={() => { setServicesEditingId(svc.id); setServiceForm({ name: svc.name || '', icon: svc.icon || '', category_id: svc.category_id != null ? String(svc.category_id) : '', is_featured: !!svc.is_featured, display_order: svc.display_order != null ? String(svc.display_order) : '', homepage_image: svc.homepage_image || '' }); }} className="p-1 text-gray-500 hover:bg-gray-100 rounded text-xs">Edit</button>
                     <button type="button" onClick={() => setConfirm({ type: 'service', item: svc })} className="p-1 text-red-600 hover:bg-red-50 rounded text-xs">Delete</button>
                   </div>
                 </>
@@ -1294,7 +1314,7 @@ function ServiceManagementPanel() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
-              <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Netflix Account" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+              <input type="text" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Gift Card, Account, Top up" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>

@@ -50,10 +50,10 @@ export default function FAQSection() {
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-m4m-purple/10 text-m4m-purple text-xs font-medium mb-3">
           FAQs
         </div>
-        <h2 className="text-2xl md:text-3xl font-bold text-m4m-black">
+        <h2 className="text-1xl md:text-2xl font-bold text-m4m-black">
           Frequently Asked Questions
         </h2>
-        <p className="text-sm text-m4m-gray-500 mt-2 max-w-xl mx-auto">
+        <p className="text-sm text-m4m-gray-500 mt-1 max-w-xl mx-auto">
           Everything you need to know before buying on M4M
         </p>
       </div>

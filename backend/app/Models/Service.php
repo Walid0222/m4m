@@ -11,7 +11,11 @@ class Service extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'slug', 'icon', 'category_id'];
+    protected $fillable = ['name', 'slug', 'icon', 'category_id', 'is_featured', 'display_order', 'homepage_image'];
+
+    protected $casts = [
+        'is_featured' => 'boolean',
+    ];
 
     public function category(): BelongsTo
     {
