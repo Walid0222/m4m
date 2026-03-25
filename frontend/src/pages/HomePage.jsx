@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useSearchParams, useLocation, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { getCurrentUrl, seoAbsoluteImageUrl } from '../lib/seoUrl';
 import { Lock, BadgeCheck, ShieldCheck, Zap, Flame, Star, History, Share2, LayoutGrid } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import FAQSection from '../components/FAQSection';
@@ -158,7 +160,8 @@ export default function HomePage() {
     };
   }, [user]);
 
-  const isMarketplaceOnly = useLocation().pathname === '/marketplace';
+  const location = useLocation();
+  const isMarketplaceOnly = location.pathname === '/marketplace';
 
   // Load trending and best-selling products (homepage only)
   useEffect(() => {
@@ -1025,9 +1028,33 @@ export default function HomePage() {
       </section>
     </>
   );
-  
+
+  const homeSeoFallback =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}${location.pathname}${location.search || ''}`
+      : '';
+  const currentUrl = getCurrentUrl(homeSeoFallback);
+  const homeOgTitle = 'M4M Marketplace - Buy Digital Products';
+  const homeOgDescription = 'Buy and sell digital products safely. Instant delivery.';
+  const homeOgImage = seoAbsoluteImageUrl();
+
   return (
     <div className="min-h-screen bg-m4m-gray-50">
+      <Helmet>
+        <title>{homeOgTitle}</title>
+        <meta name="description" content={homeOgDescription} />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href={currentUrl} />
+        <meta property="og:title" content={homeOgTitle} />
+        <meta property="og:description" content={homeOgDescription} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={currentUrl} />
+        <meta property="og:image" content={homeOgImage} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={homeOgTitle} />
+        <meta name="twitter:description" content={homeOgDescription} />
+        <meta name="twitter:image" content={homeOgImage} />
+      </Helmet>
       {isMarketplaceOnly ? (
         <div id="marketplace" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
           {marketplaceCatalog}

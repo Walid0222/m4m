@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AlertCircle, Star, Zap, CheckCircle2, Lock, ShieldCheck, Flame, Info, BadgeCheck, Umbrella, Sun, X } from 'lucide-react';
@@ -17,6 +18,7 @@ import {
   toggleFavorite,
   getFavoriteIds,
 } from '../services/api';
+import { getCurrentUrl, seoAbsoluteImageUrl } from '../lib/seoUrl';
 import { isSellerOnline } from '../lib/sellerOnline';
 import { getSellerSalesBadge } from '../lib/sellerBadge';
 import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
@@ -27,6 +29,15 @@ import { DEFAULT_MARKETPLACE_SETTINGS } from '../config/marketplaceSettings';
 
 const VIEWED_PRODUCTS_KEY = 'viewed_products';
 const VIEW_COOLDOWN_MS = 30 * 60 * 1000;
+
+const SEO_DEFAULT_DESCRIPTION = 'Buy digital products instantly on M4M Marketplace.';
+
+function seoProductCanonicalUrl(productId) {
+  if (typeof window === 'undefined') return '';
+  const pid = productId != null ? String(productId).trim() : '';
+  if (!pid) return `${window.location.origin}/`;
+  return `${window.location.origin}/product/${encodeURIComponent(pid)}`;
+}
 
 function getViewedProducts() {
   try {
@@ -594,30 +605,81 @@ export default function ProductPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="rounded-xl bg-gray-100 aspect-square animate-pulse" />
-          <div className="space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-3/4 animate-pulse" />
-            <div className="h-5 bg-gray-100 rounded w-1/2 animate-pulse" />
-            <div className="h-10 bg-gray-200 rounded w-24 animate-pulse" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const productSeoFallback = seoProductCanonicalUrl(id);
+  const currentUrl = getCurrentUrl(productSeoFallback);
 
-  if (!product) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
-        <p className="text-gray-500 mb-4">Product not found.</p>
-        <Link to="/" className="text-m4m-purple font-medium hover:underline">Back to Marketplace</Link>
-      </div>
-    );
-  }
+  const forSeo = !loading && product ? product : null;
+  const productNameSafe =
+    forSeo?.name != null && String(forSeo.name).trim() !== ''
+      ? String(forSeo.name).trim()
+      : '';
+  const productPageTitle = productNameSafe
+    ? `Buy ${productNameSafe} Cheap | Instant Delivery - M4M`
+    : 'M4M Marketplace';
+  const productMetaDescription = productNameSafe
+    ? `Buy ${productNameSafe} at the best price. Instant delivery, secure payment, and trusted sellers on M4M Marketplace.`
+    : SEO_DEFAULT_DESCRIPTION;
+  const productOgDescription = productNameSafe
+    ? `Buy ${productNameSafe} instantly.`
+    : SEO_DEFAULT_DESCRIPTION;
+  const productOgTitle = productNameSafe || 'M4M Marketplace';
+  const imagesForSeo = forSeo?.images && forSeo.images.length > 0 ? forSeo.images : [];
+  const mainImageForSeo = imagesForSeo[selectedImageIndex] || imagesForSeo[0];
+  const productOgImageRaw = seoAbsoluteImageUrl(mainImageForSeo || imagesForSeo[0]);
+  const productOgImageSafe =
+    productOgImageRaw && String(productOgImageRaw).trim() !== ''
+      ? productOgImageRaw
+      : seoAbsoluteImageUrl();
 
+  const productJsonLd = useMemo(() => {
+    if (!forSeo) return null;
+    const safeName = productNameSafe || 'Digital product';
+    const descRaw = forSeo.description != null ? String(forSeo.description) : '';
+    const descStripped = descRaw
+      .replace(/<\/script/gi, '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const safeDescription = descStripped ? descStripped.slice(0, 5000) : 'Buy digital product';
+    const safeImage =
+      productOgImageSafe && String(productOgImageSafe).trim() !== ''
+        ? String(productOgImageSafe).trim()
+        : seoAbsoluteImageUrl();
+    const priceNum = Number(forSeo?.effective_price ?? forSeo?.price ?? 0);
+    const safePrice = Number.isFinite(priceNum) ? priceNum : 0;
+    const stockNum = Number(forSeo?.stock ?? 0);
+    const href =
+      currentUrl ||
+      productSeoFallback ||
+      (typeof window !== 'undefined' ? `${window.location.origin}/` : '');
+    const payload = {
+      '@context': 'https://schema.org/',
+      '@type': 'Product',
+      '@id': href,
+      url: href,
+      name: safeName,
+      image: [safeImage],
+      description: safeDescription,
+      brand: {
+        '@type': 'Brand',
+        name: 'M4M Marketplace',
+      },
+      offers: {
+        '@type': 'Offer',
+        price: safePrice,
+        priceCurrency: 'MAD',
+        availability:
+          stockNum > 0
+            ? 'https://schema.org/InStock'
+            : 'https://schema.org/OutOfStock',
+        itemCondition: 'https://schema.org/NewCondition',
+      },
+    };
+    return JSON.stringify(payload);
+  }, [forSeo, productNameSafe, productOgImageSafe, currentUrl, productSeoFallback]);
+
+  const renderLoadedProductMain = () => {
+    if (!product) return null;
   const seller = product.seller || {};
   const price = Number(product.price || 0);
   const effectivePrice = Number(product.effective_price ?? product.price ?? 0);
@@ -1061,6 +1123,16 @@ export default function ProductPage() {
               <p className="text-gray-700 whitespace-pre-wrap text-sm leading-relaxed">{product.description}</p>
             </div>
           )}
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Why buy {product.name}?</h2>
+            <ul className="list-disc list-inside text-gray-700 text-sm leading-relaxed space-y-1">
+              <li>Instant delivery</li>
+              <li>Secure payment</li>
+              <li>Trusted sellers</li>
+              <li>Best price guaranteed</li>
+            </ul>
+          </div>
 
           {/* Warranty */}
           <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700 space-y-1">
@@ -1549,5 +1621,50 @@ export default function ProductPage() {
         </div>
       </div>
     </div>
+  );
+  };
+
+  const seoOgType = forSeo ? 'product' : 'website';
+
+  return (
+    <>
+      <Helmet>
+        <title>{productPageTitle}</title>
+        <meta name="description" content={productMetaDescription} />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href={currentUrl} />
+        <meta property="og:title" content={productOgTitle} />
+        <meta property="og:description" content={productOgDescription} />
+        <meta property="og:type" content={seoOgType} />
+        <meta property="og:url" content={currentUrl} />
+        <meta property="og:image" content={productOgImageSafe} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={productOgTitle} />
+        <meta name="twitter:description" content={productOgDescription} />
+        <meta name="twitter:image" content={productOgImageSafe} />
+        {productJsonLd != null && (
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: productJsonLd }} />
+        )}
+      </Helmet>
+      {loading ? (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="rounded-xl bg-gray-100 aspect-square animate-pulse" />
+            <div className="space-y-4">
+              <div className="h-8 bg-gray-200 rounded w-3/4 animate-pulse" />
+              <div className="h-5 bg-gray-100 rounded w-1/2 animate-pulse" />
+              <div className="h-10 bg-gray-200 rounded w-24 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      ) : !product ? (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
+          <p className="text-gray-500 mb-4">Product not found.</p>
+          <Link to="/" className="text-m4m-purple font-medium hover:underline">Back to Marketplace</Link>
+        </div>
+      ) : (
+        renderLoadedProductMain()
+      )}
+    </>
   );
 }

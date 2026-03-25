@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { getCurrentUrl, seoAbsoluteImageUrl } from '../lib/seoUrl';
 import { getServiceBySlug } from '../services/api';
+
+const SEO_DEFAULT_DESCRIPTION = 'Buy digital products instantly on M4M Marketplace.';
+
+function seoServicePageUrl(slug) {
+  if (typeof window === 'undefined') return '';
+  const s = slug != null ? String(slug).trim() : '';
+  if (!s) return `${window.location.origin}/`;
+  return `${window.location.origin}/service/${encodeURIComponent(s)}`;
+}
 
 export default function ServicePage() {
   const { slug } = useParams();
@@ -29,31 +40,58 @@ export default function ServicePage() {
     return () => { cancelled = true; };
   }, [slug]);
 
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="h-10 w-48 bg-gray-200 rounded animate-pulse mb-6" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const serviceSeoFallback = seoServicePageUrl(slug);
+  const currentUrl = getCurrentUrl(serviceSeoFallback);
 
-  if (error || !service) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
-        <p className="text-gray-500 mb-4">Service not found.</p>
-        <Link to="/" className="text-m4m-purple font-medium hover:underline">Back to Marketplace</Link>
-      </div>
-    );
-  }
+  const serviceForSeo = !loading && service && !error ? service : null;
+  const serviceNameSafe =
+    serviceForSeo?.name != null && String(serviceForSeo.name).trim() !== ''
+      ? String(serviceForSeo.name).trim()
+      : '';
+  const servicePageTitle = serviceNameSafe ? `${serviceNameSafe} | M4M Marketplace` : 'M4M Marketplace';
+  const serviceMetaDescription = serviceNameSafe
+    ? `Browse ${serviceNameSafe} on M4M. Digital products and instant delivery.`
+    : SEO_DEFAULT_DESCRIPTION;
+  const serviceOgDescription = serviceNameSafe
+    ? `Browse ${serviceNameSafe} on M4M Marketplace.`
+    : SEO_DEFAULT_DESCRIPTION;
+  const serviceOgTitle = serviceNameSafe || 'M4M Marketplace';
+  const serviceOgImage = seoAbsoluteImageUrl();
 
-  const offerTypes = service.offer_types ?? service.offerTypes ?? [];
+  const offerTypes = service?.offer_types ?? service?.offerTypes ?? [];
 
   return (
+    <>
+      <Helmet>
+        <title>{servicePageTitle}</title>
+        <meta name="description" content={serviceMetaDescription} />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href={currentUrl} />
+        <meta property="og:title" content={serviceOgTitle} />
+        <meta property="og:description" content={serviceOgDescription} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={currentUrl} />
+        <meta property="og:image" content={serviceOgImage} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={serviceOgTitle} />
+        <meta name="twitter:description" content={serviceOgDescription} />
+        <meta name="twitter:image" content={serviceOgImage} />
+      </Helmet>
+      {loading ? (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="h-10 w-48 bg-gray-200 rounded animate-pulse mb-6" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        </div>
+      ) : error || !service ? (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
+          <p className="text-gray-500 mb-4">Service not found.</p>
+          <Link to="/" className="text-m4m-purple font-medium hover:underline">Back to Marketplace</Link>
+        </div>
+      ) : (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
       <nav className="text-sm text-gray-500 mb-4">
         <Link to="/" className="hover:text-m4m-purple">Marketplace</Link>
@@ -103,5 +141,7 @@ export default function ServicePage() {
         </div>
       )}
     </div>
+      )}
+    </>
   );
 }

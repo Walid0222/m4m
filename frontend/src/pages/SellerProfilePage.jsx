@@ -1,5 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
+import { getCurrentUrl, seoAbsoluteImageUrl } from '../lib/seoUrl';
 import { ChevronRight, FolderOpen, LayoutGrid, Package } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
 import ReportModal from '../components/ReportModal';
@@ -7,6 +9,15 @@ import { VerifiedBadge, SellerSalesBadge } from '../components/SellerBadges';
 import { getProducts, getSellerProfile, getPublicSellerStats, getOfferTypes, getServices, getReviews, paginatedItems, submitReport, getFavoriteIds, toggleFavorite, getToken, createConversation } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+
+const SEO_DEFAULT_DESCRIPTION = 'Buy digital products instantly on M4M Marketplace.';
+
+function seoSellerPageUrl(sellerId) {
+  if (typeof window === 'undefined') return '';
+  const sid = sellerId != null ? String(sellerId).trim() : '';
+  if (!sid) return `${window.location.origin}/`;
+  return `${window.location.origin}/seller/${encodeURIComponent(sid)}`;
+}
 
 function getLastSeenLabel(lastActivityAt) {
   if (!lastActivityAt) return 'Offline';
@@ -297,13 +308,23 @@ export default function SellerProfilePage() {
     return Number(activeService) === Number(pinnedServiceKey);
   }, [activeService, pinnedProduct, pinnedServiceKey]);
 
-  if (loading && !seller) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-12 flex items-center justify-center min-h-[300px]">
-        <div className="w-8 h-8 border-2 border-m4m-purple border-t-transparent rounded-full animate-spin" aria-hidden />
-      </div>
-    );
-  }
+  const sellerSeoFallback = seoSellerPageUrl(id);
+  const currentUrl = getCurrentUrl(sellerSeoFallback);
+
+  const sellerForSeo = !loading && seller ? seller : null;
+  const sellerNameSafe =
+    sellerForSeo?.name != null && String(sellerForSeo.name).trim() !== ''
+      ? String(sellerForSeo.name).trim()
+      : '';
+  const sellerPageTitle = sellerNameSafe ? `${sellerNameSafe} | M4M Marketplace` : 'M4M Marketplace';
+  const sellerMetaDescription = sellerNameSafe
+    ? `Shop products from ${sellerNameSafe} on M4M Marketplace. Verified sellers and secure checkout.`
+    : SEO_DEFAULT_DESCRIPTION;
+  const sellerOgDescription = sellerNameSafe
+    ? `Shop products from ${sellerNameSafe} on M4M Marketplace. Verified sellers and secure checkout.`
+    : SEO_DEFAULT_DESCRIPTION;
+  const sellerOgTitle = sellerNameSafe || 'M4M Marketplace';
+  const sellerOgImage = seoAbsoluteImageUrl(sellerForSeo?.avatar);
 
   const lastSeenLabel = getLastSeenLabel(seller?.last_activity_at);
   const online = lastSeenLabel === 'Online';
@@ -330,6 +351,27 @@ export default function SellerProfilePage() {
       : null;
 
   return (
+    <>
+      <Helmet>
+        <title>{sellerPageTitle}</title>
+        <meta name="description" content={sellerMetaDescription} />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href={currentUrl} />
+        <meta property="og:title" content={sellerOgTitle} />
+        <meta property="og:description" content={sellerOgDescription} />
+        <meta property="og:type" content="profile" />
+        <meta property="og:url" content={currentUrl} />
+        <meta property="og:image" content={sellerOgImage} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={sellerOgTitle} />
+        <meta name="twitter:description" content={sellerOgDescription} />
+        <meta name="twitter:image" content={sellerOgImage} />
+      </Helmet>
+      {loading && !seller ? (
+        <div className="max-w-7xl mx-auto px-4 py-12 flex items-center justify-center min-h-[300px]">
+          <div className="w-8 h-8 border-2 border-m4m-purple border-t-transparent rounded-full animate-spin" aria-hidden />
+        </div>
+      ) : (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10 space-y-10">
 
       {/* Report modal */}
@@ -800,5 +842,7 @@ export default function SellerProfilePage() {
 
       
     </div>
+      )}
+    </>
   );
 }

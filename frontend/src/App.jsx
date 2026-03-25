@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Helmet } from 'react-helmet-async';
 import { AuthProvider, ProtectedRoute, SellerRoute, AdminRoute } from './contexts/AuthContext';
 import { MarketplaceSettingsProvider } from './contexts/MarketplaceSettingsContext';
 import { RefreshProvider } from './contexts/RefreshContext';
@@ -40,6 +41,10 @@ export default function App() {
           <RefreshProvider>
             <BalanceVisibilityProvider>
               <BrowserRouter>
+                <Helmet>
+                  <title>M4M Marketplace</title>
+                  <meta name="description" content="Buy and sell digital products safely." />
+                </Helmet>
                 <ReviewReminderPopup />
                 <Routes>
               <Route path="/" element={<Layout />}>
