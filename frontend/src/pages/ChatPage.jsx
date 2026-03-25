@@ -6,6 +6,7 @@ import {
   getConversations,
   getConversation,
   sendMessage as apiSendMessage,
+  sendProductMessage as apiSendProductMessage,
   getSupportConversation,
   getSupportMessages,
   sendSupportMessage,
@@ -83,6 +84,7 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [pendingProduct, setPendingProduct] = useState(null);
   const [unread, setUnread] = useState({});
   const [isTyping, setIsTyping] = useState(false);
   // Mobile: show list or chat
@@ -93,6 +95,13 @@ export default function ChatPage() {
   const urlConversationLoadedRef = useRef(null);
   const channelsRef = useRef({});
   selectedIdRef.current = selected?.id;
+
+  useEffect(() => {
+    const p = location.state?.pendingProduct;
+    if (p && p.id != null) {
+      setPendingProduct(p);
+    }
+  }, [location.state]);
 
   // ── Load conversations ───────────────────────────────────────────────────
   const refreshConversations = useCallback(async () => {
@@ -469,6 +478,82 @@ export default function ChatPage() {
     }
   };
 
+  const handleSendProduct = async (productId) => {
+    if (productId == null || sending) return;
+    if (!selected?.id || selected.id === 'support') return;
+    if (!getToken()) return;
+
+    const snapshot = pendingProduct;
+    if (!snapshot || Number(snapshot.id) !== Number(productId)) return;
+
+    const tempId = `temp_${Date.now()}`;
+    const name = snapshot.name ?? 'Product';
+    const optimisticMsg = {
+      id: tempId,
+      _tempId: tempId,
+      _pending: true,
+      message_type: 'product',
+      metadata: {
+        product_id: snapshot.id,
+        name: snapshot.name,
+        price: snapshot.price,
+        image: snapshot.image ?? null,
+        slug: snapshot.slug ?? null,
+      },
+      body: `Shared product: ${name}`,
+      user_id: user?.id,
+      sender: user ? { id: user.id, name: user.name } : undefined,
+      created_at: new Date().toISOString(),
+    };
+
+    setPendingProduct(null);
+    setMessages((prev) => [...prev, optimisticMsg]);
+    setSending(true);
+
+    try {
+      const message = await apiSendProductMessage(selected.id, productId);
+      if (message) {
+        setMessages((prev) => {
+          let replaced = false;
+          let next = prev.map((m) => {
+            if (m._tempId === tempId) {
+              replaced = true;
+              return { ...message };
+            }
+            return m;
+          });
+          if (!replaced && message.id != null && !next.some((m) => m.id === message.id)) {
+            next = [...next, message];
+          }
+          return next;
+        });
+      } else {
+        setMessages((prev) => prev.filter((m) => m._tempId !== tempId));
+        setPendingProduct(snapshot);
+      }
+      try {
+        const data = await getConversation(selected.id);
+        const list = data?.messages ? paginatedItems(data.messages) : [];
+        if (Array.isArray(list)) {
+          const reversed = [...list].reverse();
+          setMessages((prev) => {
+            const serverIds = new Set(reversed.map((m) => m.id));
+            const pendingOnly = prev.filter((m) => m._pending && !serverIds.has(m.id));
+            return [...reversed, ...pendingOnly];
+          });
+        }
+      } catch {
+        // ignore
+      }
+      refreshConversations();
+    } catch {
+      setMessages((prev) => prev.filter((m) => m._tempId !== tempId));
+      setPendingProduct(snapshot);
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleTyping = useCallback(() => {
     if (!selected?.id || selected.id === 'support' || !getToken()) return;
     // TEMP: debug typing trigger
@@ -680,6 +765,9 @@ export default function ChatPage() {
               hasMoreMessages={hasMoreMessages}
               loadingOlderMessages={loadingOlderMessages}
               onLoadPrevious={loadPreviousMessages}
+              pendingProduct={pendingProduct}
+              onSendProduct={handleSendProduct}
+              onDismissPendingProduct={() => setPendingProduct(null)}
             />
           </div>
           </div>

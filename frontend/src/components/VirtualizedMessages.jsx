@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Virtuoso } from 'react-virtuoso';
 
 /**
@@ -245,6 +246,8 @@ export default function VirtualizedMessages({
 
             const senderAvatar = m.sender?.avatar || otherUser?.avatar || null;
 
+            const meta = m.message_type === 'product' && m.metadata && typeof m.metadata === 'object' ? m.metadata : null;
+
             return (
               <div
                 className={`flex mb-1 ${
@@ -287,7 +290,36 @@ export default function VirtualizedMessages({
                         : 'rounded-bl-sm bg-white text-gray-900 border border-gray-200 shadow-sm'
                     }`}
                   >
-                    {m.body}
+                    {meta ? (
+                      <Link
+                        to={`/product/${m.metadata?.product_id || ''}`}
+                        className={`block text-left no-underline ${isMine ? 'text-white' : 'text-gray-900'}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex gap-2.5">
+                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-black/10">
+                            {meta.image ? (
+                              <img src={meta.image} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-[10px] opacity-70">—</div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold leading-snug">{meta.name || 'Product'}</p>
+                            {meta.price != null && (
+                              <p className={`mt-0.5 text-xs ${isMine ? 'text-white/90' : 'text-gray-600'}`}>
+                                {Number(meta.price).toFixed(2)} MAD
+                              </p>
+                            )}
+                            <p className={`mt-1 text-[11px] font-medium ${isMine ? 'text-white/80' : 'text-m4m-purple'}`}>
+                              View product →
+                            </p>
+                          </div>
+                        </div>
+                      </Link>
+                    ) : (
+                      m.body
+                    )}
                   </div>
                   <div
                     className={`flex items-center gap-1.5 mt-0.5 ${

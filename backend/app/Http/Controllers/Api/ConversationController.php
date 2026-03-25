@@ -8,6 +8,7 @@ use App\Events\MessageDelivered;
 use App\Events\MessageSeen;
 use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\Product;
 use App\Notifications\NewMessageNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -174,15 +175,55 @@ class ConversationController extends Controller
             return $this->error('Forbidden.', 403);
         }
 
-        $validated = $request->validate([
-            'body' => ['required', 'string', 'max:5000'],
-        ]);
+        $isProduct = $request->input('message_type') === 'product';
 
-        $message = $conversation->messages()->create([
-            'user_id' => $userId,
-            'body'    => $validated['body'],
-            'status'  => 'sent',
-        ]);
+        if ($isProduct) {
+            $validated = $request->validate([
+                'message_type' => ['required', 'in:product'],
+                'product_id'   => ['required', 'integer', 'exists:products,id'],
+            ]);
+
+            $product = Product::query()->find($validated['product_id']);
+            if (! $product) {
+                return $this->error('Product not found.', 404);
+            }
+
+            $participantIds = [(int) $conversation->user_one_id, (int) $conversation->user_two_id];
+            if (! in_array((int) $product->user_id, $participantIds, true)) {
+                return $this->error('This product is not part of this conversation.', 422);
+            }
+
+            $images = $product->images;
+            $firstImage = is_array($images) && count($images) > 0 ? $images[0] : null;
+
+            $metadata = [
+                'product_id' => $product->id,
+                'name'       => $product->name,
+                'price'      => $product->effective_price,
+                'image'      => $firstImage,
+                'slug'       => $product->slug,
+            ];
+
+            $body = 'Shared product: '.$product->name;
+
+            $message = $conversation->messages()->create([
+                'user_id'      => $userId,
+                'body'         => $body,
+                'message_type' => 'product',
+                'metadata'     => $metadata,
+                'status'       => 'sent',
+            ]);
+        } else {
+            $validated = $request->validate([
+                'body' => ['required', 'string', 'max:5000'],
+            ]);
+
+            $message = $conversation->messages()->create([
+                'user_id' => $userId,
+                'body'    => $validated['body'],
+                'status'  => 'sent',
+            ]);
+        }
 
         $message->load('sender:id,name,avatar');
 

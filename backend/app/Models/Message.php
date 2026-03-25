@@ -14,6 +14,8 @@ class Message extends Model
         'conversation_id',
         'user_id',
         'body',
+        'message_type',
+        'metadata',
         'read_at',
     ];
 
@@ -21,6 +23,7 @@ class Message extends Model
     {
         return [
             'read_at' => 'datetime',
+            'metadata' => 'array',
         ];
     }
 

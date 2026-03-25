@@ -23,6 +23,9 @@ export default function ChatBox({
   hasMoreMessages = false,
   loadingOlderMessages = false,
   onLoadPrevious,
+  pendingProduct = null,
+  onSendProduct,
+  onDismissPendingProduct,
 }) {
   const { avatar } = useAuth();
   const { t } = useLanguage();
@@ -149,6 +152,41 @@ export default function ChatBox({
 
       {/* Input bar */}
       <div className="p-3 md:p-4 border-t border-gray-200 bg-white shrink-0">
+        {pendingProduct && !isSupport && onSendProduct && onDismissPendingProduct && (
+          <div className="mb-3 flex gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-gray-200">
+              {pendingProduct.image ? (
+                <img src={pendingProduct.image} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">—</div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-gray-900">{pendingProduct.name}</p>
+              <p className="text-xs text-gray-500">
+                {pendingProduct.price != null ? `${Number(pendingProduct.price).toFixed(2)} MAD` : ''}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => onSendProduct(pendingProduct.id)}
+                  disabled={sending}
+                  className="rounded-lg bg-m4m-purple px-3 py-1.5 text-xs font-semibold text-white hover:bg-m4m-purple-dark disabled:opacity-50"
+                >
+                  Send
+                </button>
+                <button
+                  type="button"
+                  onClick={onDismissPendingProduct}
+                  disabled={sending}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="flex gap-2 items-end">
           <input
             ref={inputRef}

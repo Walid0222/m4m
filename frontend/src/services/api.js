@@ -660,6 +660,15 @@ export function sendMessage(conversationId, body) {
   return api.post(`/conversations/${conversationId}/messages`, { body }).then(unwrap);
 }
 
+export function sendProductMessage(conversationId, productId) {
+  return api
+    .post(`/conversations/${conversationId}/messages`, {
+      message_type: 'product',
+      product_id: productId,
+    })
+    .then(unwrap);
+}
+
 export function sendTyping(conversationId) {
   return api.post(`/conversations/${conversationId}/typing`).then(() => {});
 }

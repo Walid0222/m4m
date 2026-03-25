@@ -574,8 +574,19 @@ export default function ProductPage() {
     try {
       const conversation = await createConversation({ other_user_id: sellerData.id, product_id: product.id });
       const convId = conversation?.id;
-      if (convId) navigate(`/chat?conversation=${convId}`);
-      else navigate('/chat');
+      const images = product.images && product.images.length > 0 ? product.images : [];
+      const pendingProduct = {
+        id: product.id,
+        name: product.name,
+        price: product.effective_price ?? product.price,
+        image: images[0] ?? null,
+        slug: product.slug ?? null,
+      };
+      if (convId) {
+        navigate(`/chat?conversation=${convId}`, { state: { pendingProduct } });
+      } else {
+        navigate('/chat', { state: { pendingProduct } });
+      }
     } catch (err) {
       setError(err.message || 'Could not start chat');
     } finally {
