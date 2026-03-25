@@ -240,7 +240,7 @@ class AdminSellerController extends Controller
         $warnings = SellerWarning::where('seller_id', $seller->id)
             ->with('admin:id,name')
             ->latest()
-            ->paginate($request->integer('per_page', 20));
+            ->paginate(min($request->integer('per_page', 20), 100));
 
         return $this->success($warnings);
     }
@@ -255,7 +255,7 @@ class AdminSellerController extends Controller
         $history = SellerModerationAction::where('seller_id', $seller->id)
             ->with('admin:id,name')
             ->latest()
-            ->paginate($request->integer('per_page', 30));
+            ->paginate(min($request->integer('per_page', 30), 100));
 
         return $this->success($history);
     }
@@ -294,7 +294,7 @@ class AdminSellerController extends Controller
             $query->where(fn ($qb) => $qb->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%"));
         }
 
-        $sellers = $query->latest()->paginate($request->integer('per_page', 30));
+        $sellers = $query->latest()->paginate(min($request->integer('per_page', 30), 100));
 
         $sellers->getCollection()->transform(fn ($s) => $this->sellerDetail($s));
 

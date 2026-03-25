@@ -159,7 +159,9 @@ class DisputeEvidenceController extends Controller
         }
 
         if ($evidence->storage_disk === 'url') {
-            return response()->redirectTo($evidence->path);
+            // Prevent server-driven redirects for externally hosted evidence.
+            // Clients can handle the URL presentation/opening safely.
+            return response()->json(['url' => $evidence->path], 200);
         }
 
         if (! Storage::disk($evidence->storage_disk)->exists($evidence->path)) {

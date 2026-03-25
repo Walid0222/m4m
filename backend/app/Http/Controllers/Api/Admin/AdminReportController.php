@@ -35,7 +35,7 @@ class AdminReportController extends Controller
             $query->where('type', $request->type);
         }
 
-        $reports = $query->paginate($request->integer('per_page', 50));
+        $reports = $query->paginate(min($request->integer('per_page', 50), 100));
 
         $reports->getCollection()->transform(function ($r) {
             $r->target_id   = $r->reported_product_id ?? $r->reported_seller_id;

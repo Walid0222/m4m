@@ -76,7 +76,7 @@ class ReportController extends Controller
                 'reportedProduct:id,name,slug',
             ])
             ->latest()
-            ->paginate($request->integer('per_page', 20));
+            ->paginate(min($request->integer('per_page', 20), 100));
 
         // Add unread count helper (pending reports the seller hasn't acted on)
         $pendingCount = Report::where('status', 'pending')

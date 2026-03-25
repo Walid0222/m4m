@@ -21,7 +21,7 @@ class ServiceRequestController extends Controller
             ->where('seller_id', $request->user()->id)
             ->with('category:id,name,slug')
             ->latest()
-            ->paginate($request->integer('per_page', 20));
+            ->paginate(min($request->integer('per_page', 20), 100));
 
         return $this->success($requests);
     }

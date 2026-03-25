@@ -36,7 +36,7 @@ class OrderController extends Controller
                 'dispute:id,order_id,status',
             ])
             ->latest()
-            ->paginate($request->integer('per_page', 15));
+            ->paginate(min($request->integer('per_page', 15), 100));
 
         return $this->success($orders);
     }

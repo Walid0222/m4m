@@ -64,7 +64,7 @@ class ProductController extends Controller
                 break;
         }
 
-        $products = $query->paginate($request->integer('per_page', 15));
+        $products = $query->paginate(min($request->integer('per_page', 15), 100));
 
         $products->getCollection()->transform(fn ($p) => $this->hideAnalyticsFromProduct($p));
 
@@ -194,7 +194,7 @@ class ProductController extends Controller
             ->withCount('orders')
             ->orderByDesc('is_pinned')
             ->latest()
-            ->paginate($request->integer('per_page', 15));
+            ->paginate(min($request->integer('per_page', 15), 100));
 
         return $this->success($products);
     }
@@ -525,7 +525,7 @@ class ProductController extends Controller
         $accounts = ProductAccount::where('product_id', $my_product->id)
             ->orderBy('status')
             ->latest()
-            ->paginate($request->integer('per_page', 50));
+            ->paginate(min($request->integer('per_page', 50), 100));
 
         return $this->success($accounts);
     }

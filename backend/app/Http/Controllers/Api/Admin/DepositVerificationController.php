@@ -18,7 +18,7 @@ class DepositVerificationController extends Controller
         $deposits = DepositRequest::with('user:id,name,email')
             ->where('status', 'pending')
             ->latest()
-            ->paginate($request->integer('per_page', 20));
+            ->paginate(min($request->integer('per_page', 20), 100));
 
         return $this->success($deposits);
     }

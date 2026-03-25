@@ -149,7 +149,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/wallet/settings',                               [WalletSettingsController::class, 'show']);
             Route::post('/deposit-requests',                             [DepositRequestController::class, 'store']);
             Route::get('/deposit-requests',                              [DepositRequestController::class, 'index']);
-            Route::post('/withdraw-requests',                            [WithdrawRequestController::class, 'store']);
+            Route::post('/withdraw-requests',                            [WithdrawRequestController::class, 'store'])->middleware('throttle:10,1');
             Route::get('/withdraw-requests',                             [WithdrawRequestController::class, 'index']);
 
             // Security / 2FA (optional, but only for verified users)
@@ -177,7 +177,7 @@ Route::prefix('v1')->group(function () {
 
             // Orders (buyer) — banned users cannot place orders
             Route::middleware('not.banned')->group(function () {
-        Route::post('/orders', [OrderController::class, 'store']);
+        Route::post('/orders', [OrderController::class, 'store'])->middleware('throttle:60,1');
             });
             Route::get('/orders',                              [OrderController::class, 'index']);
             Route::get('/orders/{order}',                      [OrderController::class, 'show']);
@@ -187,16 +187,18 @@ Route::prefix('v1')->group(function () {
             Route::post('/coupons/preview', [CouponController::class, 'preview']);
 
             // ─── Debug (testing only) ─────────────────────────────────────────
-            // TEMP: releases the latest order escrow immediately for payout testing.
-            // IMPORTANT: this route must be removed once testing is complete.
-            Route::post('/debug/release-latest-order', [DebugEscrowController::class, 'releaseLatestHeldOrder'])
-                ->middleware('admin');
+            if (app()->environment('local')) {
+                // TEMP: releases the latest order escrow immediately for payout testing.
+                // IMPORTANT: this route must be removed once testing is complete.
+                Route::post('/debug/release-latest-order', [DebugEscrowController::class, 'releaseLatestHeldOrder'])
+                    ->middleware('admin');
 
-            // ─── SAFE Debug (testing only) ─────────────────────────────────────
-            // TEMP: force-release only the latest order when it is eligible (`escrow_status=held`).
-            // IMPORTANT: this route must be removed before production.
-            Route::post('/debug/force-release-latest', [DebugEscrowController::class, 'forceReleaseLatest'])
-                ->middleware('admin');
+                // ─── SAFE Debug (testing only) ─────────────────────────────────────
+                // TEMP: force-release only the latest order when it is eligible (`escrow_status=held`).
+                // IMPORTANT: this route must be removed before production.
+                Route::post('/debug/force-release-latest', [DebugEscrowController::class, 'forceReleaseLatest'])
+                    ->middleware('admin');
+            }
 
             // Affiliate / referral
             Route::get('/affiliate/dashboard', [AffiliateController::class, 'dashboard']);
@@ -249,7 +251,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/conversations/unread-total',                     [ConversationController::class, 'totalUnread']);
             Route::post('/conversations',                                 [ConversationController::class, 'store']);
             Route::get('/conversations/{conversation}',                   [ConversationController::class, 'show']);
-            Route::post('/conversations/{conversation}/messages',         [ConversationController::class, 'storeMessage']);
+            Route::post('/conversations/{conversation}/messages',         [ConversationController::class, 'storeMessage'])->middleware('throttle:120,1');
             Route::post('/conversations/{conversation}/typing',           [ConversationController::class, 'typing']);
             Route::post('/conversations/{conversation}/seen',             [ConversationController::class, 'seen']);
 

@@ -34,7 +34,7 @@ class AdminDisputeController extends Controller
             $query->where('status', $request->status);
         }
 
-        $disputes = $query->paginate($request->integer('per_page', 20));
+        $disputes = $query->paginate(min($request->integer('per_page', 20), 100));
 
         return $this->success($disputes);
     }

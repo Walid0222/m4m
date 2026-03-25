@@ -31,7 +31,7 @@ class AdminSupportController extends Controller
                 'messages as unread_count' => fn ($q) => $q->whereNull('read_at'),
             ])
             ->latest('updated_at')
-            ->paginate($request->integer('per_page', 50));
+            ->paginate(min($request->integer('per_page', 50), 100));
 
         // Surface the last_message to top-level for convenience
         $conversations->getCollection()->transform(function ($c) {

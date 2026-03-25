@@ -29,7 +29,7 @@ class SellerOrderController extends Controller
                 'dispute:id,order_id,admin_note,admin_decision,status',
             ])
             ->latest()
-            ->paginate($request->integer('per_page', 15));
+            ->paginate(min($request->integer('per_page', 15), 100));
 
         return $this->success($orders);
     }

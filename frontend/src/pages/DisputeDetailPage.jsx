@@ -197,7 +197,28 @@ export default function DisputeDetailPage() {
 
   const handleViewEvidenceFile = async (ev) => {
     if (ev.type === 'link') {
-      window.open(ev.path, '_blank');
+      const candidate = typeof ev.path === 'string' ? ev.path.trim() : '';
+      if (/^https?:\/\//i.test(candidate)) {
+        window.open(candidate, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      // Backend may return { url } instead of a redirect; open the safe URL when present.
+      try {
+        const blob = await getDisputeEvidenceFile(id, ev.id);
+        const text = await blob.text();
+        const parsed = JSON.parse(text);
+        if (parsed?.url) {
+          window.open(parsed.url, '_blank', 'noopener,noreferrer');
+          return;
+        }
+      } catch {
+        // ignore and fall back to opening the stored value (if any)
+      }
+
+      if (candidate) {
+        window.open(candidate, '_blank', 'noopener,noreferrer');
+      }
       return;
     }
     if (ev.type !== 'image' && ev.type !== 'file') return;

@@ -23,7 +23,6 @@ class WithdrawRequestController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        \Log::info('Withdraw request payload', $request->all());
         $validated = $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
             'currency' => ['sometimes', 'string', 'size:3'],
@@ -33,6 +32,11 @@ class WithdrawRequestController extends Controller
         ]);
 
         $user = $request->user();
+        // Log only non-sensitive fields to avoid credential/payment leakage.
+        \Log::info('Withdraw request', [
+            'user_id' => $user->id,
+            'amount' => $validated['amount'] ?? null,
+        ]);
         // Step-up authentication: require 2FA code if enabled, otherwise current password.
         if ($user->two_factor_enabled_at) {
             if (! $request->filled('two_factor_code')) {

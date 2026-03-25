@@ -101,7 +101,7 @@ class DisputeController extends Controller
         $disputes = $query
             ->with(['order:id,order_number,total_amount,status', 'buyer:id,name', 'seller:id,name,avatar,updated_at'])
             ->latest()
-            ->paginate($request->integer('per_page', 15));
+            ->paginate(min($request->integer('per_page', 15), 100));
 
         return $this->success($disputes);
     }

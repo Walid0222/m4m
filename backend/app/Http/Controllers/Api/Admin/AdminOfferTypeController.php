@@ -28,7 +28,7 @@ class AdminOfferTypeController extends Controller
             $query->where('status', $request->status);
         }
 
-        $list = $query->orderBy('name')->paginate($request->integer('per_page', 50));
+        $list = $query->orderBy('name')->paginate(min($request->integer('per_page', 50), 100));
 
         return $this->success($list);
     }

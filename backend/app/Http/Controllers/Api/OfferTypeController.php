@@ -108,7 +108,7 @@ class OfferTypeController extends Controller
             ])
             ->withAvg('reviews', 'rating')
             ->orderBy('price')
-            ->paginate($request->integer('per_page', 24));
+            ->paginate(min($request->integer('per_page', 24), 100));
 
         $products->getCollection()->transform(function ($p) {
             return $p->hideAnalyticsForBuyers();

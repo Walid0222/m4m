@@ -29,7 +29,7 @@ class ConversationController extends Controller
                 $q->where('user_id', '!=', $userId)->whereNull('read_at');
             }])
             ->latest('updated_at')
-            ->paginate($request->integer('per_page', 15));
+            ->paginate(min($request->integer('per_page', 15), 100));
 
         $conversations->getCollection()->transform(function (Conversation $c) use ($request) {
             $c->other_user = $c->user_one_id === $request->user()->id ? $c->userTwo : $c->userOne;
@@ -130,7 +130,7 @@ class ConversationController extends Controller
         $messages = $conversation->messages()
             ->with('sender:id,name,avatar')
             ->latest()
-            ->paginate($request->integer('per_page', 20));
+            ->paginate(min($request->integer('per_page', 20), 100));
 
         // Mark as delivered: any messages from the other user that are still in 'sent' status
         if (! $isSupportConvo) {

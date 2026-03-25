@@ -32,7 +32,7 @@ class AdminVerificationRequestController extends Controller
             $query->where('status', $request->status);
         }
 
-        $verifications = $query->paginate($request->integer('per_page', 50));
+        $verifications = $query->paginate(min($request->integer('per_page', 50), 100));
 
         // Normalise field names so the frontend can use either id_card_front or
         // national_id_front — it renders whichever it finds first.

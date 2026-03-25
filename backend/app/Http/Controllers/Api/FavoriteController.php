@@ -27,7 +27,7 @@ class FavoriteController extends Controller
                 ->withAvg('reviews', 'rating');
             }])
             ->latest('created_at')
-            ->paginate($request->integer('per_page', 24));
+            ->paginate(min($request->integer('per_page', 24), 100));
 
         $favorites->getCollection()->transform(function ($fav) {
             if ($fav->product) {

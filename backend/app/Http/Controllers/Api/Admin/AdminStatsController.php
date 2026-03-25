@@ -102,7 +102,7 @@ class AdminStatsController extends Controller
             $query->where('admin_id', $request->admin_id);
         }
 
-        $logs = $query->paginate($request->integer('per_page', 30));
+        $logs = $query->paginate(min($request->integer('per_page', 30), 100));
 
         return $this->success($logs);
     }
@@ -123,7 +123,7 @@ class AdminStatsController extends Controller
             $query->where('action', $request->action);
         }
 
-        $logs = $query->paginate($request->integer('per_page', 30));
+        $logs = $query->paginate(min($request->integer('per_page', 30), 100));
 
         return $this->success($logs);
     }

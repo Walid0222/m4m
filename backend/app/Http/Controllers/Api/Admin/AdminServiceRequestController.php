@@ -25,7 +25,7 @@ class AdminServiceRequestController extends Controller
             $query->where('status', $request->status);
         }
 
-        $list = $query->paginate($request->integer('per_page', 20));
+        $list = $query->paginate(min($request->integer('per_page', 20), 100));
 
         return $this->success($list);
     }

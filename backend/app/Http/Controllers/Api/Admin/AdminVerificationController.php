@@ -19,7 +19,7 @@ class AdminVerificationController extends Controller
             $query->where('status', $request->status);
         }
 
-        $verifications = $query->paginate($request->integer('per_page', 20));
+        $verifications = $query->paginate(min($request->integer('per_page', 20), 100));
 
         return $this->success($verifications);
     }

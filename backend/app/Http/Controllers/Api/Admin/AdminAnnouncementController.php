@@ -13,7 +13,7 @@ class AdminAnnouncementController extends Controller
     {
         $announcements = Announcement::query()
             ->orderByDesc('created_at')
-            ->paginate($request->integer('per_page', 25));
+            ->paginate(min($request->integer('per_page', 25), 100));
 
         return $this->success($announcements);
     }
