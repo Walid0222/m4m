@@ -32,7 +32,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How can I contact support?',
-    a: 'You can contact support anytime via live chat. Our team is here to help you 24/7.',
+    a: 'You can contact support anytime via live chat. Our team is here to help you from 10 AM to 10 PM (GMT+1).',
   },
 ];
 

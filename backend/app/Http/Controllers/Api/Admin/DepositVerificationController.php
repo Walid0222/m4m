@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Api\Controller;
 use App\Models\DepositRequest;
-use App\Models\Wallet;
 use App\Models\WalletTransaction;
 use App\Notifications\DepositApprovedNotification;
 use Illuminate\Http\JsonResponse;
@@ -25,54 +24,83 @@ class DepositVerificationController extends Controller
 
     public function verify(Request $request, DepositRequest $depositRequest): JsonResponse
     {
-        if ($depositRequest->status !== 'pending') {
-            return $this->error('Deposit already processed.', 422);
-        }
-
         $validated = $request->validate([
             'action' => ['required', 'in:approve,reject'],
             'payment_reference' => ['nullable', 'string', 'max:255'],
         ]);
 
         if ($validated['action'] === 'reject') {
-            $depositRequest->update([
-                'status' => 'cancelled',
-                'payment_reference' => $validated['payment_reference'] ?? $depositRequest->payment_reference,
-            ]);
+            try {
+                DB::transaction(function () use ($depositRequest, $validated) {
+                    /** @var DepositRequest|null $locked */
+                    $locked = DepositRequest::whereKey($depositRequest->id)->lockForUpdate()->first();
+                    if (! $locked || $locked->status !== 'pending') {
+                        throw new \RuntimeException('DEPOSIT_ALREADY_PROCESSED');
+                    }
+
+                    $locked->update([
+                        'status' => 'cancelled',
+                        'payment_reference' => $validated['payment_reference'] ?? $locked->payment_reference,
+                    ]);
+                });
+            } catch (\RuntimeException $e) {
+                if ($e->getMessage() === 'DEPOSIT_ALREADY_PROCESSED') {
+                    return $this->error('Deposit already processed.', 422);
+                }
+
+                throw $e;
+            }
 
             return $this->success($depositRequest->fresh(), 'Deposit request rejected.');
         }
 
-        DB::transaction(function () use ($depositRequest) {
-            $depositRequest->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-            ]);
+        try {
+            DB::transaction(function () use ($depositRequest) {
+                /** @var DepositRequest|null $locked */
+                $locked = DepositRequest::whereKey($depositRequest->id)->lockForUpdate()->first();
+                if (! $locked || $locked->status !== 'pending') {
+                    throw new \RuntimeException('DEPOSIT_ALREADY_PROCESSED');
+                }
 
-            $wallet = $depositRequest->user->wallet;
-            if (! $wallet) {
-                $wallet = $depositRequest->user->wallet()->create(['balance' => 0]);
+                $locked->update([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                ]);
+
+                $user = $locked->user;
+                $wallet = $user->wallet;
+                if (! $wallet) {
+                    $wallet = $user->wallet()->create(['balance' => 0]);
+                }
+
+                $amount = (float) $locked->amount;
+
+                // Apply commission for Orange Recharge deposits (12%)
+                $credited = $locked->payment_method === 'orange_recharge'
+                    ? round($amount * 0.88, 2)
+                    : $amount;
+
+                $wallet->increment('balance', $credited);
+                $newBalance = (float) $wallet->fresh()->balance;
+
+                $wallet->transactions()->create([
+                    'type' => 'deposit',
+                    'amount' => $credited,
+                    'balance_after' => $newBalance,
+                    'reference_type' => DepositRequest::class,
+                    'reference_id' => $locked->id,
+                    'description' => "Deposit verified - {$locked->reference_code}",
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'DEPOSIT_ALREADY_PROCESSED') {
+                return $this->error('Deposit already processed.', 422);
             }
 
-            $amount = (float) $depositRequest->amount;
+            throw $e;
+        }
 
-            // Apply commission for Orange Recharge deposits (12%)
-            $credited = $depositRequest->payment_method === 'orange_recharge'
-                ? round($amount * 0.88, 2)
-                : $amount;
-
-            $wallet->increment('balance', $credited);
-            $newBalance = (float) $wallet->fresh()->balance;
-
-            $wallet->transactions()->create([
-                'type' => 'deposit',
-                'amount' => $credited,
-                'balance_after' => $newBalance,
-                'reference_type' => DepositRequest::class,
-                'reference_id' => $depositRequest->id,
-                'description' => "Deposit verified - {$depositRequest->reference_code}",
-            ]);
-        });
+        $depositRequest->refresh();
 
         $depositRequest->user->notify(new DepositApprovedNotification(
             (float) $depositRequest->amount,

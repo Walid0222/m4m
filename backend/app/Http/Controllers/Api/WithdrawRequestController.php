@@ -76,47 +76,10 @@ class WithdrawRequestController extends Controller
             return $this->error("Maximum withdrawal amount is {$settings->max_withdraw_amount}.", 422);
         }
 
-        // Enforce daily withdraw limit (sum of today's pending+completed plus this amount)
-        if ((float) $settings->daily_withdraw_limit > 0) {
-            $today = Carbon::now()->startOfDay();
-            $todayTotal = $user->withdrawRequests()
-                ->where('created_at', '>=', $today)
-                ->whereIn('status', ['pending', 'completed'])
-                ->sum('amount');
-
-            if ($todayTotal + $amount > (float) $settings->daily_withdraw_limit) {
-                return $this->error('Daily withdrawal limit exceeded.', 422);
-            }
-        }
-
-        // Enforce max pending withdraw requests
-        if ((int) $settings->max_pending_requests > 0) {
-            $pendingCount = $user->withdrawRequests()->where('status', 'pending')->count();
-            if ($pendingCount >= (int) $settings->max_pending_requests) {
-                return $this->error('You have too many pending withdrawal requests. Please wait for existing requests to be processed.', 422);
-            }
-        }
-
-        // Enforce cooldown between withdrawals
-        if ((int) $settings->withdraw_cooldown_hours > 0) {
-            $lastRequest = $user->withdrawRequests()
-                ->orderByDesc('created_at')
-                ->first();
-
-            if ($lastRequest) {
-                $cooldownUntil = $lastRequest->created_at->copy()->addHours((int) $settings->withdraw_cooldown_hours);
-                if ($cooldownUntil->isFuture()) {
-                    $hoursRemaining = Carbon::now()->diffInHours($cooldownUntil);
-                    return $this->error(
-                        "You must wait {$hoursRemaining} more hour(s) before creating another withdrawal request.",
-                        422
-                    );
-                }
-            }
-        }
-
         try {
             $withdraw = DB::transaction(function () use ($user, $validated, $amount) {
+                $settings = WalletSetting::current();
+
                 $wallet = $user->wallet;
                 if (! $wallet) {
                     $wallet = $user->wallet()->create(['balance' => 0]);
@@ -124,6 +87,42 @@ class WithdrawRequestController extends Controller
                 $wallet = $user->wallet()->lockForUpdate()->first();
                 if (! $wallet) {
                     throw new \RuntimeException('NO_WALLET');
+                }
+
+                // Re-check policy under wallet lock so concurrent requests cannot bypass limits.
+                if ((float) $settings->daily_withdraw_limit > 0) {
+                    $today = Carbon::now()->startOfDay();
+                    $todayTotal = (float) WithdrawRequest::where('user_id', $user->id)
+                        ->where('created_at', '>=', $today)
+                        ->whereIn('status', ['pending', 'completed'])
+                        ->sum('amount');
+
+                    if ($todayTotal + $amount > (float) $settings->daily_withdraw_limit) {
+                        throw new \RuntimeException('DAILY_LIMIT');
+                    }
+                }
+
+                if ((int) $settings->max_pending_requests > 0) {
+                    $pendingCount = WithdrawRequest::where('user_id', $user->id)
+                        ->where('status', 'pending')
+                        ->count();
+                    if ($pendingCount >= (int) $settings->max_pending_requests) {
+                        throw new \RuntimeException('MAX_PENDING');
+                    }
+                }
+
+                if ((int) $settings->withdraw_cooldown_hours > 0) {
+                    $lastRequest = WithdrawRequest::where('user_id', $user->id)
+                        ->orderByDesc('created_at')
+                        ->first();
+
+                    if ($lastRequest) {
+                        $cooldownUntil = $lastRequest->created_at->copy()->addHours((int) $settings->withdraw_cooldown_hours);
+                        if ($cooldownUntil->isFuture()) {
+                            $hoursRemaining = Carbon::now()->diffInHours($cooldownUntil);
+                            throw new \RuntimeException('COOLDOWN:'.$hoursRemaining);
+                        }
+                    }
                 }
 
                 $pendingTotal = (float) WithdrawRequest::where('user_id', $user->id)
@@ -148,6 +147,20 @@ class WithdrawRequestController extends Controller
             }
             if ($e->getMessage() === 'PENDING_EXCEEDS_BALANCE') {
                 return $this->error('You already have pending withdrawal requests that exceed your available balance.', 422);
+            }
+            if ($e->getMessage() === 'DAILY_LIMIT') {
+                return $this->error('Daily withdrawal limit exceeded.', 422);
+            }
+            if ($e->getMessage() === 'MAX_PENDING') {
+                return $this->error('You have too many pending withdrawal requests. Please wait for existing requests to be processed.', 422);
+            }
+            if (str_starts_with($e->getMessage(), 'COOLDOWN:')) {
+                $hoursRemaining = (int) substr($e->getMessage(), strlen('COOLDOWN:'));
+
+                return $this->error(
+                    "You must wait {$hoursRemaining} more hour(s) before creating another withdrawal request.",
+                    422
+                );
             }
             throw $e;
         }

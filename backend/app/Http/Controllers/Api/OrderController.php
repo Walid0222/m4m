@@ -154,6 +154,13 @@ class OrderController extends Controller
             return $this->error('One or more sellers are currently in vacation mode and cannot accept orders.', 422);
         }
 
+        if ($sellerIds->count() > 1) {
+            return $this->error(
+                'Your order cannot include products from multiple sellers. Please place separate orders for each seller.',
+                422
+            );
+        }
+
         foreach ($items as $item) {
             $product = $products->get($item['product_id']);
             if (! $product) {
@@ -368,14 +375,19 @@ class OrderController extends Controller
                         $allDeliveryContent[] = $credentials;
                         $isInstant = true;
                     } else {
-                        // Manual delivery
+                        // Manual delivery — lock product row and re-check stock to prevent overselling.
+                        $lockedProduct = Product::whereKey($oi['product_id'])->lockForUpdate()->first();
+                        if (! $lockedProduct || (int) $lockedProduct->stock < $oi['quantity']) {
+                            throw new \RuntimeException("Out of stock for product: {$product->name}");
+                        }
+
                         $order->orderItems()->create([
                             'product_id' => $oi['product_id'],
                             'quantity' => $oi['quantity'],
                             'unit_price' => $oi['unit_price'],
                             'total_price' => $oi['total_price'],
                         ]);
-                        Product::where('id', $oi['product_id'])->decrement('stock', $oi['quantity']);
+                        $lockedProduct->decrement('stock', $oi['quantity']);
                     }
                 }
 
@@ -441,6 +453,9 @@ class OrderController extends Controller
         } catch (\RuntimeException $e) {
             if ($e->getMessage() === 'INSUFFICIENT_WALLET_BALANCE') {
                 return $this->error('Insufficient wallet balance.', 422);
+            }
+            if (str_starts_with($e->getMessage(), 'Out of stock for product:')) {
+                return $this->error($e->getMessage(), 422);
             }
             throw $e;
         }

@@ -550,6 +550,7 @@ export default function Navbar() {
                               searchQuery
                             )}
                           </p>
+                          {/*
                           <div className="flex items-center gap-2 flex-wrap">
                             <span
                               className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${getCategoryColor(
@@ -559,6 +560,7 @@ export default function Navbar() {
                               {ot.category?.name || 'Service'}
                             </span>
                           </div>
+                          */}
                         </div>
                       </button>
                     ))}
