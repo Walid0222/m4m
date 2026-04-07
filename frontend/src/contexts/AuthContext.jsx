@@ -94,19 +94,18 @@ export function AuthProvider({ children }) {
     return payload;
   }, [syncAvatar]);
 
-  const register = useCallback(async (nameOrPayload, email, password, passwordConfirmation, isSeller) => {
+  const register = useCallback(async (nameOrPayload, email, password, passwordConfirmation) => {
     const payload =
       typeof nameOrPayload === 'object' && nameOrPayload !== null && 'email' in nameOrPayload
-        ? nameOrPayload
+        ? { ...nameOrPayload, is_seller: false }
         : {
             name: nameOrPayload,
             email,
             password,
             password_confirmation: passwordConfirmation,
-            is_seller: isSeller,
+            is_seller: false,
           };
-    const res = await api.register(payload);
-    const data = res?.data;
+    const data = await api.register(payload);
     if (data?.user) {
       setUser(data.user);
       syncAvatar(data.user.id); // new user has no avatar → sets null cleanly

@@ -1,5 +1,8 @@
-import { useParams, Link, NavLink } from 'react-router-dom';
+import { useState } from 'react';
+import { useParams, Link, NavLink, useNavigate } from 'react-router-dom';
 import { MessageSquare, Mail, Twitter } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { updateMe } from '../services/api';
 
 const NAV_LINKS = [
   { slug: 'about',        label: 'About M4M' },
@@ -101,8 +104,44 @@ function HowToBuyContent() {
 }
 
 function HowToSellContent() {
+  const { user, refreshUser, loading } = useAuth();
+  const navigate = useNavigate();
+  const [activating, setActivating] = useState(false);
+  const [activationError, setActivationError] = useState('');
+  const [sellerActivationConfirmOpen, setSellerActivationConfirmOpen] = useState(false);
+
+  const isSeller = user?.is_seller === true || user?.is_seller === 1;
+  const isLoggedIn = Boolean(user);
+  const isEmailVerified = Boolean(user?.email_verified_at);
+
+  const handleConfirmSeller = async () => {
+    if (user?.is_seller === true || user?.is_seller === 1) {
+      return;
+    }
+    setActivationError('');
+    setActivating(true);
+    try {
+      const updated = await updateMe({ is_seller: true });
+      await refreshUser();
+      // SellerRoute does not require email verification; send unverified users to /profile
+      // so ProtectedRoute shows the standard verification UI instead of dashboard-only flows.
+      if (!updated?.email_verified_at) {
+        navigate('/profile', { replace: true });
+      } else {
+        navigate('/seller-dashboard', { replace: true });
+      }
+    } catch (e) {
+      setActivationError(e?.message || 'Could not activate seller mode. Please try again.');
+    } finally {
+      setActivating(false);
+    }
+  };
+
+  const secondaryOutlineBtn =
+    'inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-semibold border border-m4m-gray-300 text-m4m-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-60';
+
   const steps = [
-    { n: 1, title: 'Register as a Seller', desc: 'Create an account and check the "I want to sell" option during registration.' },
+    { n: 1, title: 'Create your M4M account', desc: 'Register as a buyer first. Seller mode is turned on only after you confirm below on this page.' },
     { n: 2, title: 'Create Your Products', desc: 'Go to Seller Dashboard → Products → Add Product. Set title, description, price, delivery type, and images.' },
     { n: 3, title: 'Choose Delivery Type', desc: 'Instant Delivery: upload pre-loaded credentials. Manual Delivery: send credentials manually after each order.' },
     { n: 4, title: 'Receive Orders', desc: 'You will be notified for each new order. For manual delivery, send credentials through the order page.' },
@@ -110,10 +149,90 @@ function HowToSellContent() {
     { n: 6, title: 'Withdraw Earnings', desc: 'Request a withdrawal from your Wallet page. Our team processes withdrawals manually within 24-48 hours.' },
     { n: 7, title: 'Get Verified', desc: 'Submit verification documents to get the Verified Seller badge, increasing trust and your product limit.' },
   ];
+
+  const purpleBtn =
+    'inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors disabled:opacity-60 disabled:pointer-events-none';
+  const showTopOnboarding = isLoggedIn && !isSeller;
+
   return (
     <article>
       <h1 className="text-2xl font-bold text-gray-900 mb-2">How to Sell on M4M</h1>
       <p className="text-gray-500 text-sm mb-8">Start selling digital products to buyers worldwide.</p>
+      {showTopOnboarding ? (
+        <>
+          <div className="rounded-xl border border-m4m-gray-200 bg-white p-5 space-y-4 mb-6">
+            <h2 className="text-base font-semibold text-m4m-black">Seller onboarding progress</h2>
+            <p className="text-sm text-m4m-gray-700">
+              Your account has been created successfully. Complete the final step below to activate seller mode.
+            </p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-lg bg-m4m-gray-50 px-3 py-2 text-sm">
+                <span className="text-m4m-gray-700">Account created</span>
+                <span className="text-green-700 font-semibold">Completed</span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-m4m-gray-50 px-3 py-2 text-sm">
+                <span className="text-m4m-gray-700">Email verification</span>
+                {isEmailVerified ? (
+                  <span className="text-green-700 font-semibold">Verified</span>
+                ) : (
+                  <span className="text-blue-700 font-semibold">Needs verification</span>
+                )}
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-m4m-gray-50 px-3 py-2 text-sm">
+                <span className="text-m4m-gray-700">Seller mode activation</span>
+                <span className="text-amber-700 font-semibold">Pending</span>
+              </div>
+            </div>
+          </div>
+          <div className="mb-8 flex flex-col items-center gap-3">
+            {activationError ? (
+              <p className="text-sm text-red-600 text-center max-w-md">{activationError}</p>
+            ) : null}
+            {!sellerActivationConfirmOpen ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setActivationError('');
+                  setSellerActivationConfirmOpen(true);
+                }}
+                disabled={activating}
+                className={purpleBtn}
+              >
+                I want to sell on M4M
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </button>
+            ) : null}
+            {sellerActivationConfirmOpen ? (
+              <div className="w-full max-w-md rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 p-5 space-y-4">
+                <p className="text-sm text-gray-700 text-center leading-relaxed">
+                  You are about to enable <strong>seller mode</strong> on your account. You will be able to list products
+                  and receive payouts per M4M rules and commission. This can be reviewed in the steps above.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setSellerActivationConfirmOpen(false)}
+                    disabled={activating}
+                    className={secondaryOutlineBtn}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmSeller}
+                    disabled={activating}
+                    className={purpleBtn}
+                  >
+                    {activating ? 'Activating…' : 'Yes, activate seller mode'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : null}
       <div className="space-y-4">
         {steps.map(({ n, title, desc }) => (
           <div key={n} className="flex gap-4 rounded-xl border border-gray-200 bg-white p-4">
@@ -128,17 +247,113 @@ function HowToSellContent() {
       <div className="mt-8 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
         <strong>Platform Commission:</strong> M4M takes a 10% commission on each completed order. You receive 90% of the sale price.
       </div>
-      <div className="mt-8 flex justify-center">
-        <Link
-          to={{ pathname: '/auth', state: { sellerIntent: true } }}
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors"
-        >
-          Start selling
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-          </svg>
-        </Link>
+      {!showTopOnboarding ? (
+      <div className="mt-6 rounded-xl border border-m4m-gray-200 bg-white p-5 space-y-4">
+        <h2 className="text-base font-semibold text-m4m-black">Seller onboarding progress</h2>
+        {isLoggedIn && !isSeller ? (
+          <p className="text-sm text-m4m-gray-700">
+            Your account has been created successfully. Complete the final step below to activate seller mode.
+          </p>
+        ) : null}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between rounded-lg bg-m4m-gray-50 px-3 py-2 text-sm">
+            <span className="text-m4m-gray-700">Account created</span>
+            {isLoggedIn ? (
+              <span className="text-green-700 font-semibold">Completed</span>
+            ) : (
+              <span className="text-amber-700 font-semibold">Pending</span>
+            )}
+          </div>
+          <div className="flex items-center justify-between rounded-lg bg-m4m-gray-50 px-3 py-2 text-sm">
+            <span className="text-m4m-gray-700">Email verification</span>
+            {!isLoggedIn ? (
+              <span className="text-amber-700 font-semibold">Pending</span>
+            ) : isEmailVerified ? (
+              <span className="text-green-700 font-semibold">Verified</span>
+            ) : (
+              <span className="text-blue-700 font-semibold">Needs verification</span>
+            )}
+          </div>
+          <div className="flex items-center justify-between rounded-lg bg-m4m-gray-50 px-3 py-2 text-sm">
+            <span className="text-m4m-gray-700">Seller mode activation</span>
+            {isSeller ? (
+              <span className="text-green-700 font-semibold">Activated</span>
+            ) : (
+              <span className="text-amber-700 font-semibold">Pending</span>
+            )}
+          </div>
+        </div>
       </div>
+      ) : null}
+      {!showTopOnboarding ? (
+      <div className="mt-8 flex flex-col items-center gap-3">
+        {activationError ? (
+          <p className="text-sm text-red-600 text-center max-w-md">{activationError}</p>
+        ) : null}
+        {loading ? (
+          <p className="text-sm text-gray-500 text-center">Loading…</p>
+        ) : !user ? (
+          <Link to="/auth" state={{ sellerIntent: true }} className={purpleBtn}>
+            Start selling
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </Link>
+        ) : !isSeller ? (
+          <>
+            {!sellerActivationConfirmOpen ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setActivationError('');
+                  setSellerActivationConfirmOpen(true);
+                }}
+                disabled={activating}
+                className={purpleBtn}
+              >
+                I want to sell on M4M
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </button>
+            ) : null}
+            {sellerActivationConfirmOpen ? (
+              <div className="w-full max-w-md rounded-xl border border-m4m-gray-200 bg-m4m-gray-50 p-5 space-y-4">
+                <p className="text-sm text-gray-700 text-center leading-relaxed">
+                  You are about to enable <strong>seller mode</strong> on your account. You will be able to list products
+                  and receive payouts per M4M rules and commission. This can be reviewed in the steps above.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setSellerActivationConfirmOpen(false)}
+                    disabled={activating}
+                    className={secondaryOutlineBtn}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmSeller}
+                    disabled={activating}
+                    className={purpleBtn}
+                  >
+                    {activating ? 'Activating…' : 'Yes, activate seller mode'}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <Link to="/seller-dashboard" className={purpleBtn}>
+            Go to Seller Dashboard
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </Link>
+        )}
+      </div>
+      ) : null}
     </article>
   );
 }

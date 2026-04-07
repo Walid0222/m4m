@@ -14,7 +14,6 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  const [isSeller, setIsSeller] = useState(sellerIntent);
   const [error, setError] = useState('');
   const [banInfo, setBanInfo] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -55,7 +54,13 @@ export default function AuthPage() {
           setSubmitting(false);
           return;
         }
-        await register(name, email, password, passwordConfirmation, isSeller);
+        await register(name, email, password, passwordConfirmation);
+        if (sellerIntent) {
+          navigate('/help/how-to-sell', { replace: true });
+        } else {
+          navigate(fromPath, { replace: true });
+        }
+        return;
       } else if (isLogin && requires2FA) {
         // Second step: submit 2FA code
         const { login2fa } = await import('../services/api');
@@ -202,36 +207,25 @@ export default function AuthPage() {
             </div>
           )}
           {!isLogin && (
-            <>
-              <div>
-                <label htmlFor="password_confirmation" className="block text-sm font-medium text-m4m-gray-700 mb-1">
-                  {t('auth.confirm_password')}
-                </label>
-                <input
-                  id="password_confirmation"
-                  type="password"
-                  value={passwordConfirmation}
-                  onChange={(e) => setPasswordConfirmation(e.target.value)}
-                  required
-                  className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
-                  placeholder={t('auth.placeholder_password')}
-                />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isSeller}
-                  onChange={(e) => setIsSeller(e.target.checked)}
-                  className="rounded border-m4m-gray-300 text-m4m-purple focus:ring-m4m-purple"
-                />
-                <span className="text-sm text-m4m-gray-700">{t('auth.i_want_to_sell')}</span>
+            <div>
+              <label htmlFor="password_confirmation" className="block text-sm font-medium text-m4m-gray-700 mb-1">
+                {t('auth.confirm_password')}
               </label>
-            </>
+              <input
+                id="password_confirmation"
+                type="password"
+                value={passwordConfirmation}
+                onChange={(e) => setPasswordConfirmation(e.target.value)}
+                required
+                className="w-full px-4 py-2.5 rounded-lg border border-m4m-gray-200 bg-white text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none"
+                placeholder={t('auth.placeholder_password')}
+              />
+            </div>
           )}
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 rounded-lg font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60 transition-colors"
+            className="w-full py-3 rounded-lg font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark disabled:opacity-60 transition-colors"
           >
             {submitting
               ? t('auth.please_wait')

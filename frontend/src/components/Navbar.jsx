@@ -16,6 +16,7 @@ import {
   Bell,
   Eye,
   EyeOff,
+  Store,
 } from 'lucide-react';
 import { useBalanceVisibility } from '../contexts/BalanceVisibilityContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -420,6 +421,10 @@ export default function Navbar() {
     </Link>
   );
 
+  const showBecomeSellerLink = Boolean(
+    user && user.is_seller !== true && user.is_seller !== 1
+  );
+
   const showVacationBanner = user?.is_seller && (user?.vacation_mode === true || user?.vacation_mode === 1);
 
   return (
@@ -780,6 +785,11 @@ export default function Navbar() {
                         <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
                         <p className="text-xs text-gray-400 truncate">{user.email}</p>
                       </div>
+                      {showBecomeSellerLink && (
+                        <DropdownLink to="/help/how-to-sell" icon={<Store className="w-4 h-4" aria-hidden />}>
+                          Become Seller
+                        </DropdownLink>
+                      )}
                       <DropdownLink to="/profile" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>}>{t('nav.profile')}</DropdownLink>
                       <DropdownLink to="/orders" icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>}>{t('nav.orders')}</DropdownLink>
                       <DropdownLink to="/favorites" icon={<svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>}>{t('nav.favorites')}</DropdownLink>
@@ -829,9 +839,17 @@ export default function Navbar() {
                   
                 </>
               ) : (
-                <Link to="/login" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors">
-                  {t('nav.login')}
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link
+                    to="/help/how-to-sell"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-m4m-purple text-m4m-purple bg-white hover:bg-purple-50 transition-colors"
+                  >
+                    Become Seller
+                  </Link>
+                  <Link to="/login" className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors">
+                    {t('nav.login')}
+                  </Link>
+                </div>
               )}
             </div>
             <select
@@ -1060,6 +1078,7 @@ export default function Navbar() {
                     </div>
                   </div>
                   {[
+                    ...(showBecomeSellerLink ? [{ to: '/help/how-to-sell', label: 'Become Seller' }] : []),
                     { to: '/profile', label: 'My Profile' },
                     { to: '/orders', label: 'My Orders' },
                     { to: '/chat', label: 'Messages' },
@@ -1086,9 +1105,18 @@ export default function Navbar() {
                   </button>
                 </>
               ) : (
-                <Link to="/login" onClick={closeAll} className="mx-2 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors">
-                  Log in
-                </Link>
+                <div className="mx-2 flex flex-col gap-2">
+                  <Link
+                    to="/help/how-to-sell"
+                    onClick={closeAll}
+                    className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold border-2 border-m4m-purple text-m4m-purple hover:bg-purple-50 transition-colors"
+                  >
+                    Become Seller
+                  </Link>
+                  <Link to="/login" onClick={closeAll} className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold bg-m4m-purple text-white hover:bg-m4m-purple-dark transition-colors">
+                    Log in
+                  </Link>
+                </div>
               )}
         </nav>
           </div>
