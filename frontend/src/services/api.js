@@ -159,8 +159,6 @@ export function uploadProfileAvatar(file) {
   }).then((res) => {
     const data = res.data?.data !== undefined ? res.data.data : res.data;
     return data?.user ?? data;
-  }).catch((err) => {
-    throw err.response?.data?.message || err.message || err;
   });
 }
 

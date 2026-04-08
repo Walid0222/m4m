@@ -26,6 +26,21 @@ async function changePassword(body) {
   }
 }
 
+/** Avatar upload errors: keep axios Error (with err.data) so validation messages can be shown. */
+function avatarUploadErrorMessage(err) {
+  if (err == null) return 'Upload failed';
+  if (typeof err === 'string') return err;
+  const data = err.data;
+  if (data && typeof data === 'object' && data.errors && typeof data.errors === 'object') {
+    for (const vals of Object.values(data.errors)) {
+      if (Array.isArray(vals) && vals[0] != null && vals[0] !== '') return String(vals[0]);
+      if (typeof vals === 'string' && vals) return vals;
+    }
+  }
+  if (typeof err.message === 'string' && err.message) return err.message;
+  return 'Upload failed';
+}
+
 function Tab({ label, active, onClick }) {
   return (
     <button
@@ -88,8 +103,8 @@ export default function UserProfilePage() {
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setAvatarError('Image must be under 2MB');
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('Image must be 5MB or smaller');
       return;
     }
     setAvatarError(null);
@@ -102,7 +117,7 @@ export default function UserProfilePage() {
       URL.revokeObjectURL(blobUrl);
       setAvatarPreviewUrl(null);
     } catch (err) {
-      setAvatarError(err.message || 'Upload failed');
+      setAvatarError(avatarUploadErrorMessage(err));
       URL.revokeObjectURL(blobUrl);
       setAvatarPreviewUrl(null);
     } finally {
@@ -233,6 +248,7 @@ export default function UserProfilePage() {
                 )}
               </div>
               <p className="text-xs text-gray-400 mt-1">Username cannot be changed after account creation.</p>
+              <p className="text-xs text-gray-400 mt-1">Profile photo: images up to 5MB; large photos are resized for display.</p>
             </div>
           </div>
         </div>
