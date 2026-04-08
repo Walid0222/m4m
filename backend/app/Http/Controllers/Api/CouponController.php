@@ -68,16 +68,8 @@ class CouponController extends Controller
                     ->where('status', Order::STATUS_COMPLETED)
                     ->count();
 
-                // Must stay in sync with OrderController commissionPercentForSeller().
-                if ($completedOrders >= 100) {
-                    $commissionPct = 8.0;
-                } elseif ($completedOrders >= 20) {
-                    $commissionPct = 10.0;
-                } elseif ($completedOrders >= 10) {
-                    $commissionPct = 12.0;
-                } else {
-                    $commissionPct = 15.0;
-                }
+                // Must stay in sync with OrderController::commissionPercentForSeller().
+                $commissionPct = $completedOrders >= 10 ? 8.0 : 5.0;
 
                 $baseCommission = round($subtotal * ($commissionPct / 100), 2);
 

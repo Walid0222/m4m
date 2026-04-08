@@ -51,16 +51,8 @@ class StatsController extends Controller
         $nextCommissionRate       = null;
         $ordersToNextCommission   = 0;
         if ($nextThreshold !== null) {
-            // Map next threshold to its commission tier
-            if ($nextThreshold >= 100) {
-                $nextCommissionRate = 8.0;
-            } elseif ($nextThreshold >= 20) {
-                $nextCommissionRate = 10.0;
-            } elseif ($nextThreshold >= 10) {
-                $nextCommissionRate = 12.0;
-            } else {
-                $nextCommissionRate = 15.0;
-            }
+            // Standard platform fee after Early Seller Bonus (see commissionInfo()).
+            $nextCommissionRate = 8.0;
             $ordersToNextCommission = max(0, $nextThreshold - $completedOrders);
         }
 
@@ -143,17 +135,11 @@ class StatsController extends Controller
      */
     private function commissionInfo(int $completedOrders): array
     {
-        if ($completedOrders >= 100) {
+        if ($completedOrders >= 10) {
             return [8.0, null];
         }
-        if ($completedOrders >= 20) {
-            return [10.0, 100];
-        }
-        if ($completedOrders >= 10) {
-            return [12.0, 20];
-        }
 
-        return [15.0, 10];
+        return [5.0, 10];
     }
 
     /**

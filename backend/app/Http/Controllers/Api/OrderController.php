@@ -491,7 +491,7 @@ class OrderController extends Controller
     }
 
     /**
-     * Progressive commission % by seller completed orders — must stay in sync with
+     * Platform fee % by seller completed orders — must stay in sync with
      * {@see EscrowService::processScheduledRelease()} and {@see EscrowService::forceReleaseForDisputeResolution()}.
      */
     private function commissionPercentForSeller(int $sellerId): float
@@ -500,17 +500,7 @@ class OrderController extends Controller
             ->where('status', Order::STATUS_COMPLETED)
             ->count();
 
-        if ($completedOrders >= 100) {
-            return 8.0;
-        }
-        if ($completedOrders >= 20) {
-            return 10.0;
-        }
-        if ($completedOrders >= 10) {
-            return 12.0;
-        }
-
-        return 15.0;
+        return $completedOrders >= 10 ? 8.0 : 5.0;
     }
 
     // ─── Helper: build safe order payload ────────────────────────────────────

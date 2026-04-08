@@ -658,7 +658,7 @@ export default function WalletPage() {
             <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-64 bg-gray-900 text-white text-xs rounded-xl px-3 py-2.5 shadow-lg z-50 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity text-center leading-relaxed">
             <div className="tooltip">
   {isSeller
-    ? "M4M marketplace takes a 10% commission from each completed order. The remaining 90% is credited to your wallet as a seller payout."
+    ? "Seller payouts: Early Seller Bonus — 5% fees for your first 10 sales; standard platform fee — 8% from your 10th completed sale onward. The remainder is credited to your wallet after each completed order (before any withdrawal processing)."
     : "Payments are held in escrow until you receive your order. If there is an issue, you can open a dispute for protection."
   }
 </div>

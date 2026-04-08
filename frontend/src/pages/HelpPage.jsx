@@ -47,7 +47,7 @@ function FaqContent() {
     { q: 'How do I become a verified seller?', a: 'Go to your Seller Dashboard → Get Verified, upload your national ID and optionally a bank statement. Our team reviews and approves within 24-48 hours.' },
     { q: 'What are seller badges?', a: 'Seller badges indicate completed sales: Beginner (1+), Trusted (10+), Professional (100+), Expert (500+), Elite (1000+). They help buyers identify reliable sellers.' },
     { q: 'How do disputes work?', a: 'If you have an issue with a delivery, open a dispute from your order page. Our team reviews the case and will either issue a refund or release funds to the seller.' },
-    { q: 'What is the platform commission?', a: 'M4M takes a 10% commission on each completed order. Sellers receive 90% of the sale price.' },
+    { q: 'What is the platform commission?', a: 'Early Seller Bonus: 5% fees for your first 10 sales. Standard platform fee: 8% from your 10th completed sale onward. The fee is taken from each completed order before the seller payout is credited.' },
     { q: 'How do I withdraw my earnings?', a: 'Go to Wallet → Withdraw. Our team manually reviews and approves withdraw requests within 24-48 hours.' },
     { q: 'Can I cancel an order?', a: 'Orders can be cancelled before delivery. Contact the seller through chat, or open a dispute if needed.' },
   ];
@@ -66,6 +66,10 @@ function FaqContent() {
             <p className="px-4 pb-4 text-sm text-gray-600 leading-relaxed">{a}</p>
           </details>
         ))}
+      </div>
+      <div className="mt-8 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-900 leading-relaxed">
+        <strong>New sellers:</strong> Early Seller Bonus — 5% fees for your first 10 sales. Standard platform fee — 8% from your
+        10th completed sale onward. See the FAQ above.
       </div>
     </article>
   );
@@ -244,8 +248,9 @@ function HowToSellContent() {
           </div>
         ))}
       </div>
-      <div className="mt-8 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
-        <strong>Platform Commission:</strong> M4M takes a 10% commission on each completed order. You receive 90% of the sale price.
+      <div className="mt-8 rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800 leading-relaxed">
+        <strong>Platform fees:</strong> Early Seller Bonus — 5% fees for your first 10 completed sales. Standard platform fee — 8%
+        after your first 10 completed sales. Fees are deducted when each order completes before your payout is credited.
       </div>
       {!showTopOnboarding ? (
       <div className="mt-6 rounded-xl border border-m4m-gray-200 bg-white p-5 space-y-4">
@@ -512,10 +517,10 @@ function TermsContent() {
       <ul>
         <li>Sellers must deliver as described within the stated delivery time.</li>
         <li>Selling counterfeit or illegal goods is strictly prohibited.</li>
-        <li>Sellers agree to a 10% platform commission on completed orders.</li>
+        <li>Sellers agree to platform fees on completed orders: Early Seller Bonus (5% fees for your first 10 sales), then standard 8% from your 10th completed sale onward.</li>
       </ul>
       <h2>4. Escrow & Payments</h2>
-      <p>M4M holds funds in escrow until delivery is confirmed. Platform commission is deducted on completion. Withdrawal requests are processed within 24-48 hours.</p>
+      <p>M4M holds funds in escrow until delivery is confirmed. The platform fee is deducted on completion. Withdrawal requests are processed within 24-48 hours.</p>
       <h2>5. Prohibited Activities</h2>
       <ul>
         <li>Fraud, scamming, or deceptive practices</li>

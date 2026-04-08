@@ -144,6 +144,13 @@ class ProductController extends Controller
             'faqs',
         ]);
 
+        if ($product->seller) {
+            $completedForFeeTier = Order::where('seller_id', $product->seller->id)
+                ->where('status', Order::STATUS_COMPLETED)
+                ->count();
+            $product->seller->setAttribute('completed_orders', $completedForFeeTier);
+        }
+
         return $this->success($this->hideAnalyticsFromProduct($product));
     }
 

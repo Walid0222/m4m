@@ -231,19 +231,12 @@ class EscrowService
             if ($sellerId) {
                 $seller = User::find($sellerId);
                 if ($seller) {
-                    // Progressive commission based on completed orders (from orders table)
+                    // Platform fee % from completed orders (from orders table) — keep in sync with
+                    // OrderController::commissionPercentForSeller() and StatsController::commissionInfo().
                     $completedOrders = Order::where('seller_id', $sellerId)
                         ->where('status', Order::STATUS_COMPLETED)
                         ->count();
-                    if ($completedOrders >= 100) {
-                        $commissionPct = 8.0;
-                    } elseif ($completedOrders >= 20) {
-                        $commissionPct = 10.0;
-                    } elseif ($completedOrders >= 10) {
-                        $commissionPct = 12.0;
-                    } else {
-                        $commissionPct = 15.0;
-                    }
+                    $commissionPct = $completedOrders >= 10 ? 8.0 : 5.0;
 
                     // Base platform commission on the pre-discount subtotal so seller earnings
                     // are not reduced by coupons. Coupon discounts are absorbed from platform
@@ -426,12 +419,7 @@ class EscrowService
                 $seller = User::find($sellerId);
                 if ($seller) {
                     $completedOrders = Order::where('seller_id', $sellerId)->where('status', Order::STATUS_COMPLETED)->count();
-                    $commissionPct = match (true) {
-                        $completedOrders >= 100 => 8.0,
-                        $completedOrders >= 20 => 10.0,
-                        $completedOrders >= 10 => 12.0,
-                        default => 15.0,
-                    };
+                    $commissionPct = $completedOrders >= 10 ? 8.0 : 5.0;
                     $baseCommission = round($subtotal * ($commissionPct / 100), 2);
                     $platformFee = max(0.0, round($baseCommission - $discountAmount, 2));
                     $sellerAmount = max(0.0, round($totalAmount - $platformFee, 2));

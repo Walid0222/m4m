@@ -1388,7 +1388,7 @@ export default function SellerDashboardPage() {
               <StatCard
                 title="Total earnings"
                 value={sellerStats ? `${Number(sellerStats.total_revenue ?? 0).toFixed(2)} MAD` : '—'}
-                subtitle="After platform commission"
+                subtitle="After platform fee"
                 icon="dollar"
               />
               <StatCard
@@ -1646,24 +1646,15 @@ export default function SellerDashboardPage() {
                   const sellerLevel = Number.isFinite(sellerStats.seller_level)
                     ? sellerStats.seller_level
                     : Math.floor(completed / 2);
-                  const currentCommission = Number(sellerStats.commission_rate ?? 15);
+                  const currentCommission = Number(sellerStats.commission_rate ?? 5);
                   const nextThreshold = sellerStats.next_commission_threshold ?? null;
                   const nextCommission = sellerStats.next_commission_rate ?? null;
                   const ordersNeeded = nextThreshold ? Math.max(0, nextThreshold - completed) : 0;
 
-                  // Determine current tier start for progress bar
-                  let tierStart = 0;
-                  if (completed >= 100) tierStart = 100;
-                  else if (completed >= 20) tierStart = 20;
-                  else if (completed >= 10) tierStart = 10;
-
-                  let progress = 1;
-                  if (nextThreshold && nextThreshold > tierStart) {
-                    progress = Math.min(
-                      1,
-                      Math.max(0, (completed - tierStart) / (nextThreshold - tierStart)),
-                    );
-                  }
+                  const progress =
+                    nextThreshold && nextThreshold > 0
+                      ? Math.min(1, Math.max(0, completed / nextThreshold))
+                      : 1;
 
                   return (
                     <div className="rounded-2xl border border-m4m-gray-200 bg-white p-5 mb-8">
@@ -1671,9 +1662,15 @@ export default function SellerDashboardPage() {
                         <div>
                           <h2 className="text-base font-semibold text-m4m-black">Seller Progress</h2>
                           <p className="text-xs text-m4m-gray-500">
-                            Your commission decreases automatically as you complete more successful orders.
+                            Early Seller Bonus: 5% fees for your first 10 sales. Standard platform fee: 8% from your 10th
+                            completed sale onward.
                           </p>
                         </div>
+                        {completed < 10 ? (
+                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
+                            Early Seller Bonus Active
+                          </span>
+                        ) : null}
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4 text-sm">
                         <div>
@@ -1686,14 +1683,14 @@ export default function SellerDashboardPage() {
                           <p className="mt-0.5 text-lg font-semibold text-m4m-black">{completed}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-m4m-gray-500">Current commission</p>
+                          <p className="text-xs text-m4m-gray-500">Current platform fee</p>
                           <p className="mt-0.5 text-lg font-semibold text-m4m-black">
                             {currentCommission.toFixed(0)}%
                           </p>
                           <p className="text-[11px] text-m4m-gray-400">Platform fee on each completed order</p>
                         </div>
                         <div>
-                          <p className="text-xs text-m4m-gray-500">Next commission tier</p>
+                          <p className="text-xs text-m4m-gray-500">Standard platform fee (next)</p>
                           {nextThreshold ? (
                             <>
                               <p className="mt-0.5 text-lg font-semibold text-m4m-black">
@@ -1701,15 +1698,15 @@ export default function SellerDashboardPage() {
                               </p>
                               <p className="text-[11px] text-m4m-gray-400">
                                 {ordersNeeded > 0
-                                  ? `${ordersNeeded} more order${ordersNeeded === 1 ? '' : 's'} to reach the next tier`
-                                  : 'You are at the threshold for the next tier.'}
+                                  ? `${ordersNeeded} more completed sale${ordersNeeded === 1 ? '' : 's'} until the standard 8% fee applies`
+                                  : 'Standard platform fee: 8% from your 10th completed sale onward.'}
                               </p>
                             </>
                           ) : (
                             <>
-                              <p className="mt-0.5 text-lg font-semibold text-m4m-black">Lowest commission</p>
+                              <p className="mt-0.5 text-lg font-semibold text-m4m-black">8%</p>
                               <p className="text-[11px] text-m4m-gray-400">
-                                You already benefit from the best commission rate.
+                                Standard platform fee: 8% from your 10th completed sale onward.
                               </p>
                             </>
                           )}
@@ -1718,12 +1715,12 @@ export default function SellerDashboardPage() {
                       <div className="mt-2">
                         <div className="flex justify-between text-[11px] text-m4m-gray-500 mb-1">
                           <span>
-                            Current tier: {currentCommission.toFixed(0)}%
+                            Current platform fee: {currentCommission.toFixed(0)}%
                           </span>
                           <span>
                             {nextThreshold
-                              ? `Next tier at ${nextThreshold} completed orders`
-                              : 'Max tier reached'}
+                              ? 'Standard 8% from your 10th completed sale onward'
+                              : 'Standard rate active'}
                           </span>
                         </div>
                         <div className="h-2 rounded-full bg-m4m-gray-100 overflow-hidden">
@@ -3129,28 +3126,18 @@ export default function SellerDashboardPage() {
 
             {/* Platform commission info */}
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-              <h2 className="font-semibold text-amber-900 mb-2">Progressive Commission</h2>
+              <h2 className="font-semibold text-amber-900 mb-2">Seller platform fees</h2>
               <p className="text-sm text-amber-800 mb-3">
-                M4M uses a progressive commission model to reward trusted sellers. As you complete more successful orders, your
-                commission decreases automatically.
+                <strong>Early Seller Bonus:</strong> 5% fees for your first 10 sales.{' '}
+                <strong>Standard platform fee:</strong> 8% from your 10th completed sale onward.
               </p>
-              <ul className="text-sm text-amber-900 space-y-1 mb-4">
-                <li>• New sellers: <strong>15%</strong></li>
-                <li>• After 10 completed orders: <strong>12%</strong></li>
-                <li>• After 20 completed orders: <strong>10%</strong></li>
-                <li>• After 100 completed orders: <strong>8%</strong></li>
-              </ul>
-              <div className="mt-1 grid grid-cols-3 gap-3 text-center text-xs">
+              <div className="mt-1 grid grid-cols-2 gap-3 text-center text-xs">
                 <div className="rounded-lg bg-white border border-amber-200 p-2">
-                  <p className="text-[11px] text-amber-700">Example: new seller</p>
-                  <p className="font-bold text-amber-900 text-sm">100 MAD → 85 MAD</p>
+                  <p className="text-[11px] text-amber-700">Early Seller Bonus (under 10 completed sales)</p>
+                  <p className="font-bold text-amber-900 text-sm">100 MAD → 95 MAD</p>
                 </div>
                 <div className="rounded-lg bg-white border border-amber-200 p-2">
-                  <p className="text-[11px] text-amber-700">After 20 orders</p>
-                  <p className="font-bold text-amber-900 text-sm">100 MAD → 90 MAD</p>
-                </div>
-                <div className="rounded-lg bg-white border border-amber-200 p-2">
-                  <p className="text-[11px] text-amber-700">After 100 orders</p>
+                  <p className="text-[11px] text-amber-700">Standard fee (10+ completed sales)</p>
                   <p className="font-bold text-amber-900 text-sm">100 MAD → 92 MAD</p>
                 </div>
               </div>

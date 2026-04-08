@@ -235,10 +235,10 @@ export default function OfferTypePage() {
 
       {/* Grid / empty state */}
       {Array.isArray(sortedProducts) && sortedProducts.length === 0 ? (
-        <div className="relative px-3 py-2 text-center">
-          <p className="text-gray-500 mb-2">No offers found</p>
-          <p className="text-xs text-gray-400">Try adjusting your search or sort options.</p>
-        </div>
+        <div className="relative mt-6 rounded-2xl border border-gray-200 bg-white py-16 px-6 text-center shadow-sm">
+        <p className="text-gray-500 mb-2">No offers found</p>
+        <p className="text-sm text-gray-400">Try adjusting your search or sort options.</p>
+      </div>
       ) : (
         <>
           <div className="relative mt-5 px-2 py-2">

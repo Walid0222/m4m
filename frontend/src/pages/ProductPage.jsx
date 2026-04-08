@@ -63,13 +63,24 @@ function wasProductViewedRecently(productId) {
   return (Date.now() - ts) < VIEW_COOLDOWN_MS;
 }
 
-/** Commission tiers — must match backend OrderController::commissionPercentForSeller */
+/** Completed orders for fee tier: prefers `seller.completed_orders` from product API (matches payout). */
+function sellerCompletedOrderCountForFeeTier(seller) {
+  if (!seller || typeof seller !== 'object') return { count: 0, isEstimate: true };
+  const direct = seller.completed_orders;
+  if (direct != null && direct !== '' && Number.isFinite(Number(direct))) {
+    return { count: Math.max(0, Number(direct)), isEstimate: false };
+  }
+  const legacy = seller.completed_sales ?? seller.completedSales;
+  if (legacy != null && legacy !== '' && Number.isFinite(Number(legacy))) {
+    return { count: Math.max(0, Number(legacy)), isEstimate: true };
+  }
+  return { count: 0, isEstimate: true };
+}
+
+/** Platform fee % — must match backend OrderController::commissionPercentForSeller(completed order count). */
 function commissionPercentForSeller(completedOrders) {
   const n = Number(completedOrders) || 0;
-  if (n >= 100) return 8;
-  if (n >= 20) return 10;
-  if (n >= 10) return 12;
-  return 15;
+  return n >= 10 ? 8 : 5;
 }
 
 function formatMAD(value) {
@@ -176,6 +187,11 @@ function PurchaseConfirmModal({
               <span className="text-[11px] text-gray-500">
                 {t('product.coupon_help')}
               </span>
+              {sellerCompletedOrderCountForFeeTier(seller).isEstimate ? (
+                <span className="text-[10px] text-amber-700 mt-0.5">
+                  Platform fee tier is an estimate; coupon cap and totals are finalized at checkout.
+                </span>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -550,7 +566,7 @@ export default function ProductPage() {
       const sub = baseUnitPrice * quantity;
       const pct = couponInfo?.discount_percent ?? 0;
       const requested = pct && sub > 0 ? Math.round((sub * (pct / 100)) * 100) / 100 : 0;
-      const completedOrders = product?.seller?.completed_sales ?? product?.seller?.completedSales ?? 0;
+      const completedOrders = sellerCompletedOrderCountForFeeTier(product?.seller).count;
       const baseCommission = Math.round((sub * (commissionPercentForSeller(completedOrders) / 100)) * 100) / 100;
       const applied = Math.min(requested, baseCommission);
       const total = Math.max(0, sub - applied);
@@ -736,7 +752,7 @@ export default function ProductPage() {
   })();
 
   const sellerSuccessRate = seller.success_rate ?? seller.success_rate_percent ?? null;
-  const sellerCompletedOrders = Number(seller.completed_sales ?? seller.completedSales ?? 0);
+  const sellerCompletedOrders = sellerCompletedOrderCountForFeeTier(seller).count;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-8 pb-24 lg:pb-10">
@@ -765,7 +781,7 @@ export default function ProductPage() {
                 const sub = baseUnitPrice * quantity;
                 const pct = couponInfo?.discount_percent ?? 0;
                 const requested = pct && sub > 0 ? Math.round((sub * (pct / 100)) * 100) / 100 : 0;
-                const completedOrders = product?.seller?.completed_sales ?? product?.seller?.completedSales ?? 0;
+                const completedOrders = sellerCompletedOrderCountForFeeTier(product?.seller).count;
                 const cpct = commissionPercentForSeller(completedOrders);
                 const baseCommission = Math.round((sub * (cpct / 100)) * 100) / 100;
                 return Math.min(requested, baseCommission);
@@ -783,7 +799,7 @@ export default function ProductPage() {
                 const sub = baseUnitPrice * quantity;
                 const pct = couponInfo?.discount_percent ?? 0;
                 const requested = pct && sub > 0 ? Math.round((sub * (pct / 100)) * 100) / 100 : 0;
-                const completedOrders = product?.seller?.completed_sales ?? product?.seller?.completedSales ?? 0;
+                const completedOrders = sellerCompletedOrderCountForFeeTier(product?.seller).count;
                 const cpct = commissionPercentForSeller(completedOrders);
                 const baseCommission = Math.round((sub * (cpct / 100)) * 100) / 100;
                 const applied = Math.min(requested, baseCommission);
@@ -797,7 +813,7 @@ export default function ProductPage() {
                 const pct = couponInfo?.discount_percent ?? 0;
                 const requested = pct && sub > 0 ? Math.round((sub * (pct / 100)) * 100) / 100 : 0;
                 if (requested <= 0) return false;
-                const completedOrders = product?.seller?.completed_sales ?? product?.seller?.completedSales ?? 0;
+                const completedOrders = sellerCompletedOrderCountForFeeTier(product?.seller).count;
                 const baseCommission = Math.round((sub * (commissionPercentForSeller(completedOrders) / 100)) * 100) / 100;
                 return requested > baseCommission;
               })()}
