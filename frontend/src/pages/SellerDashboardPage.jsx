@@ -54,6 +54,34 @@ const SECTIONS = [
   { id: 'verification', label: 'Get Verified', icon: 'verify' },
 ];
 
+/** Short examples under category tiles in the add-product wizard (key = category slug). */
+const CATEGORY_HELPER_EXAMPLES = {
+  subscriptions: 'Netflix, Spotify, ChatGPT, YouTube Premium',
+  accounts: 'Login-based access (Netflix account, Spotify account)',
+  'gift-cards': 'Codes, vouchers, top-ups',
+};
+
+function highlightTextParts(text, query) {
+  const t = String(text ?? '');
+  const q = (query || '').trim();
+  if (!q) return [{ key: '0', text: t, hit: false }];
+  const lower = t.toLowerCase();
+  const qq = q.toLowerCase();
+  const parts = [];
+  let start = 0;
+  let i = lower.indexOf(qq, start);
+  let k = 0;
+  while (i !== -1) {
+    if (i > start) parts.push({ key: `a${k}`, text: t.slice(start, i), hit: false });
+    parts.push({ key: `b${k}`, text: t.slice(i, i + q.length), hit: true });
+    start = i + q.length;
+    i = lower.indexOf(qq, start);
+    k += 1;
+  }
+  if (start < t.length) parts.push({ key: `c${k}`, text: t.slice(start), hit: false });
+  return parts.length ? parts : [{ key: '0', text: t, hit: false }];
+}
+
 function StatCard({ title, value, subtitle, icon }) {
   const icons = {
     chart: (
@@ -391,6 +419,20 @@ export default function SellerDashboardPage() {
   const [serviceRequestForm, setServiceRequestForm] = useState({ service_name: '', category_id: '', description: '' });
   const [serviceRequestSubmitting, setServiceRequestSubmitting] = useState(false);
   const [serviceRequestError, setServiceRequestError] = useState('');
+  const [wizardServiceSearch, setWizardServiceSearch] = useState('');
+
+  useEffect(() => {
+    setWizardServiceSearch('');
+  }, [form.category_id]);
+
+  const openServiceRequestModal = useCallback(() => {
+    setServiceRequestError('');
+    setServiceRequestForm((f) => ({
+      ...f,
+      category_id: form.category_id ? String(form.category_id) : (f.category_id || ''),
+    }));
+    setServiceRequestModalOpen(true);
+  }, [form.category_id]);
   const { tick } = useRefresh();
   const { showBalance, toggleShowBalance } = useBalanceVisibility();
 
@@ -439,7 +481,7 @@ export default function SellerDashboardPage() {
 
   useEffect(() => {
     getCategories().then((d) => setCategories(Array.isArray(d) ? d : (d?.categories ?? d?.data ?? []))).catch(() => setCategories([]));
-    getServices().then((d) => setServices(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setServices([]));
+    getServices({ all: 1 }).then((d) => setServices(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setServices([]));
     getOfferTypes().then((d) => setOfferTypes(Array.isArray(d) ? d : (d?.data ?? []))).catch(() => setOfferTypes([]));
   }, []);
 
@@ -479,6 +521,20 @@ export default function SellerDashboardPage() {
     if (!categoryId) return list;
     return list.filter((s) => String(s.category_id) === String(categoryId));
   }, [services]);
+  const wizardServicesForStep = useMemo(() => {
+    const base = getFilteredServices(form.category_id);
+    const q = wizardServiceSearch.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((s) => {
+      const name = String(s.name || '').toLowerCase();
+      const slug = String(s.slug || '').toLowerCase();
+      return name.includes(q) || slug.includes(q);
+    });
+  }, [getFilteredServices, form.category_id, wizardServiceSearch]);
+  const selectedCategorySlug = useMemo(() => {
+    const c = (categories || []).find((x) => String(x.id) === String(form.category_id));
+    return String(c?.slug || '').toLowerCase();
+  }, [categories, form.category_id]);
   const filteredOfferTypes = form.service_id ? (offerTypesByService[form.service_id] || []) : offerTypes;
 
   const fetchOrders = useCallback(async (page = 1, options = { showLoading: true }) => {
@@ -1844,6 +1900,8 @@ export default function SellerDashboardPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           {(categories || []).map((c) => {
                             const isSelected = String(form.category_id) === String(c.id);
+                            const catSlug = String(c.slug || '').toLowerCase();
+                            const helperLine = CATEGORY_HELPER_EXAMPLES[catSlug];
                             const iconMap = {
                               gaming: '',
                               streaming: '',
@@ -1861,18 +1919,31 @@ export default function SellerDashboardPage() {
                                 key={c.id}
                                 type="button"
                                 onClick={() => { updateForm('category_id', c.id); updateForm('service_id', ''); updateForm('offer_type_id', ''); }}
-                                className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 transition-all min-h-[80px] ${
+                                className={`flex flex-col items-center justify-center gap-1.5 p-3 sm:p-4 rounded-xl border-2 transition-all text-left min-h-[92px] ${
                                   isSelected
                                     ? 'border-m4m-purple bg-m4m-purple/10 text-m4m-purple'
                                     : 'border-m4m-gray-200 bg-white hover:border-m4m-purple/50 hover:bg-m4m-gray-50 text-m4m-gray-800'
                                 }`}
                               >
-                                <span className="text-2xl">{icon}</span>
-                                <span className="text-sm font-medium">{c.name}</span>
+                                <span className="text-2xl leading-none">{icon}</span>
+                                <span className="text-sm font-medium text-center leading-snug">{c.name}</span>
+                                {helperLine ? (
+                                  <span className={`text-[11px] leading-tight text-center px-0.5 line-clamp-3 ${isSelected ? 'text-m4m-purple/90' : 'text-m4m-gray-500'}`}>
+                                    {helperLine}
+                                  </span>
+                                ) : null}
                               </button>
                             );
                           })}
                         </div>
+                        {form.category_id && selectedCategorySlug === 'subscriptions' ? (
+                          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/90 px-4 py-3">
+                            <p className="text-sm text-emerald-950">
+                              <span className="font-semibold">Tip:</span>{' '}
+                              Most streaming services like Netflix or Spotify are under Subscriptions.
+                            </p>
+                          </div>
+                        ) : null}
                         <div className="mt-4 rounded-xl bg-m4m-purple/5 border border-m4m-purple/20 p-4">
                           <p className="text-xs font-semibold text-m4m-purple mb-1">Seller Tip</p>
                           <p className="text-sm text-m4m-gray-700">Choose the correct category to improve visibility in search results.</p>
@@ -1886,15 +1957,99 @@ export default function SellerDashboardPage() {
                     <div className="space-y-6">
                       <div>
                         <label className="block text-sm font-semibold text-m4m-gray-800 mb-2">Service *</label>
-                        <select value={form.service_id} onChange={(e) => { updateForm('service_id', e.target.value); updateForm('offer_type_id', ''); }} className="w-full px-4 py-3 rounded-xl border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white">
-                          <option value="">Select service</option>
-                          {getFilteredServices(form.category_id).map((s) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
-                        <button type="button" onClick={() => setServiceRequestModalOpen(true)} className="mt-3 text-sm font-medium text-m4m-purple hover:underline">
-                          Can&apos;t find your service? Request new service
-                        </button>
+                        <p className="text-sm text-m4m-gray-500 mb-3">
+                          Search or tap a platform you&apos;re selling. Matching text is highlighted.
+                        </p>
+                        <div className="relative mb-3">
+                          <svg className="w-4 h-4 text-m4m-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="M21 21l-4.35-4.35" strokeLinecap="round" />
+                          </svg>
+                          <input
+                            type="search"
+                            value={wizardServiceSearch}
+                            onChange={(e) => setWizardServiceSearch(e.target.value)}
+                            placeholder="Filter by name (e.g. netflix, spotify)…"
+                            autoComplete="off"
+                            aria-label="Search services"
+                            className="w-full pl-10 pr-4 py-3 rounded-xl border border-m4m-gray-200 text-m4m-black focus:ring-2 focus:ring-m4m-purple focus:border-transparent outline-none bg-white"
+                          />
+                        </div>
+                        <div className="rounded-xl border border-m4m-gray-200 bg-m4m-gray-50/60 max-h-64 overflow-y-auto">
+                          {wizardServicesForStep.length === 0 ? (
+                            <div className="p-5 text-center space-y-3">
+                              <p className="text-sm text-m4m-gray-700">
+                                {wizardServiceSearch.trim()
+                                  ? 'No services match your search in this category.'
+                                  : 'There are no services in this category yet.'}
+                              </p>
+                              <p className="text-sm font-medium text-m4m-gray-900">
+                                Can&apos;t find your service? Request it
+                              </p>
+                              <button
+                                type="button"
+                                onClick={openServiceRequestModal}
+                                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark shadow-sm"
+                              >
+                                Request a service
+                              </button>
+                            </div>
+                          ) : (
+                            <ul className="divide-y divide-m4m-gray-100" role="listbox" aria-label="Services">
+                              {wizardServicesForStep.map((s) => {
+                                const selected = String(form.service_id) === String(s.id);
+                                return (
+                                  <li key={s.id} role="none">
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={selected}
+                                      onClick={() => { updateForm('service_id', s.id); updateForm('offer_type_id', ''); }}
+                                      className={`w-full text-left px-4 py-3 flex items-start gap-2 transition-colors ${
+                                        selected
+                                          ? 'bg-m4m-purple/12 ring-inset ring-2 ring-m4m-purple/50'
+                                          : 'bg-white hover:bg-m4m-gray-50'
+                                      }`}
+                                    >
+                                      <span className="text-sm font-medium text-m4m-black break-words">
+                                        {highlightTextParts(s.name, wizardServiceSearch).map((p) =>
+                                          p.hit ? (
+                                            <mark key={p.key} className="bg-amber-200/95 text-m4m-black rounded px-0.5">
+                                              {p.text}
+                                            </mark>
+                                          ) : (
+                                            <span key={p.key}>{p.text}</span>
+                                          ))}
+                                      </span>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </div>
+                        <div className="mt-4 rounded-xl border-2 border-dashed border-m4m-purple/40 bg-gradient-to-br from-m4m-purple/[0.07] to-white px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="flex gap-3 min-w-0">
+                            <span className="shrink-0 w-10 h-10 rounded-xl bg-m4m-purple/15 flex items-center justify-center text-m4m-purple" aria-hidden>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                            </span>
+                            <div>
+                              <p className="text-sm font-semibold text-m4m-gray-900">Need a service that isn&apos;t listed?</p>
+                              <p className="text-xs text-m4m-gray-600 mt-0.5">
+                                Submit a request — your chosen category is pre-filled when possible.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={openServiceRequestModal}
+                            className="shrink-0 px-5 py-2.5 rounded-xl bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark shadow-sm w-full sm:w-auto text-center"
+                          >
+                            Request a service
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1910,9 +2065,19 @@ export default function SellerDashboardPage() {
                             <option key={ot.id} value={ot.id}>{ot.name}</option>
                           ))}
                         </select>
-                        <button type="button" onClick={() => setServiceRequestModalOpen(true)} className="mt-3 text-sm font-medium text-m4m-purple hover:underline">
-                          Can&apos;t find your service? Request new service
-                        </button>
+                        <div className="mt-4 rounded-xl border-2 border-m4m-purple/30 bg-m4m-purple/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <p className="text-sm text-m4m-gray-800">
+                            <span className="font-semibold text-m4m-gray-900">Missing an offer type?</span>{' '}
+                            Request help adding options for this service.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={openServiceRequestModal}
+                            className="shrink-0 px-5 py-2.5 rounded-xl bg-m4m-purple text-white text-sm font-semibold hover:bg-m4m-purple-dark shadow-sm w-full sm:w-auto text-center"
+                          >
+                            Request a service
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
