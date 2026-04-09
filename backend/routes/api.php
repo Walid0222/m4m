@@ -91,6 +91,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:auth');
     Route::post('/login',    [AuthController::class, 'login'])->middleware('throttle:auth');
     Route::post('/login/2fa',[AuthController::class, 'login2fa'])->middleware('throttle:auth');
+    Route::post('/auth/google', [AuthController::class, 'loginGoogle'])->middleware('throttle:auth');
 
     Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])
         ->middleware('throttle:6,1');

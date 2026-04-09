@@ -111,6 +111,14 @@ export function login2fa(userId, code) {
   });
 }
 
+export function loginWithGoogle(idToken) {
+  return api.post('/auth/google', { id_token: idToken }).then((res) => {
+    const payload = res.data?.data !== undefined ? res.data.data : res.data;
+    if (payload?.token) setToken(payload.token);
+    return payload;
+  });
+}
+
 export function forgotPassword(email) {
   return api.post('/forgot-password', { email }).then((res) => res.data);
 }

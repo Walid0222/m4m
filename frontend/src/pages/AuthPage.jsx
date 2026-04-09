@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { loginWithGoogle } from '../services/api';
 
 export default function AuthPage() {
   const location = useLocation();
@@ -20,8 +21,12 @@ export default function AuthPage() {
   const [requires2FA, setRequires2FA] = useState(false);
   const [twoFaUserId, setTwoFaUserId] = useState(null);
   const [twoFaCode, setTwoFaCode] = useState('');
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const { login, register, refreshUser } = useAuth();
   const navigate = useNavigate();
+  const googleButtonRef = useRef(null);
+  const googleRenderedRef = useRef(false);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('m4m_ban_info');
@@ -31,6 +36,78 @@ export default function AuthPage() {
       }
     } catch { /* ignore */ }
   }, []);
+
+  const handleGoogleCredential = useCallback(async (credentialResponse) => {
+    const idToken = credentialResponse?.credential;
+    if (!idToken) {
+      setError('Google login failed. Please try again.');
+      return;
+    }
+    setError('');
+    setGoogleSubmitting(true);
+    try {
+      const data = await loginWithGoogle(idToken);
+      if (data?.requires_2fa && data.user_id) {
+        setRequires2FA(true);
+        setTwoFaUserId(data.user_id);
+        setTwoFaCode('');
+        return;
+      }
+      await refreshUser();
+      navigate(fromPath, { replace: true });
+    } catch (err) {
+      setError(err.message || t('common.something_went_wrong'));
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  }, [fromPath, navigate, refreshUser, t]);
+
+  useEffect(() => {
+    if (!isLogin || requires2FA || !googleClientId) return;
+    if (typeof window === 'undefined') return;
+
+    const renderGoogleButton = () => {
+      if (!window.google?.accounts?.id || !googleButtonRef.current || googleRenderedRef.current) return;
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleGoogleCredential,
+      });
+      googleButtonRef.current.innerHTML = '';
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        type: 'standard',
+        shape: 'pill',
+        theme: 'outline',
+        text: 'continue_with',
+        size: 'large',
+        width: 320,
+      });
+      googleRenderedRef.current = true;
+    };
+
+    if (window.google?.accounts?.id) {
+      renderGoogleButton();
+      return;
+    }
+
+    const scriptId = 'google-identity-services';
+    let script = document.getElementById(scriptId);
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+    script.addEventListener('load', renderGoogleButton);
+    return () => {
+      script?.removeEventListener('load', renderGoogleButton);
+    };
+  }, [googleClientId, handleGoogleCredential, isLogin, requires2FA]);
+
+  useEffect(() => {
+    googleRenderedRef.current = false;
+  }, [isLogin, requires2FA]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -233,6 +310,28 @@ export default function AuthPage() {
                 ? (requires2FA ? t('auth.verify_code') : t('auth.sign_in'))
                 : t('auth.create_account')}
           </button>
+          {isLogin && !requires2FA && (
+            <div className="pt-1">
+              <div className="relative my-2">
+                <div className="absolute inset-0 flex items-center" aria-hidden>
+                  <div className="w-full border-t border-m4m-gray-200" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-2 bg-white text-m4m-gray-400">OR</span>
+                </div>
+              </div>
+              {googleClientId ? (
+                <div className="flex justify-center">
+                  <div ref={googleButtonRef} />
+                </div>
+              ) : (
+                <p className="text-xs text-center text-m4m-gray-400">Google login is not configured yet.</p>
+              )}
+              {googleSubmitting && (
+                <p className="text-xs text-center text-m4m-gray-500 mt-2">Signing in with Google...</p>
+              )}
+            </div>
+          )}
         </form>
         <p className="mt-6 text-center text-sm text-m4m-gray-500">
           {isLogin ? t('auth.dont_have_account') : t('auth.already_have_account')}

@@ -4,10 +4,14 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\User;
 use App\Services\SecurityLogService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -143,6 +147,95 @@ class AuthController extends Controller
         }
 
         SecurityLogService::log($user, 'login_2fa_success', $request);
+
+        return $this->success([
+            'user'       => $this->userFields($user),
+            'token'      => $token,
+            'token_type' => 'Bearer',
+        ]);
+    }
+
+    public function loginGoogle(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'id_token' => ['required', 'string'],
+        ]);
+
+        $google = $this->verifyGoogleIdToken($data['id_token']);
+        if ($google === null) {
+            return $this->error('Invalid Google login token.', 422);
+        }
+
+        $email = $google['email'] ?? null;
+        $googleId = $google['sub'] ?? null;
+        $name = trim((string) ($google['name'] ?? ''));
+        $emailVerified = ($google['email_verified'] ?? 'false') === 'true';
+
+        if (! $email || ! $googleId) {
+            return $this->error('Google account data is incomplete.', 422);
+        }
+
+        $user = User::where('google_id', $googleId)->first();
+
+        if (! $user) {
+            $existing = User::where('email', $email)->first();
+
+            if ($existing && $existing->google_id && hash_equals((string) $existing->google_id, (string) $googleId)) {
+                $user = $existing;
+            } elseif ($existing && ! $existing->google_id) {
+                // Safety rule: never auto-link or auto-merge password accounts.
+                return $this->error('This email already exists. Please sign in with password for now.', 422);
+            } elseif ($existing && $existing->google_id && ! hash_equals((string) $existing->google_id, (string) $googleId)) {
+                return $this->error('This email already exists. Please sign in with password for now.', 422);
+            } else {
+                try {
+                    $user = DB::transaction(function () use ($name, $email, $googleId, $emailVerified) {
+                        $newUser = User::create([
+                            'name' => $name !== '' ? Str::limit($name, 255) : Str::before($email, '@'),
+                            'email' => $email,
+                            'password' => Hash::make(Str::random(64)),
+                            'google_id' => $googleId,
+                            'auth_provider' => 'google',
+                            'is_admin' => false,
+                            'is_seller' => false,
+                            'email_verified_at' => $emailVerified ? now() : null,
+                        ]);
+                        $newUser->wallet()->create(['balance' => 0]);
+
+                        return $newUser;
+                    });
+                } catch (QueryException $e) {
+                    if (! $this->isUniqueConstraintViolation($e)) {
+                        throw $e;
+                    }
+                    $user = User::where('google_id', $googleId)->first();
+                    if (! $user) {
+                        throw $e;
+                    }
+                }
+            }
+        }
+
+        $blocked = $this->loginBanGate($user);
+        if ($blocked !== null) {
+            return $blocked;
+        }
+
+        // Same 2FA policy as regular login: do not issue token yet.
+        if ($user->two_factor_secret && $user->two_factor_enabled_at) {
+            return response()->json([
+                'requires_2fa' => true,
+                'user_id'      => $user->id,
+            ]);
+        }
+
+        $user->tokens()->where('name', 'auth')->delete();
+        $token = $user->createToken('auth')->plainTextToken;
+
+        if ($user->fraud_score !== null && $user->fraud_score > 0) {
+            $user->update(['fraud_score' => 0]);
+        }
+        SecurityLogService::log($user, 'login', $request);
 
         return $this->success([
             'user'       => $this->userFields($user),
@@ -289,6 +382,51 @@ class AuthController extends Controller
         }
 
         return $this->error('Your account cannot log in at this time.', 403);
+    }
+
+    private function isUniqueConstraintViolation(QueryException $e): bool
+    {
+        return ($e->errorInfo[0] ?? '') === '23000';
+    }
+
+    private function verifyGoogleIdToken(string $idToken): ?array
+    {
+        $clientId = (string) config('services.google.client_id');
+        if ($clientId === '') {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(8)->get('https://oauth2.googleapis.com/tokeninfo', [
+                'id_token' => $idToken,
+            ]);
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $payload = $response->json();
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        $aud = (string) ($payload['aud'] ?? '');
+        $iss = (string) ($payload['iss'] ?? '');
+        $exp = (int) ($payload['exp'] ?? 0);
+        if ($aud !== $clientId) {
+            return null;
+        }
+        if (! in_array($iss, ['accounts.google.com', 'https://accounts.google.com'], true)) {
+            return null;
+        }
+        if ($exp <= now()->timestamp) {
+            return null;
+        }
+
+        return $payload;
     }
 
     private function userFields(User $user): array
