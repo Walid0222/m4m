@@ -32,6 +32,7 @@ class SellerProfileController extends Controller
 
         $products = $seller->products()
             ->where('status', 'active')
+            ->whereSellerVisibleInPublicCatalog()
             ->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,vacation_mode')
             ->orderByDesc('is_pinned')
             ->latest()

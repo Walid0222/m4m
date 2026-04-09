@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -65,6 +66,24 @@ class Product extends Model
     public function seller(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * Public marketplace reads: only sellers not currently suspended or permanently banned.
+     * Expired temporary bans (still flagged in DB) are included, matching login auto-lift semantics.
+     */
+    public function scopeWhereSellerVisibleInPublicCatalog(Builder $query): Builder
+    {
+        return $query->whereHas('seller', function (Builder $q) {
+            $q->where(function (Builder $w) {
+                $w->where('is_banned', false);
+            })->orWhere(function (Builder $w) {
+                $w->where('is_banned', true)
+                    ->where('ban_type', 'temporary')
+                    ->whereNotNull('banned_until')
+                    ->where('banned_until', '<=', now());
+            });
+        });
     }
 
     /** Offer type (service type) this product belongs to. */

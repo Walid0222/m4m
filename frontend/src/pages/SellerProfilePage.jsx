@@ -624,7 +624,7 @@ export default function SellerProfilePage() {
       )}
 
       {/* Products & catalog */}
-      {loading ? (
+        {loading ? (
         <section>
           <h2 className="text-lg font-semibold text-m4m-black mb-4">Listed products</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -803,8 +803,8 @@ export default function SellerProfilePage() {
                   <p className="rounded-xl border border-dashed border-m4m-gray-200 bg-m4m-gray-50/80 px-4 py-8 text-center text-m4m-gray-600">
                     No products in this category.
                   </p>
-                )}
-              </section>
+        )}
+      </section>
             )}
           </div>
 

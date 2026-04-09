@@ -81,27 +81,10 @@ class AuthController extends Controller
             ]);
         }
 
-        // Auto-lift expired temporary bans before login check
-        if ($user->is_banned && $user->ban_type === 'temporary' && $user->banned_until?->isPast()) {
-            $user->update([
-                'is_banned'    => false,
-                'ban_type'     => null,
-                'banned_until' => null,
-                'ban_reason'   => null,
-            ]);
+        $blocked = $this->loginBanGate($user);
+        if ($blocked !== null) {
+            return $blocked;
         }
-
-        // Permanent ban — cannot login at all
-        if ($user->is_banned && $user->ban_type === 'permanent') {
-            return $this->error(
-                '🚫 Your account has been permanently banned.'
-                    . ($user->ban_reason ? ' Reason: ' . $user->ban_reason : ''),
-                403
-            );
-        }
-
-        // Temporary ban — allow login so seller can see suspension message
-        // (seller-action routes are protected by EnsureSellerNotBanned middleware)
 
         // If 2FA is enabled, do not issue token yet; ask for TOTP code.
         if ($user->two_factor_secret && $user->two_factor_enabled_at) {
@@ -145,6 +128,11 @@ class AuthController extends Controller
         if (! $totp->verify($data['code'])) {
             SecurityLogService::log($user, 'login_2fa_failed', $request);
             return $this->error('Invalid 2FA code.', 422);
+        }
+
+        $blocked = $this->loginBanGate($user);
+        if ($blocked !== null) {
+            return $blocked;
         }
 
         $user->tokens()->where('name', 'auth')->delete();
@@ -260,6 +248,47 @@ class AuthController extends Controller
         $user->update(['avatar' => $path]);
 
         return $this->success($this->userFields($user->fresh()), 'Avatar updated.');
+    }
+
+    /**
+     * Shared login / login2fa gate: auto-lift expired temporary bans, then block active sanctions.
+     *
+     * @return JsonResponse|null 403 response if login must be denied; null if allowed to proceed.
+     */
+    private function loginBanGate(User $user): ?JsonResponse
+    {
+        if ($user->is_banned && $user->ban_type === 'temporary' && $user->banned_until?->isPast()) {
+            $user->update([
+                'is_banned'    => false,
+                'ban_type'     => null,
+                'banned_until' => null,
+                'ban_reason'   => null,
+            ]);
+            $user->refresh();
+        }
+
+        if (! $user->is_banned) {
+            return null;
+        }
+
+        if ($user->ban_type === 'permanent') {
+            return $this->error(
+                '🚫 Your account has been permanently banned.'
+                    . ($user->ban_reason ? ' Reason: ' . $user->ban_reason : ''),
+                403
+            );
+        }
+
+        if ($user->ban_type === 'temporary') {
+            return $this->error(
+                '⏸️ Your seller account is suspended until '
+                    . $user->banned_until?->toDateString() . '.'
+                    . ($user->ban_reason ? ' Reason: ' . $user->ban_reason : ''),
+                403
+            );
+        }
+
+        return $this->error('Your account cannot log in at this time.', 403);
     }
 
     private function userFields(User $user): array

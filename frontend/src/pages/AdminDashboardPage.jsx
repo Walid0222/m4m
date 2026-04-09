@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   CircleDot,
   Package,
+  Store,
   Tag,
   Megaphone,
   Users,
@@ -65,6 +66,9 @@ import {
   updateAdminOfferType,
   deleteAdminOfferType,
   getAdminAffiliates,
+  getAdminSellers,
+  getAdminSeller,
+  adminUnbanSeller,
   paginatedItems,
 } from '../services/api';
 
@@ -74,6 +78,7 @@ const TABS = [
   { id: 'deposits', label: 'Deposits', icon: Wallet },
   { id: 'withdrawals', label: 'Withdrawals', icon: ArrowDownToLine },
   { id: 'reports', label: 'Reports', icon: Flag },
+  { id: 'sellers', label: 'Seller moderation', icon: Store },
   { id: 'disputes', label: 'Disputes', icon: Scale },
   { id: 'verification', label: 'Verifications', icon: ShieldCheck },
   { id: 'service-requests', label: 'Service requests', icon: CircleDot },
@@ -510,6 +515,12 @@ function ReportsPanel() {
   const [flash, setFlash] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [confirm, setConfirm] = useState(null); // { reportId, action, report }
+  /** Seller report: panel open report id; fetch GET /admin/sellers/{id} for is_banned. */
+  const [sellerAccessReportId, setSellerAccessReportId] = useState(null);
+  const [sellerAccessLoading, setSellerAccessLoading] = useState(false);
+  const [sellerDetailById, setSellerDetailById] = useState({});
+  const [unbanConfirm, setUnbanConfirm] = useState(null); // { sellerId, name }
+  const [unbanLoading, setUnbanLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -532,6 +543,50 @@ function ReportsPanel() {
       setExpanded(null);
       setConfirm(null);
     } catch { setFlash({ type: 'error', text: 'Action failed.' }); }
+  };
+
+  const toggleSellerAccessPanel = async (report) => {
+    const sid = Number(report?.target_id);
+    if (!sid || report.type !== 'seller') return;
+    if (sellerAccessReportId === report.id) {
+      setSellerAccessReportId(null);
+      return;
+    }
+    setSellerAccessReportId(report.id);
+    setSellerAccessLoading(true);
+    try {
+      const d = await getAdminSeller(sid);
+      setSellerDetailById((prev) => ({ ...prev, [sid]: { ...d, _error: null } }));
+    } catch {
+      setSellerDetailById((prev) => ({ ...prev, [sid]: { _error: true } }));
+    } finally {
+      setSellerAccessLoading(false);
+    }
+  };
+
+  const handleUnbanSeller = async () => {
+    if (!unbanConfirm?.sellerId) return;
+    const sid = unbanConfirm.sellerId;
+    setUnbanLoading(true);
+    try {
+      await adminUnbanSeller(sid);
+      try {
+        const fresh = await getAdminSeller(sid);
+        setSellerDetailById((prev) => ({ ...prev, [sid]: { ...fresh, _error: null } }));
+      } catch {
+        setSellerDetailById((prev) => ({
+          ...prev,
+          [sid]: { ...prev[sid], is_banned: false, ban_type: null, banned_until: null, ban_reason: null },
+        }));
+      }
+      setUnbanConfirm(null);
+      setFlash({ type: 'success', text: 'Seller access restored.' });
+      await load();
+    } catch {
+      setFlash({ type: 'error', text: 'Could not restore seller access.' });
+    } finally {
+      setUnbanLoading(false);
+    }
   };
 
   const MODERATION_MESSAGES = {
@@ -564,6 +619,17 @@ function ReportsPanel() {
           confirmDanger={['ban', 'delete'].includes(confirm.action)}
           onConfirm={() => handleAction(confirm.reportId, confirm.action)}
           onCancel={() => setConfirm(null)}
+        />
+      )}
+      {unbanConfirm && (
+        <ConfirmModal
+          title="Restore seller access"
+          message={`Remove suspension/ban for ${unbanConfirm.name ? `"${unbanConfirm.name}"` : 'this seller'}? They will be able to log in and sell again (warnings are not cleared).`}
+          confirmLabel="Restore seller"
+          confirmDanger={false}
+          loading={unbanLoading}
+          onConfirm={handleUnbanSeller}
+          onCancel={() => !unbanLoading && setUnbanConfirm(null)}
         />
       )}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
@@ -639,6 +705,58 @@ function ReportsPanel() {
                   {/* Description */}
                   {r.description && (
                     <p className="mt-2 text-sm text-gray-600 bg-gray-50 rounded-lg p-2.5 border border-gray-100 line-clamp-3">{r.description}</p>
+                  )}
+
+                  {/* Seller-only: check moderation status & unban via existing POST /admin/sellers/{id}/unban */}
+                  {r.type === 'seller' && Number(r.target_id) > 0 && (
+                    <div className="mt-3 pt-2 border-t border-dashed border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => toggleSellerAccessPanel(r)}
+                        className="text-xs font-medium text-m4m-purple hover:underline"
+                      >
+                        {sellerAccessReportId === r.id ? 'Hide seller access ↑' : 'Seller access / restore ↓'}
+                      </button>
+                      {sellerAccessReportId === r.id && (
+                        <div className="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-3 text-sm">
+                          {sellerAccessLoading ? (
+                            <p className="text-gray-500 text-xs">Loading seller status…</p>
+                          ) : (() => {
+                            const sid = Number(r.target_id);
+                            const info = sellerDetailById[sid];
+                            if (info?._error) {
+                              return <p className="text-red-600 text-xs">Could not load seller status.</p>;
+                            }
+                            if (!info) {
+                              return <p className="text-gray-500 text-xs">No data.</p>;
+                            }
+                            if (!info.is_banned) {
+                              return <p className="text-gray-600 text-xs">This seller is not suspended or banned.</p>;
+                            }
+                            return (
+                              <div className="space-y-2">
+                                <p className="text-xs text-amber-800">
+                                  {info.ban_type === 'permanent' ? 'Permanently banned' : 'Suspended'}
+                                  {info.banned_until ? ` until ${info.banned_until}` : ''}.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setUnbanConfirm({
+                                      sellerId: sid,
+                                      name: info.name ?? r.target_name ?? '',
+                                    })
+                                  }
+                                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-600 text-white hover:bg-green-700"
+                                >
+                                  Restore seller access
+                                </button>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
                   )}
 
                   {/* Actions panel */}
@@ -1831,6 +1949,7 @@ function SupportChatPanel({ adminUser }) {
 
 /* ── Overview (stats) ─────────────────────────────────────────────────────── */
 function OverviewPanel() {
+  const [, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -1850,7 +1969,13 @@ function OverviewPanel() {
     { label: 'Total Users', value: stats.users?.total ?? 0, color: 'bg-blue-50 text-blue-700', icon: 'users' },
     { label: 'Total Sellers', value: stats.users?.sellers ?? 0, color: 'bg-purple-50 text-purple-700', icon: 'store' },
     { label: 'Verified Sellers', value: stats.users?.verified_sellers ?? 0, color: 'bg-green-50 text-green-700', icon: 'shield-check' },
-    { label: 'Banned Users', value: stats.users?.banned ?? 0, color: 'bg-red-50 text-red-700', icon: 'ban' },
+    {
+      label: 'Banned Users',
+      value: stats.users?.banned ?? 0,
+      color: 'bg-red-50 text-red-700',
+      icon: 'ban',
+      navigate: { tab: 'sellers', seller_filter: 'banned' },
+    },
     { label: 'Total Orders', value: stats.orders?.total ?? 0, color: 'bg-indigo-50 text-indigo-700', icon: 'package' },
     { label: 'Completed Orders', value: stats.orders?.completed ?? 0, color: 'bg-emerald-50 text-emerald-700', icon: 'check-circle' },
     { label: 'Disputed Orders', value: stats.orders?.disputed ?? 0, color: 'bg-orange-50 text-orange-700', icon: 'alert-triangle' },
@@ -1868,22 +1993,44 @@ function OverviewPanel() {
     <div>
       <h2 className="font-semibold text-gray-900 mb-4">Platform Statistics</h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
-        {cards.map(({ label, value, color, icon }) => (
-          <div key={label} className={`rounded-xl p-4 ${color}`}>
-            <p className="text-2xl mb-1">
-              {icon === 'users' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20h6M3 20h5v-2a4 4 0 00-3-3.87M16 7a4 4 0 11-8 0 4 4 0 018 0zM5 14a4 4 0 014-4h6a4 4 0 014 4" /></svg>}
-              {icon === 'store' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9l1-5h16l1 5M4 9h16v10H4zM9 13h6" /></svg>}
-              {icon === 'shield-check' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3l8 4v5c0 5-3.5 9-8 9s-8-4-8-9V7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" /></svg>}
-              {icon === 'ban' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636A9 9 0 005.636 18.364 9 9 0 0018.364 5.636z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12" /></svg>}
-              {icon === 'package' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10l9 4 9-4V7" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11v10" /></svg>}
-              {icon === 'check-circle' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>}
-              {icon === 'alert-triangle' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.29 3.86L1.82 18a1 1 0 00.86 1.5h18.64a1 1 0 00.86-1.5L13.71 3.86a1 1 0 00-1.72 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01" /></svg>}
-              {icon === 'wallet' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16v10H4z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7l2-3h10l2 3" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12h2v2h-2z" /></svg>}
-            </p>
-            <p className="text-2xl font-bold">{value}</p>
-            <p className="text-xs font-medium mt-0.5 opacity-80">{label}</p>
-          </div>
-        ))}
+        {cards.map(({ label, value, color, icon, navigate }) => {
+          const inner = (
+            <>
+              <p className="text-2xl mb-1">
+                {icon === 'users' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-3-3.87M9 20h6M3 20h5v-2a4 4 0 00-3-3.87M16 7a4 4 0 11-8 0 4 4 0 018 0zM5 14a4 4 0 014-4h6a4 4 0 014 4" /></svg>}
+                {icon === 'store' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9l1-5h16l1 5M4 9h16v10H4zM9 13h6" /></svg>}
+                {icon === 'shield-check' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3l8 4v5c0 5-3.5 9-8 9s-8-4-8-9V7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" /></svg>}
+                {icon === 'ban' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636A9 9 0 005.636 18.364 9 9 0 0018.364 5.636z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l12 12" /></svg>}
+                {icon === 'package' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10l9 4 9-4V7" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11v10" /></svg>}
+                {icon === 'check-circle' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>}
+                {icon === 'alert-triangle' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.29 3.86L1.82 18a1 1 0 00.86 1.5h18.64a1 1 0 00.86-1.5L13.71 3.86a1 1 0 00-1.72 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01" /></svg>}
+                {icon === 'wallet' && <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16v10H4z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7l2-3h10l2 3" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12h2v2h-2z" /></svg>}
+              </p>
+              <p className="text-2xl font-bold">{value}</p>
+              <p className="text-xs font-medium mt-0.5 opacity-80">
+                {label}
+                {navigate && <span className="block text-[10px] font-normal mt-0.5 opacity-70">Open seller list →</span>}
+              </p>
+            </>
+          );
+          if (navigate) {
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setSearchParams(navigate, { replace: true })}
+                className={`rounded-xl p-4 text-left w-full transition-opacity hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-m4m-purple focus:ring-offset-2 ${color}`}
+              >
+                {inner}
+              </button>
+            );
+          }
+          return (
+            <div key={label} className={`rounded-xl p-4 ${color}`}>
+              {inner}
+            </div>
+          );
+        })}
       </div>
       <h2 className="font-semibold text-gray-900 mb-3">Pending Actions</h2>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1895,6 +2042,221 @@ function OverviewPanel() {
         ))}
       </div>
     </div>
+  );
+}
+
+const SELLER_MOD_FILTERS = [
+  { id: 'all', label: 'All sellers' },
+  { id: 'active', label: 'Active' },
+  { id: 'suspended', label: 'Suspended' },
+  { id: 'banned', label: 'Banned' },
+  { id: 'warned', label: 'Warned' },
+];
+
+function sellerModerationStatusLabel(row) {
+  const s = row?.status;
+  if (s === 'permanent_ban') return 'Banned (permanent)';
+  if (s === 'temporary_ban') return 'Suspended';
+  if (s === 'warned') return 'Warned';
+  return 'Active';
+}
+
+function SellersModerationPanel() {
+  const [searchParams] = useSearchParams();
+  const [filter, setFilter] = useState(() => {
+    const f = searchParams.get('seller_filter');
+    return ['active', 'suspended', 'banned', 'warned', 'all'].includes(f) ? f : 'all';
+  });
+  const [searchInput, setSearchInput] = useState('');
+  const [searchApplied, setSearchApplied] = useState('');
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [listPayload, setListPayload] = useState(null);
+  const [flash, setFlash] = useState(null);
+  const [unbanConfirm, setUnbanConfirm] = useState(null);
+  const [unbanLoading, setUnbanLoading] = useState(false);
+
+  useEffect(() => {
+    const f = searchParams.get('seller_filter');
+    if (['active', 'suspended', 'banned', 'warned', 'all'].includes(f)) {
+      setFilter(f);
+      setPage(1);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 4000);
+    return () => clearTimeout(t);
+  }, [flash]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = { page, per_page: 30 };
+      if (filter !== 'all') params.status = filter;
+      if (searchApplied.trim()) params.search = searchApplied.trim();
+      const res = await getAdminSellers(params);
+      setListPayload(res);
+    } catch {
+      setListPayload(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [filter, page, searchApplied]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const rows = paginatedItems(listPayload) ?? [];
+  const lastPage = listPayload?.last_page ?? 1;
+  const total = listPayload?.total ?? rows.length;
+
+  const handleUnban = async () => {
+    if (!unbanConfirm?.sellerId) return;
+    setUnbanLoading(true);
+    try {
+      await adminUnbanSeller(unbanConfirm.sellerId);
+      setUnbanConfirm(null);
+      setFlash({ type: 'success', text: 'Seller access restored.' });
+      await load();
+    } catch {
+      setFlash({ type: 'error', text: 'Could not restore seller access.' });
+    } finally {
+      setUnbanLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <Flash msg={flash} />
+      {unbanConfirm && (
+        <ConfirmModal
+          title="Restore seller access"
+          message={`Remove suspension/ban for ${unbanConfirm.name ? `"${unbanConfirm.name}"` : 'this seller'}? They can log in and sell again (warnings are not cleared).`}
+          confirmLabel="Restore seller"
+          loading={unbanLoading}
+          onConfirm={handleUnban}
+          onCancel={() => !unbanLoading && setUnbanConfirm(null)}
+        />
+      )}
+      <h2 className="text-base font-semibold text-gray-900 mb-1">Seller moderation</h2>
+      <p className="text-xs text-gray-500 mb-4">View sellers by status and restore access after suspension or ban.</p>
+
+      <div className="flex flex-wrap gap-1.5 mb-4">
+        {SELLER_MOD_FILTERS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => { setFilter(f.id); setPage(1); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === f.id ? 'bg-m4m-purple text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input
+          type="search"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              setSearchApplied(searchInput);
+              setPage(1);
+            }
+          }}
+          placeholder="Search name or email…"
+          className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-gray-200 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => { setSearchApplied(searchInput); setPage(1); }}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"
+        >
+          Search
+        </button>
+      </div>
+
+      {loading ? <p className="text-gray-400 text-sm">Loading…</p>
+        : (
+          <>
+            <p className="text-xs text-gray-500 mb-2">{total} seller(s)</p>
+            <div className="overflow-x-auto rounded-xl border border-gray-200">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-600">
+                  <tr>
+                    <th className="px-3 py-2">Name</th>
+                    <th className="px-3 py-2">Email</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Ban / until</th>
+                    <th className="px-3 py-2 w-36">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-8 text-center text-gray-500">No sellers in this filter.</td>
+                    </tr>
+                  ) : rows.map((row) => (
+                    <tr key={row.seller_id} className="border-t border-gray-100">
+                      <td className="px-3 py-2 font-medium text-gray-900">{row.name ?? '—'}</td>
+                      <td className="px-3 py-2 text-gray-600">{row.email ?? '—'}</td>
+                      <td className="px-3 py-2 text-gray-700">{sellerModerationStatusLabel(row)}</td>
+                      <td className="px-3 py-2 text-gray-600 text-xs">
+                        {row.is_banned ? (
+                          <>
+                            {row.ban_type === 'permanent' ? 'Permanent' : 'Temporary'}
+                            {row.banned_until ? ` · until ${row.banned_until}` : ''}
+                          </>
+                        ) : '—'}
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.is_banned ? (
+                          <button
+                            type="button"
+                            onClick={() => setUnbanConfirm({ sellerId: row.seller_id, name: row.name })}
+                            className="text-xs font-medium text-green-700 hover:underline"
+                          >
+                            Restore access
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {lastPage > 1 && (
+              <div className="flex items-center justify-center gap-3 mt-4">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-gray-600">
+                  Page {page} / {lastPage}
+                </span>
+                <button
+                  type="button"
+                  disabled={page >= lastPage}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
+    </>
   );
 }
 
@@ -2736,7 +3098,7 @@ function MarketplaceSettingsPanel() {
 }
 
 /* ── Main admin page ──────────────────────────────────────────────────────── */
-const VALID_ADMIN_TABS = ['overview', 'deposits', 'escrow', 'withdrawals', 'reports', 'disputes', 'verification', 'service-requests', 'services', 'coupons', 'announcements', 'affiliates', 'support', 'marketplace-settings'];
+const VALID_ADMIN_TABS = ['overview', 'deposits', 'escrow', 'withdrawals', 'reports', 'sellers', 'disputes', 'verification', 'service-requests', 'services', 'coupons', 'announcements', 'affiliates', 'support', 'marketplace-settings'];
 
 export default function AdminDashboardPage() {
   const { user } = useAuth();
@@ -3000,6 +3362,7 @@ export default function AdminDashboardPage() {
             {activeTab === 'escrow' && <EscrowPanel />}
             {activeTab === 'withdrawals' && <WithdrawalsPanel />}
             {activeTab === 'reports' && <ReportsPanel />}
+            {activeTab === 'sellers' && <SellersModerationPanel />}
             {activeTab === 'disputes' && <DisputesPanel />}
             {activeTab === 'verification' && <VerificationPanel />}
             {activeTab === 'service-requests' && <ServiceRequestsPanel />}

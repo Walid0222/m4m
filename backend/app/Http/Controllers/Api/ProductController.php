@@ -13,7 +13,7 @@ class ProductController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Product::query()->where('status', 'active');
+        $query = Product::query()->where('status', 'active')->whereSellerVisibleInPublicCatalog();
 
         if ($request->has('search')) {
             $query->where(function ($q) use ($request) {
@@ -82,6 +82,7 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->where('status', 'active')
+            ->whereSellerVisibleInPublicCatalog()
             ->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
                 'orders as completed_orders_count' => function ($q) {
@@ -110,6 +111,7 @@ class ProductController extends Controller
 
         $products = Product::query()
             ->where('status', 'active')
+            ->whereSellerVisibleInPublicCatalog()
             ->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
                 'orders as completed_orders_count' => function ($q) {
@@ -130,6 +132,10 @@ class ProductController extends Controller
     public function show(Request $request, Product $product): JsonResponse
     {
         if ($product->status !== 'active') {
+            return $this->error('Product not available.', 404);
+        }
+
+        if (! Product::query()->whereKey($product->id)->whereSellerVisibleInPublicCatalog()->exists()) {
             return $this->error('Product not available.', 404);
         }
 
@@ -166,6 +172,7 @@ class ProductController extends Controller
 
         $query = Product::query()
             ->where('status', 'active')
+            ->whereSellerVisibleInPublicCatalog()
             ->where('id', '!=', $product->id)
             ->with('seller:id,name,avatar,updated_at,is_verified_seller,last_activity_at,created_at,vacation_mode')
             ->withCount([
@@ -209,7 +216,7 @@ class ProductController extends Controller
     public function search(Request $request): JsonResponse
     {
         $q = $request->string('q', '')->trim();
-        $query = Product::query()->where('status', 'active');
+        $query = Product::query()->where('status', 'active')->whereSellerVisibleInPublicCatalog();
 
         if ($q !== '') {
             $terms = preg_split('/\s+/', strtolower($q));

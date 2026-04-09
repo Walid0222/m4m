@@ -762,6 +762,21 @@ export function resolveAdminReport(reportId, action) {
   });
 }
 
+/** GET /admin/sellers — paginated seller moderation list (?status=&search=&page=&per_page=). */
+export function getAdminSellers(params = {}) {
+  return api.get('/admin/sellers', { params }).then(unwrap);
+}
+
+/** GET /admin/sellers/{seller} — moderation status (existing backend). */
+export function getAdminSeller(sellerId) {
+  return api.get(`/admin/sellers/${sellerId}`).then(unwrap);
+}
+
+/** POST /admin/sellers/{seller}/unban — restore seller (existing backend only). */
+export function adminUnbanSeller(sellerId) {
+  return api.post(`/admin/sellers/${sellerId}/unban`, {}).then(unwrap);
+}
+
 // --- Seller verification (admin) ---
 
 export function getAdminVerificationRequests(params = {}) {
