@@ -70,6 +70,7 @@ import {
   getAdminSeller,
   adminUnbanSeller,
   paginatedItems,
+  getStoragePublicUrl,
 } from '../services/api';
 
 const TABS = [
@@ -194,11 +195,35 @@ function DepositsPanel() {
                   <td className="px-4 py-3 font-medium">{Number(d.amount).toFixed(2)} MAD</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700">
-                      {d.payment_method === 'orange_recharge' ? 'Orange Recharge' : 'Bank transfer'}
+                      {d.payment_method === 'orange_recharge'
+                        ? 'Orange Recharge'
+                        : d.payment_method === 'cashplus'
+                          ? 'CashPlus'
+                          : d.payment_method === 'wafacash'
+                            ? 'Wafacash'
+                            : 'Bank transfer'}
                     </span>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">
-                    {d.payment_method === 'bank_transfer' ? (d.reference_code || `#${d.id}`) : '—'}
+                    {d.payment_method === 'cashplus' || d.payment_method === 'wafacash' ? (
+                      <div className="space-y-1">
+                        <span className="block">{d.transaction_code || '—'}</span>
+                        {d.receipt_image ? (
+                          <a
+                            href={getStoragePublicUrl(d.receipt_image)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block text-m4m-purple font-sans text-[11px] font-medium"
+                          >
+                            View receipt
+                          </a>
+                        ) : null}
+                      </div>
+                    ) : d.payment_method === 'bank_transfer' || !d.payment_method ? (
+                      d.reference_code || `#${d.id}`
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${d.status === 'completed' ? 'bg-green-100 text-green-700' : d.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{d.status ?? 'pending'}</span>

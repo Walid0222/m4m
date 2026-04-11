@@ -338,7 +338,35 @@ export function getWithdrawRequests(params = {}) {
   return api.get('/withdraw-requests', { params }).then(unwrap);
 }
 
-export function createDepositRequest({ amount, currency = 'USD', payment_method } = {}) {
+/** Public storage URL for paths returned by the API (e.g. deposit receipt). */
+export function getStoragePublicUrl(relativePath) {
+  if (!relativePath) return '';
+  const p = String(relativePath);
+  if (/^https?:\/\//i.test(p)) return p;
+  const base = BASE_URL.replace(/\/?api\/v1\/?$/i, '').replace(/\/$/, '');
+  return `${base}/storage/${p.replace(/^\//, '')}`;
+}
+
+export function createDepositRequest({
+  amount,
+  currency = 'USD',
+  payment_method,
+  transaction_code: transactionCode,
+  receipt_image: receiptImageFile,
+} = {}) {
+  const isCashAgent = payment_method === 'cashplus' || payment_method === 'wafacash';
+  if (isCashAgent) {
+    const form = new FormData();
+    form.append('amount', String(amount));
+    form.append('currency', currency);
+    form.append('payment_method', payment_method);
+    form.append('transaction_code', transactionCode ?? '');
+    if (receiptImageFile) form.append('receipt_image', receiptImageFile);
+    return api.post('/deposit-requests', form).then((res) => {
+      const body = res.data;
+      return body?.data ?? body;
+    });
+  }
   return api.post('/deposit-requests', { amount, currency, payment_method }).then((res) => {
     const body = res.data;
     return body?.data ?? body;

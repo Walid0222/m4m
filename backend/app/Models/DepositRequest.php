@@ -18,6 +18,8 @@ class DepositRequest extends Model
         'status',
         'payment_method',
         'payment_reference',
+        'transaction_code',
+        'receipt_image',
         'completed_at',
     ];
 

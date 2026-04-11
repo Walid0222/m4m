@@ -21,6 +21,19 @@ import {
 const CURRENCY = 'MAD';
 const REQUESTS_PAGE_SIZE = 4;
 
+function isCashAgentDepositMethod(m) {
+  return m === 'cashplus' || m === 'wafacash';
+}
+
+function depositRequestErrorMessage(err) {
+  const errors = err?.data?.errors;
+  if (errors && typeof errors === 'object') {
+    const parts = Object.values(errors).flat().filter(Boolean);
+    if (parts.length) return parts.join(' ');
+  }
+  return err.message || 'Something went wrong.';
+}
+
 function useWalletData() {
   const [balance, setBalance] = useState(null);
   const [deposits, setDeposits] = useState([]);
@@ -126,7 +139,9 @@ export default function WalletPage() {
   const [depositSubmitting, setDepositSubmitting] = useState(false);
   const [depositSuccess, setDepositSuccess] = useState(null);
   const [depositConfirmPending, setDepositConfirmPending] = useState(false);
-  const [depositMethod, setDepositMethod] = useState('bank_transfer'); // 'bank_transfer' | 'orange_recharge'
+  const [depositMethod, setDepositMethod] = useState('bank_transfer');
+  const [depositTransactionCode, setDepositTransactionCode] = useState('');
+  const [depositReceiptFile, setDepositReceiptFile] = useState(null);
   const [depositError, setDepositError] = useState(null);
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -273,6 +288,17 @@ export default function WalletPage() {
       return;
     }
 
+    if (isCashAgentDepositMethod(depositMethod)) {
+      if (!depositTransactionCode.trim()) {
+        setDepositError('Transaction code is required.');
+        return;
+      }
+      if (!depositReceiptFile) {
+        setDepositError('Receipt image is required.');
+        return;
+      }
+    }
+
     setDepositError(null);
     setDepositConfirmPending(true);
   };
@@ -284,17 +310,29 @@ export default function WalletPage() {
     setDepositSubmitting(true);
     setDepositSuccess(null);
     try {
-      const data = await createDepositRequest({ amount, currency: CURRENCY, payment_method: depositMethod });
+      const data = await createDepositRequest(
+        isCashAgentDepositMethod(depositMethod)
+          ? {
+              amount,
+              currency: CURRENCY,
+              payment_method: depositMethod,
+              transaction_code: depositTransactionCode.trim(),
+              receipt_image: depositReceiptFile,
+            }
+          : { amount, currency: CURRENCY, payment_method: depositMethod }
+      );
       setDepositSuccess(
         data?.reference_code
           ? { reference: data.reference_code, amount: data.amount }
           : { error: 'Request sent. Check deposit requests below.' }
       );
       setDepositAmount('');
+      setDepositTransactionCode('');
+      setDepositReceiptFile(null);
       setDepositError(null);
       await refresh();
     } catch (err) {
-      setDepositSuccess({ error: err.message || 'Something went wrong.' });
+      setDepositSuccess({ error: depositRequestErrorMessage(err) });
     } finally {
       setDepositSubmitting(false);
     }
@@ -336,6 +374,9 @@ export default function WalletPage() {
 
   const amountNum = parseFloat(depositAmount || '0');
   const isInvalidOrange = depositMethod === 'orange_recharge' && amountNum < 200;
+  const isInvalidCashAgent =
+    isCashAgentDepositMethod(depositMethod) &&
+    (!depositTransactionCode.trim() || !depositReceiptFile);
 
   const handleWithdrawConfirm = async () => {
     setWithdrawConfirmPending(false);
@@ -437,7 +478,14 @@ export default function WalletPage() {
             {!isSeller && (
               <button
                 type="button"
-                onClick={() => { setDepositOpen(true); setDepositSuccess(null); setDepositAmount(''); }}
+                onClick={() => {
+                  setDepositOpen(true);
+                  setDepositSuccess(null);
+                  setDepositAmount('');
+                  setDepositTransactionCode('');
+                  setDepositReceiptFile(null);
+                  setDepositError(null);
+                }}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold bg-white text-m4m-purple hover:bg-purple-50 transition-colors shadow-sm"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
@@ -698,7 +746,11 @@ export default function WalletPage() {
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-xl font-bold text-gray-900">
                 {depositSuccess?.reference
-                  ? (depositMethod === 'orange_recharge' ? 'Orange Recharge details' : 'Bank transfer details')
+                  ? (isCashAgentDepositMethod(depositMethod)
+                    ? 'Deposit submitted'
+                    : depositMethod === 'orange_recharge'
+                      ? 'Orange Recharge details'
+                      : 'Bank transfer details')
                   : 'Deposit funds'}
               </h3>
               <button type="button" onClick={() => setDepositOpen(false)} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
@@ -732,6 +784,20 @@ export default function WalletPage() {
                       <p className="text-xs text-gray-500">Bank transfers have <span className="font-semibold">0% commission</span>.</p>
                     </div>
                   </>
+                )}
+                {(depositMethod === 'cashplus' || depositMethod === 'wafacash') && (
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2">
+                    <p className="text-xs font-semibold text-slate-800 uppercase tracking-wide">
+                      {depositMethod === 'cashplus' ? 'CashPlus' : 'Wafacash'}
+                    </p>
+                    <p className="text-sm text-slate-700">
+                      Your request is pending. An admin will verify your payment using the transaction code and receipt you provided.
+                    </p>
+                    <div className="rounded-lg bg-white border border-slate-100 p-3 text-xs text-slate-600">
+                      <p className="font-medium text-slate-700">Amount</p>
+                      <p className="text-lg font-bold text-slate-900">{Number(depositSuccess.amount).toFixed(2)} {CURRENCY}</p>
+                    </div>
+                  </div>
                 )}
                 {depositMethod === 'orange_recharge' && (
                   <>
@@ -773,7 +839,12 @@ export default function WalletPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setDepositMethod('bank_transfer')}
+                      onClick={() => {
+                        setDepositMethod('bank_transfer');
+                        setDepositTransactionCode('');
+                        setDepositReceiptFile(null);
+                        setDepositError(null);
+                      }}
                       className={`px-3 py-2.5 rounded-xl text-sm font-semibold border transition-colors text-left ${
                         depositMethod === 'bank_transfer'
                           ? 'bg-m4m-purple text-white border-m4m-purple'
@@ -785,7 +856,12 @@ export default function WalletPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setDepositMethod('orange_recharge')}
+                      onClick={() => {
+                        setDepositMethod('orange_recharge');
+                        setDepositTransactionCode('');
+                        setDepositReceiptFile(null);
+                        setDepositError(null);
+                      }}
                       className={`px-3 py-2.5 rounded-xl text-sm font-semibold border transition-colors text-left ${
                         depositMethod === 'orange_recharge'
                           ? 'bg-orange-500 text-white border-orange-500'
@@ -794,6 +870,40 @@ export default function WalletPage() {
                     >
                       <span className="block">Orange Recharge</span>
                       <span className="block text-[11px] opacity-80">12% commission</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDepositMethod('cashplus');
+                        setDepositTransactionCode('');
+                        setDepositReceiptFile(null);
+                        setDepositError(null);
+                      }}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-semibold border transition-colors text-left ${
+                        depositMethod === 'cashplus'
+                          ? 'bg-slate-700 text-white border-slate-700'
+                          : 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="block">CashPlus</span>
+                      <span className="block text-[11px] opacity-80">Code + receipt</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDepositMethod('wafacash');
+                        setDepositTransactionCode('');
+                        setDepositReceiptFile(null);
+                        setDepositError(null);
+                      }}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-semibold border transition-colors text-left ${
+                        depositMethod === 'wafacash'
+                          ? 'bg-sky-700 text-white border-sky-700'
+                          : 'bg-white border-gray-200 text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="block">Wafacash</span>
+                      <span className="block text-[11px] opacity-80">Code + receipt</span>
                     </button>
                   </div>
                   {depositMethod === 'bank_transfer' && (
@@ -819,6 +929,39 @@ export default function WalletPage() {
                             allowFullScreen
                           />
                         </div>
+                      </div>
+                    </div>
+                  )}
+                  {(depositMethod === 'cashplus' || depositMethod === 'wafacash') && (
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-3">
+                      <p className="text-xs text-slate-700">
+                        After paying at the agent, enter the <span className="font-semibold">transaction code</span> from your receipt and upload a clear photo of the receipt.
+                      </p>
+                      <div>
+                        <label htmlFor="deposit_tx_code" className="block text-xs font-medium text-slate-700 mb-1">
+                          Transaction code
+                        </label>
+                        <input
+                          id="deposit_tx_code"
+                          type="text"
+                          autoComplete="off"
+                          value={depositTransactionCode}
+                          onChange={(e) => setDepositTransactionCode(e.target.value)}
+                          className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-gray-900 focus:ring-2 focus:ring-slate-400 focus:border-transparent outline-none font-mono text-sm"
+                          placeholder="Code from receipt"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="deposit_receipt" className="block text-xs font-medium text-slate-700 mb-1">
+                          Receipt image
+                        </label>
+                        <input
+                          id="deposit_receipt"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setDepositReceiptFile(e.target.files?.[0] ?? null)}
+                          className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-slate-200 file:text-slate-800"
+                        />
                       </div>
                     </div>
                   )}
@@ -873,7 +1016,7 @@ export default function WalletPage() {
                 )}
                 <div className="flex gap-3">
                   <button type="button" onClick={() => setDepositOpen(false)} className="flex-1 py-3 rounded-xl font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-                  <button type="submit" disabled={depositSubmitting || isInvalidOrange} className="flex-1 py-3 rounded-xl font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60 transition-colors">
+                  <button type="submit" disabled={depositSubmitting || isInvalidOrange || isInvalidCashAgent} className="flex-1 py-3 rounded-xl font-semibold bg-m4m-green text-white hover:bg-m4m-green-hover disabled:opacity-60 transition-colors">
                     {depositSubmitting ? 'Processing…' : 'Continue'}
                   </button>
                 </div>
@@ -997,7 +1140,11 @@ export default function WalletPage() {
       {depositConfirmPending && (
         <ConfirmModal
           title="Confirm deposit request"
-          message={`You are about to create a deposit request for ${parseFloat(depositAmount).toFixed(2)} ${CURRENCY}. After confirming, you will receive a reference code to use in your bank transfer.`}
+          message={
+            isCashAgentDepositMethod(depositMethod)
+              ? `Submit a ${depositMethod === 'cashplus' ? 'CashPlus' : 'Wafacash'} deposit request for ${parseFloat(depositAmount).toFixed(2)} ${CURRENCY} with the transaction code and receipt you entered?`
+              : `You are about to create a deposit request for ${parseFloat(depositAmount).toFixed(2)} ${CURRENCY}. After confirming, you will receive a reference code to use in your bank transfer.`
+          }
           onConfirm={handleDepositConfirm}
           onCancel={() => setDepositConfirmPending(false)}
         />
